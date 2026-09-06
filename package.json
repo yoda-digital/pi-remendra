@@ -87,7 +87,7 @@
     "*.{ts,js,mjs,cjs}": [
       "eslint --fix"
     ],
-    "*.{ts,js,mjs,cjs,json,jsonc,md}": [
+    "*.{ts,js,mjs,cjs,json,jsonc}": [
       "oxfmt"
     ]
   },

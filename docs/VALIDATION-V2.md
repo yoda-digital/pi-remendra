@@ -8,6 +8,7 @@ Remendra's rebrand and distribution changes were validated on Node **24.15.0** w
 - Focused v2 suite: **64 tests passed across five files**.
 - Build, TypeScript type checking, ESLint, and repository formatting checks passed.
 - Native Pi SDK smoke tests passed in foreground-only and background-observer modes with no extension errors.
+- A clean temporary Pi home successfully installed commit `53f1e69` from GitHub with `pi install git:github.com/yoda-digital/pi-remendra`; the installed CLI reported SQLite `quick_check: ok`, and the committed host extension and worker were present.
 - Compatibility coverage confirms that Remendra accepts Blackhole v2 exports and removes stale Blackhole v2 packets.
 
 The engine source was reconstructed from the audited base and implementation patch recorded below. The historical benchmark measurements in this document were recorded for the pre-rebrand alpha on Node 24.19.0; they remain implementation provenance, not a performance claim for every environment.

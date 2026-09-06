@@ -5,6 +5,7 @@
 - Rebranded the default v2 package as Remendra: `pi-remendra`, `/remendra`, `remendra-memory`, `PI_REMENDRA_*`, and `~/.pi/agent/pi-remendra/v2/`.
 - Pointed package metadata and installation documentation at `yoda-digital/pi-remendra`.
 - Made the Git repository directly installable through `pi install git:github.com/yoda-digital/pi-remendra` by publishing the built extension and worker with the source.
+- Corrected the inherited staged-file configuration so documentation-only commits no longer fail by passing intentionally ignored Markdown files to the formatter.
 
 ### Compatibility
 
