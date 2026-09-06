@@ -375,7 +375,12 @@ export class MemoryStore {
       throw new Error("Invalid validity interval");
     if (input.visibility && !["lineage", "project", "user"].includes(input.visibility))
       throw new Error("Invalid visibility");
-    if (actor !== "user" && input.visibility && input.visibility !== "lineage")
+    if (
+      actor !== "user" &&
+      actor !== "import" &&
+      input.visibility &&
+      input.visibility !== "lineage"
+    )
       throw new Error("Only the user can promote memory scope");
     if (input.anchor && !scope.entryIds.includes(input.anchor))
       throw new Error("Claim anchor is outside the active lineage");

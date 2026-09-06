@@ -57,7 +57,7 @@ var MemoryClient = class {
     this.pending.clear();
     void worker.terminate();
   }
-  call(method, args, timeoutMs = 5e3) {
+  call(method, args, timeoutMs = 15e3) {
     return new Promise((resolve2, reject) => {
       const worker = this.start();
       worker.ref();
@@ -268,7 +268,7 @@ var BackgroundLearner = class {
           inputBudget,
           reservation,
           config.dailyTokenBudget,
-          config.jobTimeoutMs + 2e3
+          config.jobTimeoutMs + 5e3
         ]);
         if (!job)
           return learned ? `Learned ${learned} memories; queue or budget exhausted` : "No eligible work or daily budget exhausted";
@@ -306,7 +306,9 @@ var BackgroundLearner = class {
               usage,
               attempt + 1 < config.maxAttempts && !signal.aborted ? 0 : 3e4
             ]);
-          } catch {
+          } catch (failError) {
+            const msg = failError instanceof Error ? failError.message : String(failError);
+            console.error("[remendra] failJob failed:", msg, "job:", job.id);
           }
           if (signal.aborted || !stillCurrent())
             return `Learning paused; ${learned} memories committed`;
@@ -433,7 +435,7 @@ var HELP = `Remendra v2 \u2014 durable memory with source evidence
 /remendra-recall <query>          memory search, ID, #N or #N:path
 Modes in settings: active, shadow (compile without injecting), recall (no background learning).
 User memory is opt-in. All source text remains untrusted data.`;
-var LEGACY_PACKET_TYPES = /* @__PURE__ */ new Set(["blackhole.v2.context", "blackhole.v2.output"]);
+var LEGACY_PACKET_TYPES = /* @__PURE__ */ new Set(["remendra.v2.context", "remendra.v2.output"]);
 function workerLocation() {
   const local = new URL("./v2/worker.js", import.meta.url);
   if (existsSync(local)) return local;
@@ -506,10 +508,13 @@ function installV2(pi, providedClient) {
     environment: process.env.PI_REMENDRA_ENVIRONMENT
   });
   const ensure = async (ctx) => {
-    if (initializing) await initializing;
+    if (initializing) {
+      await initializing;
+      return;
+    }
     if (client && projectId && cwd === ctx.cwd && sessionId === ctx.sessionManager.getSessionId())
       return;
-    initializing = (async () => {
+    const init = (async () => {
       invalidate();
       cwd = ctx.cwd;
       sessionId = ctx.sessionManager.getSessionId();
@@ -520,10 +525,11 @@ function installV2(pi, providedClient) {
       projectId = await client.call("project", [await realpath(ctx.cwd)]);
       scope = makeScope(ctx);
     })();
+    initializing = init;
     try {
-      await initializing;
+      await init;
     } finally {
-      initializing = void 0;
+      if (initializing === init) initializing = void 0;
     }
   };
   const refresh = async (ctx) => {

@@ -87,12 +87,20 @@ var MemoryStore = class {
     if (file !== ":memory:") mkdirSync(dirname(file), { recursive: true, mode: 448 });
     this.db = openDatabase(file);
     this.db.exec(
-      "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000; PRAGMA secure_delete=ON;"
+      "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000; PRAGMA secure_delete=ON;"
     );
     const version = Number(this.get("PRAGMA user_version")?.user_version ?? 0);
     if (version !== 0 && version !== SCHEMA_VERSION) {
+      if (version > SCHEMA_VERSION) {
+        this.db.close();
+        throw new Error(
+          `Memory schema ${version} is newer than supported ${SCHEMA_VERSION}; upgrade pi-remendra`
+        );
+      }
       this.db.close();
-      throw new Error(`Unsupported memory schema ${version}; expected ${SCHEMA_VERSION}`);
+      throw new Error(
+        `Memory schema ${version} requires migration to ${SCHEMA_VERSION}; no migration path available yet`
+      );
     }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -148,6 +156,7 @@ var MemoryStore = class {
   db;
   depth = 0;
   statements = /* @__PURE__ */ new Map();
+  lastScopeKey = "";
   statement(sql) {
     let statement = this.statements.get(sql);
     if (!statement) {
@@ -229,15 +238,23 @@ var MemoryStore = class {
     for (const entry of scope.entryIds) insert.run(entry);
   }
   scopeSQL(scope, mode = "current", alias = "c") {
+    if (mode === "all") {
+      return {
+        sql: `((${alias}.project_id=? AND (${alias}.visibility IN ('project','lineage')))${scope.includeUser ? ` OR ${alias}.visibility='user'` : ""})`,
+        args: [scope.projectId]
+      };
+    }
     return {
-      sql: `((${alias}.project_id=? AND (${alias}.visibility='project' OR (${alias}.visibility='lineage' AND ${alias}.session_id=? AND (${mode === "all" ? "1" : `${alias}.anchor IN (SELECT id FROM active_entries)`}))))${scope.includeUser ? ` OR ${alias}.visibility='user'` : ""})`,
+      sql: `((${alias}.project_id=? AND (${alias}.visibility='project' OR (${alias}.visibility='lineage' AND ${alias}.session_id=? AND ${alias}.anchor IN (SELECT id FROM active_entries))))${scope.includeUser ? ` OR ${alias}.visibility='user'` : ""})`,
       args: [scope.projectId, scope.sessionId]
     };
   }
   inScope(claim, scope, all = false) {
     if (claim.visibility === "user") return scope.includeUser === true;
     if (claim.projectId !== scope.projectId) return false;
-    return claim.visibility === "project" || claim.sessionId === scope.sessionId && (all || scope.entryIds.includes(claim.anchor));
+    if (claim.visibility === "project") return true;
+    if (all) return true;
+    return claim.sessionId === scope.sessionId && scope.entryIds.includes(claim.anchor);
   }
   source(key) {
     const row = this.get("SELECT rowid AS ordinal,* FROM sources WHERE key=?", key);
@@ -292,6 +309,11 @@ var MemoryStore = class {
           digest
         )) {
           this.run("UPDATE sources SET replaced=1 WHERE key=?", String(old.key));
+          this.run(
+            "INSERT INTO source_fts(source_fts,rowid,text) VALUES('delete',(SELECT rowid FROM sources WHERE key=?),(SELECT text FROM sources WHERE key=?))",
+            String(old.key),
+            String(old.key)
+          );
           this.run(
             "UPDATE chunks SET state='excluded',reason='source replaced' WHERE source_key=?",
             String(old.key)
@@ -359,7 +381,7 @@ var MemoryStore = class {
       throw new Error("Invalid validity interval");
     if (input.visibility && !["lineage", "project", "user"].includes(input.visibility))
       throw new Error("Invalid visibility");
-    if (actor !== "user" && input.visibility && input.visibility !== "lineage")
+    if (actor !== "user" && actor !== "import" && input.visibility && input.visibility !== "lineage")
       throw new Error("Only the user can promote memory scope");
     if (input.anchor && !scope.entryIds.includes(input.anchor))
       throw new Error("Claim anchor is outside the active lineage");
@@ -514,10 +536,21 @@ var MemoryStore = class {
       const conflicts = [];
       const canDispute = actor !== "import" && claim.status === "active";
       if (claim.subject && claim.predicate && claim.value !== void 0) {
-        for (const row of this.all(
-          "SELECT data FROM claims WHERE (project_id=? OR visibility='user') AND status IN ('active','disputed')",
-          scope.projectId
-        )) {
+        const conflictRows = [
+          ...this.all(
+            "SELECT data FROM claims WHERE project_id=? AND status IN ('active','disputed')",
+            scope.projectId
+          ),
+          ...this.all(
+            "SELECT data FROM claims WHERE visibility='user' AND status IN ('active','disputed')"
+          )
+        ];
+        const seen = /* @__PURE__ */ new Map();
+        for (const row of conflictRows) {
+          const c = parse(row);
+          if (!seen.has(c.id)) seen.set(c.id, row);
+        }
+        for (const row of [...seen.values()]) {
           const other = parse(row);
           if (!this.inScope(other, {
             ...scope,
@@ -554,14 +587,14 @@ var MemoryStore = class {
   }
   invalidate(id, includeSelf = false) {
     const visited = /* @__PURE__ */ new Set();
-    const queue = includeSelf ? [id] : this.all("SELECT claim_id FROM dependencies WHERE parent_id=?", id).map(
+    const queue2 = includeSelf ? [id] : this.all("SELECT claim_id FROM dependencies WHERE parent_id=?", id).map(
       (r) => String(r.claim_id)
     );
-    while (queue.length) {
-      const next = queue.shift();
+    while (queue2.length) {
+      const next = queue2.shift();
       if (visited.has(next)) continue;
       visited.add(next);
-      queue.push(
+      queue2.push(
         ...this.all("SELECT claim_id FROM dependencies WHERE parent_id=?", next).map(
           (r) => String(r.claim_id)
         )
@@ -611,6 +644,7 @@ var MemoryStore = class {
       result.claim.revision++;
       result.claim.updatedAt = nowISO();
       this.writeClaim(result.claim, "correction");
+      this.run("DELETE FROM events WHERE claim_id=? AND action='recorded'", result.claim.id);
       return result;
     });
   }
@@ -647,11 +681,23 @@ var MemoryStore = class {
         claim.actor = "user";
       }
       if (["accept", "promote"].includes(action) && claim.status === "active" && claim.subject && claim.predicate && claim.value !== void 0) {
-        for (const row of this.all(
-          "SELECT data FROM claims WHERE (project_id=? OR visibility='user') AND id<>? AND status IN ('active','disputed')",
-          scope.projectId,
-          claim.id
-        )) {
+        const changeConflictRows = [
+          ...this.all(
+            "SELECT data FROM claims WHERE project_id=? AND id<>? AND status IN ('active','disputed')",
+            scope.projectId,
+            claim.id
+          ),
+          ...this.all(
+            "SELECT data FROM claims WHERE visibility='user' AND id<>? AND status IN ('active','disputed')",
+            claim.id
+          )
+        ];
+        const changeSeen = /* @__PURE__ */ new Map();
+        for (const row of changeConflictRows) {
+          const c = parse(row);
+          if (!changeSeen.has(c.id)) changeSeen.set(c.id, row);
+        }
+        for (const row of [...changeSeen.values()]) {
           const other = parse(row);
           if (!this.inScope(other, {
             ...scope,
@@ -694,7 +740,7 @@ var MemoryStore = class {
         return false;
     for (const d of claim.dependsOn) {
       const parent = this.rawClaim(d.id);
-      if (!parent || parent.revision !== d.revision || !this.usable(parent, scope, at, new Set(visited)))
+      if (!parent || parent.revision !== d.revision || !this.usable(parent, scope, at, visited))
         return false;
     }
     return true;
@@ -718,7 +764,7 @@ var MemoryStore = class {
           at
         )
       );
-      if (!parent || parent.revision !== d.revision || !this.historicalUsable(parent, scope, at, new Set(seen)))
+      if (!parent || parent.revision !== d.revision || !this.historicalUsable(parent, scope, at, seen))
         return false;
     }
     return true;
@@ -952,7 +998,6 @@ var MemoryStore = class {
         job.id
       );
       this.settleJob(job, actualTokens, dollars, "complete");
-      this.bump();
       return records;
     });
   }
@@ -1134,6 +1179,19 @@ var MemoryStore = class {
           "SELECT COUNT(*) AS n FROM jobs WHERE state='leased' AND expires_at<=?",
           Date.now()
         )?.n ?? 0
+      ),
+      pendingChunks: Number(
+        this.get("SELECT COUNT(*) AS n FROM chunks WHERE state='pending'")?.n ?? 0
+      ),
+      failedJobs: Number(this.get("SELECT COUNT(*) AS n FROM jobs WHERE state='failed'")?.n ?? 0),
+      damagedChunks: Number(
+        this.get("SELECT COUNT(*) AS n FROM chunks WHERE state='damaged'")?.n ?? 0
+      ),
+      chunkBacklog: Object.fromEntries(
+        this.all("SELECT state, COUNT(*) AS n FROM chunks GROUP BY state").map((r) => [
+          String(r.state),
+          Number(r.n)
+        ])
       )
     };
   }
@@ -1184,6 +1242,18 @@ var MemoryStore = class {
       scope.projectId
     ))
       records.push({ type: "erased_source", data: row });
+    for (const row of this.all("SELECT * FROM aliases WHERE project_id=?", scope.projectId))
+      records.push({ type: "alias", data: row });
+    for (const row of this.all(
+      "SELECT rs.* FROM retired_spans rs JOIN sources s ON s.key=rs.source_key WHERE s.project_id=?",
+      scope.projectId
+    ))
+      records.push({ type: "retired_span", data: row });
+    for (const row of this.all(
+      "SELECT t.* FROM trials t JOIN claims c ON c.id=t.procedure_id WHERE c.project_id=?",
+      scope.projectId
+    ))
+      records.push({ type: "trial", data: row });
     return records.map((r) => JSON.stringify(r)).join("\n") + "\n";
   }
   importData(scope, text) {
@@ -1196,6 +1266,7 @@ var MemoryStore = class {
       const refs = /* @__PURE__ */ new Map();
       const erasedRefs = /* @__PURE__ */ new Set();
       let sources = 0, claims = 0;
+      const idMap = /* @__PURE__ */ new Map();
       const importedScope = { ...scope, entryIds: [...scope.entryIds] };
       for (const row of rows) {
         if (!jsonObject(row) || row.type !== "source" || !jsonObject(row.data)) continue;
@@ -1236,12 +1307,14 @@ var MemoryStore = class {
           const s = refs.get(e.sourceKey);
           return s ? [{ ...e, sourceKey: s.key, hash: s.hash }] : [];
         });
+        const newId = `import:${hash(`${scope.projectId}:${scope.sessionId}:${c.id}`).slice(0, 40)}`;
         const input = {
-          id: `import:${hash(`${scope.projectId}:${scope.sessionId}:${c.id}`).slice(0, 40)}`,
+          id: newId,
           text: c.text,
           kind: c.kind,
           evidence,
           anchor: scope.entryIds.at(-1),
+          visibility: c.visibility,
           conditions: c.conditions,
           cues: c.cues,
           rationale: c.rationale,
@@ -1253,8 +1326,18 @@ var MemoryStore = class {
           validUntil: c.validUntil,
           environment: c.environment
         };
+        idMap.set(c.id, newId);
         const result = this.record(importedScope, input, "import");
         if (!result.duplicate) claims++;
+        if (Array.isArray(c.supersedes) && c.supersedes.length) {
+          const mapped = c.supersedes.map((old) => idMap.get(old) ?? old).filter((id) => id !== newId);
+          if (mapped.length) {
+            result.claim.supersedes = mapped;
+            result.claim.revision++;
+            result.claim.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+            this.writeClaim(result.claim, "import_supersedes");
+          }
+        }
       }
       return { sources, claims };
     });
@@ -1378,6 +1461,10 @@ ${warnings ? `Do not reuse obsolete or disputed versions: ${warnings}.
 `;
   const render = (rows, count) => `${header}${rows.join("\n")}
 Omitted ${count} retrieved records. Recall can search source history; absence here is not evidence of absence.`;
+  const headerTokens = estimateTokens(header);
+  const footerTemplate = "\nOmitted 999999 retrieved records. Recall can search source history; absence here is not evidence of absence.";
+  const footerTokens = estimateTokens(footerTemplate);
+  let runningTokens = headerTokens + footerTokens;
   for (const hit of candidates) {
     const c = hit.claim;
     const line = JSON.stringify({
@@ -1397,8 +1484,9 @@ Omitted ${count} retrieved records. Recall can search source history; absence he
       sources: c.evidence.map((e) => ({ key: e.sourceKey, start: e.start, end: e.end })),
       why: hit.reasons
     });
-    if (estimateTokens(render([...lines, line], candidates.length - selected.length - 1)) > budget)
-      continue;
+    const lineTokens = estimateTokens(line) + 1;
+    if (runningTokens + lineTokens > budget) continue;
+    runningTokens += lineTokens;
     lines.push(line);
     selected.push(hit);
   }
@@ -1595,23 +1683,34 @@ function importLegacy(store, scope, text) {
     for (const { value, type } of candidates) {
       const id = String(value.id), content = String(value.content);
       if (!content.trim() || content.length > 12e3) {
+        if (content.length > 12e3) {
+          console.warn(
+            "[remendra] Migration skipped oversized record (" + content.length + " chars): " + id.slice(0, 20)
+          );
+        }
         skipped++;
         continue;
       }
       const entryId = `legacy:${hash(JSON.stringify([id, content])).slice(0, 32)}`;
       const source = store.ingest(scope, [
-        { entryId, role: "import", text: content, timestamp: "1970-01-01T00:00:00.000Z" }
+        {
+          entryId,
+          role: "import",
+          text: content,
+          timestamp: typeof value.timestamp === "string" && value.timestamp ? value.timestamp : typeof value.createdAt === "string" && value.createdAt ? value.createdAt : (/* @__PURE__ */ new Date()).toISOString()
+        }
       ]);
       const s = source.keys[0] ? store.source(source.keys[0]) : void 0;
       if (!s || s.erased) {
         skipped++;
         continue;
       }
+      const relevance = typeof value.relevance === "string" ? value.relevance : void 0;
       const input = {
         id: `legacy:${hash(JSON.stringify([scope.projectId, scope.sessionId, id, content])).slice(0, 40)}`,
         alias: id,
         text: content,
-        kind: type === "reflection" ? "hypothesis" : "fact",
+        kind: "fact",
         anchor: scope.entryIds.at(-1),
         evidence: [{ sourceKey: s.key, hash: s.hash, start: 0, end: s.text.length }],
         rationale: `Imported v1 ${type}; original ID ${id}. Legacy source references: ${JSON.stringify(value.sourceEntryIds ?? value.supportingObservationIds ?? [])}`
@@ -1621,6 +1720,25 @@ function importLegacy(store, scope, text) {
         input,
         "import"
       );
+      if (!result.duplicate && result.claim.status === "candidate") {
+        try {
+          const accepted = store.change(
+            { ...scope, entryIds: [...scope.entryIds, entryId] },
+            result.claim.id,
+            result.claim.revision,
+            "accept"
+          );
+          if (relevance === "critical" || relevance === "high") {
+            store.change(
+              { ...scope, entryIds: [...scope.entryIds, entryId] },
+              accepted.id,
+              accepted.revision,
+              "pin"
+            );
+          }
+        } catch {
+        }
+      }
       if (result.duplicate) duplicates++;
       else imported++;
     }
@@ -1821,7 +1939,7 @@ var loadAllMessages = (sessionFile, full, allowedEntryIds) => {
     }
   }
   if (parseErrors > 0) {
-    console.warn(`blackhole: ${parseErrors} malformed JSONL line(s) in ${sessionFile}`);
+    console.warn(`remendra: ${parseErrors} malformed JSONL line(s) in ${sessionFile}`);
   }
   const rendered = [];
   const rawMessages = [];
@@ -2459,7 +2577,7 @@ function recall(store, scope, request, config, sessionFile) {
       asOf: request.asOf
     });
     return finish(
-      `Memory results ${hits2.length}; page ${page}. ${mode === "history" || request.scope === "all" ? "Historical records include inactive claims; check status before use." : "Current usable memories only."}
+      `Memory results ${hits2.length}; page ${page}. ${mode === "history" ? "Historical records include inactive claims; check status before use." : request.scope === "all" ? "All project lineage memories across sessions." : "Current usable memories only."}
 ` + hits2.slice((page - 1) * 10, page * 10).map((h) => JSON.stringify(h)).join("\n")
     );
   }
@@ -2548,7 +2666,10 @@ async function fetchEmbeddings(config, input, timeout = 1e4) {
       chunks.push(value);
     }
   } finally {
-    await reader.cancel();
+    try {
+      await reader.cancel();
+    } catch {
+    }
     reader.releaseLock();
   }
   const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -2756,8 +2877,9 @@ async function dispatch(request) {
     });
   }
 }
+var queue = Promise.resolve();
 port.on("message", (request) => {
-  void dispatch(request);
+  queue = queue.then(() => dispatch(request));
 });
 port.postMessage({ ready: true });
 //# sourceMappingURL=worker.js.map

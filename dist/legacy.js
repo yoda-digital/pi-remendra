@@ -372,25 +372,25 @@ function applyEnvOverrides(config2, env, defaults) {
 }
 var DECLARATIVE_ENV_OVERRIDES = {
   // Booleans
-  memory: "PI_BLACKHOLE_MEMORY",
-  debug: "PI_BLACKHOLE_DEBUG",
-  debugLog: "PI_BLACKHOLE_DEBUG_LOG",
-  sessionFallback: "PI_BLACKHOLE_SESSION_FALLBACK",
-  fullFoldAlways: "PI_BLACKHOLE_FULL_FOLD_ALWAYS",
+  memory: "PI_REMENDRA_MEMORY",
+  debug: "PI_REMENDRA_DEBUG",
+  debugLog: "PI_REMENDRA_DEBUG_LOG",
+  sessionFallback: "PI_REMENDRA_SESSION_FALLBACK",
+  fullFoldAlways: "PI_REMENDRA_FULL_FOLD_ALWAYS",
   // Positive integers
-  compactAfterTokens: "PI_BLACKHOLE_COMPACT_AFTER_TOKENS",
-  observeAfterTokens: "PI_BLACKHOLE_OBSERVE_AFTER_TOKENS",
-  reflectAfterTokens: "PI_BLACKHOLE_REFLECT_AFTER_TOKENS",
-  observationsPoolMaxTokens: "PI_BLACKHOLE_OBSERVATIONS_POOL_MAX_TOKENS",
-  observationsPoolTargetTokens: "PI_BLACKHOLE_OBSERVATIONS_POOL_TARGET_TOKENS",
-  reflectorInputMaxTokens: "PI_BLACKHOLE_REFLECTOR_INPUT_MAX_TOKENS",
-  dropperInputMaxTokens: "PI_BLACKHOLE_DROPPER_INPUT_MAX_TOKENS",
-  observerChunkMaxTokens: "PI_BLACKHOLE_OBSERVER_CHUNK_MAX_TOKENS",
-  observerPreambleMaxTokens: "PI_BLACKHOLE_OBSERVER_PREAMBLE_MAX_TOKENS",
-  agentMaxTurns: "PI_BLACKHOLE_AGENT_MAX_TURNS",
+  compactAfterTokens: "PI_REMENDRA_COMPACT_AFTER_TOKENS",
+  observeAfterTokens: "PI_REMENDRA_OBSERVE_AFTER_TOKENS",
+  reflectAfterTokens: "PI_REMENDRA_REFLECT_AFTER_TOKENS",
+  observationsPoolMaxTokens: "PI_REMENDRA_OBSERVATIONS_POOL_MAX_TOKENS",
+  observationsPoolTargetTokens: "PI_REMENDRA_OBSERVATIONS_POOL_TARGET_TOKENS",
+  reflectorInputMaxTokens: "PI_REMENDRA_REFLECTOR_INPUT_MAX_TOKENS",
+  dropperInputMaxTokens: "PI_REMENDRA_DROPPER_INPUT_MAX_TOKENS",
+  observerChunkMaxTokens: "PI_REMENDRA_OBSERVER_CHUNK_MAX_TOKENS",
+  observerPreambleMaxTokens: "PI_REMENDRA_OBSERVER_PREAMBLE_MAX_TOKENS",
+  agentMaxTurns: "PI_REMENDRA_AGENT_MAX_TURNS",
   // Non-negative integer (0 = disabled, unset = inherit pi default)
   providerIdleTimeoutMs: {
-    var: "PI_BLACKHOLE_PROVIDER_IDLE_TIMEOUT_MS",
+    var: "PI_REMENDRA_PROVIDER_IDLE_TIMEOUT_MS",
     parse: (raw) => {
       const n = Number(raw);
       return Number.isInteger(n) && n >= 0 ? n : void 0;
@@ -398,7 +398,7 @@ var DECLARATIVE_ENV_OVERRIDES = {
   },
   // Float in (0, 1]
   dropperPressureThreshold: {
-    var: "PI_BLACKHOLE_DROPPER_PRESSURE_THRESHOLD",
+    var: "PI_REMENDRA_DROPPER_PRESSURE_THRESHOLD",
     parse: (raw) => {
       const n = Number.parseFloat(raw);
       return Number.isFinite(n) && n > 0 && n <= 1 ? n : void 0;
@@ -406,7 +406,7 @@ var DECLARATIVE_ENV_OVERRIDES = {
   },
   // Float in (0, 1]
   dropperPoolFullnessThreshold: {
-    var: "PI_BLACKHOLE_DROPPER_POOL_FULLNESS_THRESHOLD",
+    var: "PI_REMENDRA_DROPPER_POOL_FULLNESS_THRESHOLD",
     parse: (raw) => {
       const n = Number.parseFloat(raw);
       return Number.isFinite(n) && n > 0 && n <= 1 ? n : void 0;
@@ -414,34 +414,34 @@ var DECLARATIVE_ENV_OVERRIDES = {
   },
   // Comma-separated provider skip list ("provider" or "provider:api")
   skipForProviders: {
-    var: "PI_BLACKHOLE_SKIP_PROVIDERS",
+    var: "PI_REMENDRA_SKIP_PROVIDERS",
     parse: (raw) => raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
   },
   // Enum overrides — custom parsers because canonical only auto-handles
   // booleans and positive integers.
   compaction: {
-    var: "PI_BLACKHOLE_COMPACTION",
+    var: "PI_REMENDRA_COMPACTION",
     parse: (raw) => {
       const trimmed = raw.trim().toLowerCase();
       return ["auto", "manual", "off"].includes(trimmed) ? trimmed : void 0;
     }
   },
   compactionEngine: {
-    var: "PI_BLACKHOLE_COMPACTION_ENGINE",
+    var: "PI_REMENDRA_COMPACTION_ENGINE",
     parse: (raw) => {
       const trimmed = raw.trim().toLowerCase();
-      return ["blackhole", "pi-default"].includes(trimmed) ? trimmed : void 0;
+      return ["remendra", "pi-default"].includes(trimmed) ? trimmed : void 0;
     }
   },
   compactionSummaryMode: {
-    var: "PI_BLACKHOLE_COMPACTION_SUMMARY_MODE",
+    var: "PI_REMENDRA_COMPACTION_SUMMARY_MODE",
     parse: (raw) => {
       const trimmed = raw.trim().toLowerCase();
       return ["default", "append"].includes(trimmed) ? trimmed : void 0;
     }
   },
   midRunCompaction: {
-    var: "PI_BLACKHOLE_MID_RUN_COMPACTION",
+    var: "PI_REMENDRA_MID_RUN_COMPACTION",
     parse: (raw) => {
       const trimmed = raw.trim().toLowerCase();
       return ["resume", "pause", "off"].includes(trimmed) ? trimmed : void 0;
@@ -457,8 +457,8 @@ function getAgentDir2() {
   __cachedAgentDir = current || getAgentDir();
   return __cachedAgentDir;
 }
-var CONFIG_DIR = "pi-blackhole";
-var CONFIG_FILE = "pi-blackhole-config.json";
+var CONFIG_DIR = "pi-remendra";
+var CONFIG_FILE = "pi-remendra-config.json";
 function configPath() {
   return join(getAgentDir2(), CONFIG_DIR, CONFIG_FILE);
 }
@@ -467,7 +467,7 @@ var DEFAULTS = {
   sessionFallback: true,
   // New config surface
   compaction: "auto",
-  compactionEngine: "blackhole",
+  compactionEngine: "remendra",
   compactionSummaryMode: "default",
   skipForProviders: [],
   tailBehavior: "minimal",
@@ -490,7 +490,7 @@ var DEFAULTS = {
 };
 var THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"];
 var COMPACTION_VALUES = ["auto", "manual", "off"];
-var COMPACTION_ENGINE_VALUES = ["blackhole", "pi-default"];
+var COMPACTION_ENGINE_VALUES = ["remendra", "pi-default"];
 var COMPACTION_SUMMARY_MODE_VALUES = ["default", "append"];
 var TAIL_BEHAVIOR_VALUES = ["pi-default", "minimal"];
 var MID_RUN_COMPACTION_VALUES = ["resume", "pause", "off"];
@@ -614,7 +614,7 @@ function migrateOldKnobs(parsed) {
     parsed.compaction = "manual";
   }
   if (parsed.overrideDefaultCompaction === true) {
-    parsed.compactionEngine = "blackhole";
+    parsed.compactionEngine = "remendra";
     if (parsed.tailBehavior === void 0) {
       parsed.tailBehavior = "minimal";
     }
@@ -630,7 +630,7 @@ function readJson(path) {
   try {
     return { data: JSON.parse(readFileSync(path, "utf-8")), error: null };
   } catch (e) {
-    const msg = `blackhole: config file at ${path} has invalid JSON: ${e.message}. Using defaults.`;
+    const msg = `remendra: config file at ${path} has invalid JSON: ${e.message}. Using defaults.`;
     console.warn(msg);
     return { data: null, error: msg };
   }
@@ -652,12 +652,12 @@ function loadUnifiedConfig(cwd, onWarn) {
     const settingsResult = readJson(settingsPath);
     const settingsRaw = settingsResult.data;
     if (settingsResult.error && onWarn) onWarn(settingsResult.error);
-    const omRaw = settingsRaw?.["pi-blackhole"] ?? settingsRaw?.["observational-memory"];
+    const omRaw = settingsRaw?.["pi-remendra"] ?? settingsRaw?.["observational-memory"];
     const projectSettingsPath = join(cwd, ".pi", "settings.json");
     const projectResult2 = readJson(projectSettingsPath);
     const projectRaw2 = projectResult2.data;
     if (projectResult2.error && onWarn) onWarn(projectResult2.error);
-    const projectOmRaw = projectRaw2?.["pi-blackhole"] ?? projectRaw2?.["observational-memory"];
+    const projectOmRaw = projectRaw2?.["pi-remendra"] ?? projectRaw2?.["observational-memory"];
     const merged2 = {};
     if (piVccRaw && isRecord(piVccRaw)) Object.assign(merged2, piVccRaw);
     if (omRaw && isRecord(omRaw)) Object.assign(merged2, omRaw);
@@ -673,7 +673,7 @@ function loadUnifiedConfig(cwd, onWarn) {
   }
   const parsed = parseConfig(raw);
   migrateOldKnobs(parsed);
-  const envPassive = process.env.PI_BLACKHOLE_PASSIVE ?? process.env.PI_VCC_OM_PASSIVE ?? process.env.PI_OBSERVATIONAL_MEMORY_PASSIVE;
+  const envPassive = process.env.PI_REMENDRA_PASSIVE ?? process.env.PI_VCC_OM_PASSIVE ?? process.env.PI_OBSERVATIONAL_MEMORY_PASSIVE;
   if (envPassive !== void 0) {
     const v = envPassive.trim().toLowerCase();
     if (["1", "true", "yes", "on"].includes(v)) {
@@ -687,34 +687,34 @@ function loadUnifiedConfig(cwd, onWarn) {
     }
   }
   const merged = { ...DEFAULTS, ...parsed };
-  const envCompaction = process.env.PI_BLACKHOLE_COMPACTION;
+  const envCompaction = process.env.PI_REMENDRA_COMPACTION;
   if (envCompaction !== void 0) {
     const trimmed = envCompaction.trim().toLowerCase();
     if (isCompaction(trimmed)) {
       merged.compaction = trimmed;
     } else {
-      console.warn(`blackhole: invalid PI_BLACKHOLE_COMPACTION value "${envCompaction}"; ignoring`);
+      console.warn(`remendra: invalid PI_REMENDRA_COMPACTION value "${envCompaction}"; ignoring`);
     }
   }
-  const envCompactionEngine = process.env.PI_BLACKHOLE_COMPACTION_ENGINE;
+  const envCompactionEngine = process.env.PI_REMENDRA_COMPACTION_ENGINE;
   if (envCompactionEngine !== void 0) {
     const trimmed = envCompactionEngine.trim().toLowerCase();
     if (isCompactionEngine(trimmed)) {
       merged.compactionEngine = trimmed;
     } else {
       console.warn(
-        `blackhole: invalid PI_BLACKHOLE_COMPACTION_ENGINE value "${envCompactionEngine}"; ignoring`
+        `remendra: invalid PI_REMENDRA_COMPACTION_ENGINE value "${envCompactionEngine}"; ignoring`
       );
     }
   }
-  const envMidRunCompaction = process.env.PI_BLACKHOLE_MID_RUN_COMPACTION;
+  const envMidRunCompaction = process.env.PI_REMENDRA_MID_RUN_COMPACTION;
   if (envMidRunCompaction !== void 0) {
     const trimmed = envMidRunCompaction.trim().toLowerCase();
     if (isMidRunCompaction(trimmed)) {
       merged.midRunCompaction = trimmed;
     } else {
       console.warn(
-        `blackhole: invalid PI_BLACKHOLE_MID_RUN_COMPACTION value "${envMidRunCompaction}"; ignoring`
+        `remendra: invalid PI_REMENDRA_MID_RUN_COMPACTION value "${envMidRunCompaction}"; ignoring`
       );
     }
   }
@@ -735,7 +735,7 @@ function scaffoldConfig() {
 `);
     }
   } catch (e) {
-    console.error("blackhole: config scaffold failed", e);
+    console.error("remendra: config scaffold failed", e);
   }
 }
 function configFileNeedsMigration() {
@@ -1868,7 +1868,7 @@ var isRecord2 = (value) => typeof value === "object" && value !== null;
 var isStringArray = (value) => Array.isArray(value) && value.every((item) => typeof item === "string");
 function isPiVccCompactionDetailsV2(value) {
   if (!isRecord2(value)) return false;
-  if (value.compactor !== "blackhole" || value.version !== 2 || value.summaryMode !== "append" || typeof value.chainStart !== "boolean" || typeof value.trailingSummary !== "string" || !isStringArray(value.sections) || !Number.isInteger(value.sourceMessageCount) || value.sourceMessageCount < 1 || typeof value.previousSummaryUsed !== "boolean") {
+  if (value.compactor !== "remendra" || value.version !== 2 || value.summaryMode !== "append" || typeof value.chainStart !== "boolean" || typeof value.trailingSummary !== "string" || !isStringArray(value.sections) || !Number.isInteger(value.sourceMessageCount) || value.sourceMessageCount < 1 || typeof value.previousSummaryUsed !== "boolean") {
     return false;
   }
   if (!isRecord2(value.segment)) return false;
@@ -2074,7 +2074,7 @@ function renderSegmentCoverageMarker(sequence, coverage) {
   const firstKept = coverage.firstKeptEntryId || "<compact-all>";
   const legacy = coverage.includesLegacySummary ? `; legacySummary=true${coverage.rebasedFromCompactionId ? `; rebasedFrom=${coverage.rebasedFromCompactionId}` : ""}` : "";
   return [
-    `[Blackhole Append Segment ${sequence}]`,
+    `[Remendra Append Segment ${sequence}]`,
     `Coverage: ${coverage.firstCoveredEntryId}..${coverage.lastCoveredEntryId}; firstKept=${firstKept}; sourceMessages=${coverage.sourceMessageCount}${legacy}`,
     "Read segments in sequence. Later segments override earlier conflicting state."
   ].join("\n");
@@ -2136,7 +2136,7 @@ function buildAppendOnlyDetails(input) {
     chainStart = false;
   }
   return {
-    compactor: "blackhole",
+    compactor: "remendra",
     version: 2,
     summaryMode: "append",
     chainStart,
@@ -2178,10 +2178,10 @@ function projectAppendOnlyContext(messages, branchEntries) {
   const tailMessages = trailing ? [
     {
       role: "custom",
-      customType: "blackhole-compaction-tail",
+      customType: "remendra-compaction-tail",
       content: trailing,
       display: false,
-      details: { compactor: "blackhole", version: 2 },
+      details: { compactor: "remendra", version: 2 },
       timestamp: timestampOf(latest, segmentMessages.length)
     }
   ] : [];
@@ -2463,7 +2463,7 @@ function buildExistingReflectionsSummary(reflections, maxTokens) {
   return lines.join("\n");
 }
 var DEBUG_LOG_MAX_BYTES = 10 * 1024 * 1024;
-var DEBUG_LOG_RELATIVE_PATH = join("pi-blackhole", "debug.ndjson");
+var DEBUG_LOG_RELATIVE_PATH = join("pi-remendra", "debug.ndjson");
 var storage = new AsyncLocalStorage();
 function withDebugLogContext(context, fn) {
   const parent = storage.getStore();
@@ -2502,7 +2502,7 @@ async function flushBuffer() {
     rotateIfNeeded(path);
     await appendFile(path, batch.join(""), "utf-8");
   } catch (error) {
-    console.error("blackhole: debug log write failed", error);
+    console.error("remendra: debug log write failed", error);
   } finally {
     flushing = false;
   }
@@ -2535,7 +2535,7 @@ function flushDebugLog() {
     rotateIfNeeded(path);
     appendFileSync(path, batch.join(""), "utf-8");
   } catch (error) {
-    console.error("blackhole: debug log flush failed", error);
+    console.error("remendra: debug log flush failed", error);
   }
 }
 function rotateIfNeeded(path) {
@@ -3045,7 +3045,7 @@ function notifyMigrationReminder(sessionId, notify) {
   if (count >= 2) return;
   if (!configFileNeedsMigration()) return;
   migrationNotifyCount.set(sessionId, count + 1);
-  notify("blackhole: Use `/blackhole configure` to save your updated configuration.", "info");
+  notify("remendra: Use `/remendra configure` to save your updated configuration.", "info");
 }
 var formatTokens = (n) => {
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
@@ -3060,12 +3060,12 @@ var formatCompactionStats = (stats) => {
   if (stats.keepFallbackToCompactAll) {
     parts.push(`compact-all`);
   }
-  return `blackhole: ${parts.join("; ")} (~${formatTokens(stats.keptTokensEst)} tok).`;
+  return `remendra: ${parts.join("; ")} (~${formatTokens(stats.keptTokensEst)} tok).`;
 };
 var dbg = (debug, data) => {
   if (!debug) return;
   try {
-    writeFileSync("/tmp/pi-blackhole-debug.json", JSON.stringify(data, null, 2));
+    writeFileSync("/tmp/pi-remendra-debug.json", JSON.stringify(data, null, 2));
   } catch {
   }
 };
@@ -3195,8 +3195,8 @@ function buildOwnCut(branchEntries, piFirstKeptEntryId, tailBehavior) {
   };
 }
 var REASON_MESSAGES = {
-  no_live_messages: "blackhole: Nothing to compact (no live messages)",
-  too_few_live_messages: `blackhole: Too few live messages \u2014 Pi's default logic preserves visible context. Set tailBehavior to "minimal" in config to force compaction with fewer messages.`
+  no_live_messages: "remendra: Nothing to compact (no live messages)",
+  too_few_live_messages: `remendra: Too few live messages \u2014 Pi's default logic preserves visible context. Set tailBehavior to "minimal" in config to force compaction with fewer messages.`
 };
 var registerBeforeCompactHook = (pi, omRuntime) => {
   pi.on("session_before_compact", (event, ctx) => {
@@ -3238,13 +3238,13 @@ var registerBeforeCompactHook = (pi, omRuntime) => {
     if (omRuntime.config.compaction === void 0 && omRuntime.config.compactionEngine === void 0) {
       if (!isPiVcc && !omRuntime.config.overrideDefaultCompaction) {
         trace("before_compact.return_early", {
-          reason: "overrideDefaultCompaction=false and not /blackhole"
+          reason: "overrideDefaultCompaction=false and not /remendra"
         });
         return;
       }
       if ((omRuntime.config.compaction === "manual" || omRuntime.config.noAutoCompact) && !isPiVcc) {
         trace("before_compact.cancel", {
-          reason: "manual mode and not /blackhole"
+          reason: "manual mode and not /remendra"
         });
         omRuntime.lastCompactCancelled = true;
         return { cancel: true };
@@ -3409,7 +3409,7 @@ var registerBeforeCompactHook = (pi, omRuntime) => {
       messageCount: agentMessages.length
     });
     const legacyDetails = {
-      compactor: "blackhole",
+      compactor: "remendra",
       version: 1,
       sections: [...summary.matchAll(/^\[(.+?)\]/gm)].map((m) => m[1]),
       sourceMessageCount: agentMessages.length,
@@ -3436,7 +3436,7 @@ var registerBeforeCompactHook = (pi, omRuntime) => {
       if (omRuntime.appendFallbackNotified) return;
       omRuntime.appendFallbackNotified = true;
       ctx?.ui?.notify?.(
-        `pi-blackhole: append summary mode fell back to a complete replacement summary (${reason}); run /blackhole to rebase back into append segments`,
+        `pi-remendra: append summary mode fell back to a complete replacement summary (${reason}); run /remendra to rebase back into append segments`,
         "warning"
       );
     };
@@ -3579,14 +3579,14 @@ function handleCompactFailed(event, ctx, runtime) {
     });
   }
   if (reason === "overflow" && aborted && willRetry) {
-    notifySafely(hasUI, ui, "blackhole: overflow compaction aborted, retrying turn", "info");
+    notifySafely(hasUI, ui, "remendra: overflow compaction aborted, retrying turn", "info");
   }
   if (runtime.config.compactionEngine === "pi-default" && !attributedFromExtension) {
     trace("compact_failed.skipped_pi_default", { reason });
     return;
   }
   if (!aborted && errorMessage && attributedFromExtension) {
-    notifySafely(hasUI, ui, `blackhole: compaction failed \u2014 ${errorMessage}`, "error");
+    notifySafely(hasUI, ui, `remendra: compaction failed \u2014 ${errorMessage}`, "error");
   }
 }
 
@@ -3608,7 +3608,7 @@ function registerCompactionContextHook(pi, runtime) {
     }
   });
 }
-var PENDING_DIR = "pi-blackhole";
+var PENDING_DIR = "pi-remendra";
 var PENDING_SUFFIX = "-pending.json";
 var STALE_SUFFIX = "-pending.stale.json";
 function pendingPath(sessionId) {
@@ -3741,7 +3741,7 @@ function writePendingCursors(sessionId, cursors) {
   state.cursors = { ...cursors };
   writeSessionState(sessionId, state);
 }
-var PENDING_DIR2 = "pi-blackhole";
+var PENDING_DIR2 = "pi-remendra";
 var PENDING_SUFFIX2 = "-pending.json";
 var STALE_SUFFIX2 = "-pending.stale.json";
 function extractSessionId(filename) {
@@ -4123,7 +4123,7 @@ function createCleanupPicker(orphaned, theme, done) {
 async function handleCleanup(ctx) {
   const { orphaned } = analyzeOrphaned();
   if (orphaned.length === 0) {
-    ctx.ui.notify("pi-blackhole: No orphaned pending files found.", "info");
+    ctx.ui.notify("pi-remendra: No orphaned pending files found.", "info");
     return;
   }
   const isRpc = ctx.mode === "rpc" || ctx.mode === "json" || ctx.mode === "print";
@@ -4134,7 +4134,7 @@ async function handleCleanup(ctx) {
       "",
       ...orphaned.map((pf) => `  ${describeFile(pf)}`),
       "",
-      "Use /blackhole cleanup in TUI mode to delete these files."
+      "Use /remendra cleanup in TUI mode to delete these files."
     ];
     ctx.ui.notify(lines.join("\n"), "warning");
     return;
@@ -4151,24 +4151,24 @@ async function handleCleanup(ctx) {
     const intended = items.length;
     if (deleted === intended) {
       ctx.ui.notify(
-        `pi-blackhole: Deleted ${intended} orphaned pending file${intended === 1 ? "" : "s"}.`,
+        `pi-remendra: Deleted ${intended} orphaned pending file${intended === 1 ? "" : "s"}.`,
         "info"
       );
     } else {
       ctx.ui.notify(
-        `pi-blackhole: Deleted ${deleted}/${intended} orphaned pending file${intended === 1 ? "" : "s"} (${intended - deleted} failed).`,
+        `pi-remendra: Deleted ${deleted}/${intended} orphaned pending file${intended === 1 ? "" : "s"} (${intended - deleted} failed).`,
         "warning"
       );
     }
   } else if (items.length > 0 && items.length < orphaned.length) {
     const remainingSize = items.reduce((s, pf) => s + pf.sizeBytes, 0);
     ctx.ui.notify(
-      `pi-blackhole: ${orphaned.length - items.length} deleted, ${items.length} remain (${(remainingSize / 1024).toFixed(1)} KB).`,
+      `pi-remendra: ${orphaned.length - items.length} deleted, ${items.length} remain (${(remainingSize / 1024).toFixed(1)} KB).`,
       "info"
     );
   } else if (items.length === 0 && orphaned.length > 0) {
     ctx.ui.notify(
-      `pi-blackhole: All ${orphaned.length} orphaned pending file${orphaned.length === 1 ? "" : "s"} removed.`,
+      `pi-remendra: All ${orphaned.length} orphaned pending file${orphaned.length === 1 ? "" : "s"} removed.`,
       "info"
     );
   }
@@ -8291,7 +8291,7 @@ var ConfigManager = class {
     }
   }
 };
-var BUNDLED_CHANGELOG_TEXT = '## [2.0.0-alpha.1] - 2026-09-06\n\n### Added\n\n- New default memory engine with worker-backed SQLite, exact source evidence, typed claims, revision history, and explicit lineage/project/user scope.\n- Transactional corrections, conflict handling, dependency invalidation, and retired evidence spans that prevent stale re-extraction.\n- Bounded context compiler, durable extraction leases, native Pi model dispatch, cancellation, retries, and shared token reservations.\n- Unicode FTS5 recall, historical/source lookup, optional semantic indexing, procedure trials, direct v1 migration, exports, backups, and diagnostics.\n- Standalone CLI, focused v2 regression suite, real Pi SDK smoke test, and reproducible synthetic benchmark.\n\n### Changed\n\n- Pi owns native compaction and foreground scheduling. The default engine no longer patches private AgentSession methods or captures provider streams.\n- Supported Pi peer version is pinned to 0.85.1; validated Node runtime is 24.\n- Installed packages load the built dist/index.js entry and include the storage worker. Original behavior remains available through dist/legacy.js.\n\n### Release status\n\n- Installable alpha. See docs/VALIDATION-V2.md for measured tests and outstanding live-provider/platform gates.\n\n---\n\n## [0.4.10] - 2026-08-29\n\n### Changed\n\n- **Upgraded recall & export algorithms (BM25+, SimHash64, c-TF-IDF, and technical density scoring).**\n  - Upgraded session history search to **BM25+** with lower-bound delta term ($\\delta = 0.5$) preventing length bias against concise observations.\n  - Added lightweight morphological stemming (`stemToken`) to `dedup.ts` for higher token-set overlap across grammatical variants.\n  - Added 64-bit SimHash locality-sensitive fingerprinting (`computeSimHash64`, `simHashHammingDistance`) and cluster drift guards to speed up pairwise candidate filtering and prevent transitive clustering drift.\n  - Added technical entity density scoring (`technicalDensityFactor`) in `format-export.ts` to reward concrete code artifacts (paths, symbols, flags, hashes) over conversational transcripts.\n  - Expanded stemming and technical-artifact detection for common software terminology, major language file types, framework constructs, API routes, DevOps/configuration signals, errors, and semantic versions.\n  - Topic labels now preserve readable surface words while using stems only for internal matching and scoring.\n  - Upgraded topic labeling from standard TF-IDF to **c-TF-IDF** (Class-based TF-IDF with sublinear saturation).\n  - Export preamble now shows a best-effort heuristic warning instead of a Key Topics index.\n\n### Fixed\n\n- **Git-based installs no longer require interactive `pnpm approve-builds`.** `simple-git-hooks` is explicitly trusted through pnpm 11\'s workspace `allowBuilds` configuration, and the prepare lifecycle now initializes hooks and builds the bundle exactly once.\n- **Export pipeline hardening for large corpora.** Fixed `token.charCodeAt is not a function` crash caused by `TECHNICAL_ROOTS` prototype pollution on tokens like `constructor`/`toString` (now guarded with `hasOwnProperty`) and added a malformed-token guard in `computeSimHash64`; topic labels now preserve surface forms and the export warning clarifies heuristic ranking.\n\n---\n\n## [0.4.9] - 2026-08-28\n\n### Added\n\n- **Distilled project-memory export (`/blackhole-export`).** ([#65](https://github.com/k0valik/pi-blackhole/pull/65)) New command that scans project-scoped session JSONL files plus global OM pending buffers, deduplicates/clusters observations, and writes a single import-ready Markdown file (tiered as `Reflections \u2192 Critical \u2192 High \u2192 Medium \u2192 Low` plus an `Unattributed pending memory` section for orphaned buffers). Scoring is tier-weighted with recency decay, log-scaled recurrence and evidence-mass boosts, consensus rerank, burst penalty and length factor; viability gating keeps low/medium only with multi-session support or length/quality, high/critical always. Hierarchical topic assignment via S\xF8rensen-Dice graph + TF-IDF labeling; three-pass dedup (exact normalized, Levenshtein@0.88 after bigram-Jaccard prefilter, S\xF8rensen-Dice@0.70 with Levenshtein floor). Output parsing via `out:<path>.md` or a timestamped default; deterministic and stateless. New modules `src/project-recall/corpus.ts`, `dedup.ts`, `format-export.ts`, `session-dir.ts` and handler `src/commands/blackhole-export.ts` (wired in `index.ts`). Appendix A slice of the project-recall plan \u2014 future project-aware recall search remains out of scope for this release.\n\n### Fixed\n\n- **Capture `AgentSession` from bundled Pi CLI entrypoint.** ([#62](https://github.com/k0valik/pi-blackhole/pull/62), thanks @daoguademeng) `installHostInlineCompactionAdapter` now resolves the host `AgentSession` from the bundled CLI\'s runtime chunk (when the entrypoint is `dist/bundle/cli.js`) in addition to `dist/index.js`, so inline (mid-run) compaction works when Pi is launched via its bundled CLI instead of silently falling back to settled compaction.\n- **Unified `session_compact_failed` handling (pi >=0.84.3).** Ported from [ceblan/pi-blackhole#ceb-dev](https://github.com/ceblan/pi-blackhole/compare/main...ceblan:pi-blackhole:ceb-dev) (thanks @ceblan / Carlos Estrada): new `src/hooks/compact-failed.ts` closes gaps in failure coverage \u2014 structured `compact_failed.received` trace with corrected `attributedFromExtension` (`fromExtension || compactWasPiVcc || lastCompactCancelled`), defensive `compactInFlight` + `autoCompactionController` reset (aborts orphaned idle-wait so it cannot launch a second compaction after a later turn), overflow-retry `willRetry` visibility (`"overflow compaction aborted, retrying turn"`), and `compactionEngine: pi-default` noise filtering. `Runtime.lastCompactCancelled` is set on every `{ cancel: true }` from `before-compact` and consumed attempt-scoped with `compactWasPiVcc` (leak-free lifecycle: set at `session_before_compact` start, consumed on `session_compact` success or `session_compact_failed`). Covers pi #8328 overflow path.\n\n---\n\n## [0.4.8] - 2026-08-23\n\n### Added\n\n- **Opt-in append compaction (`compactionSummaryMode`).** New config key (`default` | `append`; `default` is the default) plus `PI_BLACKHOLE_COMPACTION_SUMMARY_MODE` override. In append mode each automatic Blackhole compaction appends one immutable provider-visible segment (`S1 | S2 | \u2026`) while every stored summary stays a complete fallback; `/blackhole` rebases the active chain into one clean segment; a legacy v1 summary enters through one marked rebase. A new `context` hook projects segments before each model call and fails closed to the fallback on any malformed state. When the projected chain passes half of the model\'s context window, the next automatic compaction folds it back into one segment. Falls back to rewrite surgery once per session when append mode encounters unsupported state. See `docs/APPEND_COMPACTION.md`. ([#58](https://github.com/k0valik/pi-blackhole/pull/58), thanks @sonSunnoi)\n\n### Changed\n\n- **Mid-run compaction failures now use exponential backoff** (1s doubling to a 30s cap) instead of suspending retries until context pressure drops. A single transient failure no longer wedges auto-compaction for the rest of the pressure episode; failure notices now include "retrying in Xs".\n- **Permanent inline-compaction unavailability (pi version lacks the adapter API) is now classified once** and reported as a single warning ("using settled compaction fallback") instead of surfacing as a retryable failure every episode. With `midRunCompaction: resume`, later turn-end attempts skip the adapter immediately, and agent start warns once if resume mode is configured against a known-unsupported adapter.\n- **Compaction token counting now uses real provider usage when available.** `rawTokensSinceLastCompaction` reads the last valid assistant message\'s usage (`calculateContextTokens`: `totalTokens` or the input/output/cache component sum) after the latest compaction entry, plus a chars/4 estimate for trailing entries, instead of estimating the whole window from characters. Chars/4 remains the fallback for sessions without usage data. Error/aborted assistant turns are never used as baselines; usage from before the latest compaction is ignored (it reflects the pre-compaction context). Approach from tavasti@360f24a (pi-vcc upstream PR #40); hardened implementation ported from plan-01 of the token-rework work.\n- **Minimal tails honor later Pi split-turn boundaries.** An oversized current turn can now be cut at Pi\'s safe assistant/user boundary instead of being retained whole after compaction.\n\n### Fixed\n\n- **Inline compaction ignores aborted/errored assistant turns.** Assistant messages with `stopReason: "error"` or `"aborted"` are now skipped when checking for trailing in-flight tool calls, matching Pi\'s own transform-messages behavior.\n- **Inline compaction ignores stale tool calls** that reference cleared state from a prior turn ([#57](https://github.com/k0valik/pi-blackhole/pull/57), thanks @daoguademeng)\n- **Settings modal footer and key dispatch guard against section rows.** Prevents a crash when the focused row in `/blackhole configure` is a section header instead of an editable field.\n\n---\n\n## [0.4.7] - 2026-08-15\n\n### Fixed\n\n- **Installation from git now works without a prebuilt `dist/`.** The package manifest entrypoint now points at `./index.ts` instead of `./dist/index.js`. Because `dist/` is gitignored, direct Git installs were missing the extension entrypoint and failing to load. Pi can load the TypeScript entrypoint directly, so this restores functionality for `npm install github:k0valik/pi-blackhole` and similar Git-based installs. Registry installs are unaffected (npm/pnpm/bun ship the prebuilt `dist/` bundle).\n\n---\n\n## [0.4.6] - 2026-08-14\n\n### Added\n\n- **Session-local config.** Config values can now be set at session scope via `/blackhole configure` or the config modal\'s scope selector. Session config is ephemeral \u2014 it lives only for the current session and overrides project-local and env values, so you can experiment with settings like `midRunCompaction` or `compactionEngine` without touching files or environment variables.\n\n- **All env overrides are visible in the config modal.** `PI_BLACKHOLE_MID_RUN_COMPACTION`, `PI_BLACKHOLE_COMPACTION`, and `PI_BLACKHOLE_COMPACTION_ENGINE` (alongside existing overrides like `PI_BLACKHOLE_SKIP_PROVIDERS` and `PI_BLACKHOLE_PROVIDER_IDLE_TIMEOUT_MS`) now appear in the env tab of the config modal with their current effective values, so you can see at a glance what the environment is contributing.\n\n### Changed\n\n- **Config modal migrated to the canonical `pi-base` config-rework surface.** The modal now uses the upstream scope-selector and config-flow, replacing the legacy `openSettingsModal` path. The layer precedence is: global \u2192 project \u2192 env \u2192 session, matching pi-utils behavior.\n\n### Removed\n\n- **Dead monolith-era config code.** Removed `src/pi-base/config-settings.ts`, `settings-registry.ts`, `settings-ui.ts`, `registry.ts`, `report.ts`, `llm.ts`, `hash.ts`, `context-provider.ts`, `once.ts`, `debug.ts`, `config-manager-howto.md`, `settings/README.md`, and the obsolete `scope-action.test.ts`. Blackhole-specific wiring (kitty decode, NixOS read-only warnings, key migration, clamping) remains in `blackhole-settings.ts`.\n\n### Fixed\n\n- **Recall drill-down honors lineage scope.** ([#54](https://github.com/k0valik/pi-blackhole/issues/54)) `#N:path` drill-down now checks the active lineage before expanding off-lineage entries, matching every other recall path. Off-lineage indices are blocked under the default `scope:"lineage"` and require `scope:"all"` to access.\n- **Inline compaction restores the Working indicator.** ([#52](https://github.com/k0valik/pi-blackhole/pull/52), thanks @daoguademeng) After inline compaction completes, the UI "Working" indicator is restored so the user sees activity resumed.\n\n### Dependencies\n\n- Bumped dev-dependency group across 2 PRs (#45, #53): `@typescript-eslint/eslint-plugin` to `8.66.0`, `eslint` to `10.8.0`, `lint-staged` to `17.3.0`, `typebox` to `1.3.10`, `typescript` to `6.0.3` (pinned for `@typescript-eslint` v8 compatibility), and `vitest` to `4.1.10`.\n\n## [0.4.4] - 2026-08-06\n\n### Added\n\n- **Experimental compatibility shim for pi-codex-compaction coexistence.** ([#47](https://github.com/k0valik/pi-blackhole/pull/47), thanks @danielmrdev) Optional `skipForProviders` (config key or `PI_BLACKHOLE_SKIP_PROVIDERS` env override) makes blackhole step aside entirely \u2014 no compaction, no observational-memory consolidation \u2014 for listed providers, giving exactly-one-engine semantics when pi-codex-compaction also registers a `session_before_compact` handler. **Niche surface by design**: unsurfaced in README/CONFIG.md until a second consumer exists (see shim notes in `src/core/provider-skip.ts`); surfaced only in example-config.json.\n\n- **Isolated provider idle timeout for background memory jobs.** ([#48](https://github.com/k0valik/pi-blackhole/pull/48), thanks @FelikZ) Optional `providerIdleTimeoutMs` lets observer/reflector/dropper worker HTTP requests tolerate longer silent provider intervals without forcing interactive Pi requests to wait equally long, by wrapping the provider `fetch` with an undici dispatcher that injects `bodyTimeout`. Unset inherits pi\'s global default; `0` disables; `> 0` sets a millisecond cap. Configurable via config file, `/blackhole configure`, or `PI_BLACKHOLE_PROVIDER_IDLE_TIMEOUT_MS`.\n\n### Fixed\n\n- **Credential-resolved provider endpoints are preserved for observational-memory workers on Pi versions whose registry exposes `getProviderAuth()`.** Observer, reflector, and dropper now use the endpoint selected by Pi\'s auth resolver, preventing GitHub Copilot Business/Enterprise requests from falling back to the Individual endpoint and returning HTTP 421. On older registries without `getProviderAuth()`, the fix degrades silently to the previous behavior.\n- **`midRunCompaction: "resume"` no longer aborts or replaces the active run.** ([#50](https://github.com/k0valik/pi-blackhole/pull/50), thanks @daoguademeng) The old `ctx.compact()` + `blackhole-resume` path propagated a false interrupt to background/subagent extensions and let nested child runners resolve before Blackhole\'s detached resume run finished. Resume mode now performs Pi\'s native compaction pipeline inline from the awaited `turn_end` handler, refreshes the next low-level turn from the compacted messages, and continues inside the original `session.prompt()` promise. Completed tool calls remain paired; no synthetic user/custom message is injected. `"resume"` is an **experimental opt-in** \u2014 it monkey-patches Pi host internals and can silently deactivate on host drift.\n- **Mid-run compaction compatibility fails closed.** A reload-idempotent, weakly referenced runtime adapter recognizes the known Pi 0.81 and 0.84 `AgentSession.compact()` shapes. Unknown internal drift refuses transparent compaction and leaves the active run alive instead of falling back to the unsafe aborting path. External abort/cancellation still passes through normally.\n\n### Testing\n\n- Added adapter contract coverage for Pi 0.81/0.84 compact shapes, no-abort behavior, compacted next-turn context refresh, external cancellation, unpaired-tool rejection, fail-closed drift handling, and reload idempotency. A real `AgentSession` + faux-provider integration test runs on both the 0.81.1 compatibility baseline and 0.84.0 dev baseline, proving the active run signal stays live, the next provider request receives the compacted context, and the original `session.prompt()` remains pending through compaction. Trigger tests prove no `ctx.compact()` or `blackhole-resume` dispatch.\n\n### Dependencies\n\n- Bumped `@earendil-works/pi-*` devDependencies from `0.83.0` to `0.84.0`; the peer range remains `>=0.81.1 <1.0.0`, and the adapter retains a tested legacy-shape path for the minimum supported host.\n\n## [0.4.3] - 2026-08-01\n\n### Added\n\n- **pi-base config modal for `/blackhole configure`.** ([#41](https://github.com/k0valik/pi-blackhole/pull/41)) The hand-rolled configure overlay is replaced with pi-base\'s ConfigManager + settings modal (vendored into `src/pi-base/`), with scope-aware editing: global config lives at `<agentDir>/pi-blackhole/` (respecting `PI_CODING_AGENT_DIR`), project config overlays `<cwd>/.pi/pi-blackhole-config.json`.\n\n### Changed\n\n- **Number fields edit inline in `/blackhole configure`.** Number fields (e.g. `compactAfterTokens`, `observeAfterTokens`) no longer cycle in fixed steps on every Enter \u2014 pressing Enter drops into inline editing where you type the value directly; `\u2190`/`\u2192` still fine-tune by step when not editing.\n- **Destructive-action confirmations are safer.** The delete/reset scope confirm now lists **Cancel first (pre-selected)** and shows a warning-color line stating what the action will do \u2014 tabbing into the confirm can never land on a destructive action by accident.\n- **Custom provider streams discovered through pi\'s model registry.** ([#42](https://github.com/k0valik/pi-blackhole/pull/42), thanks @FelikZ) The bridge that lets OM agents (observer/reflector/dropper) use custom providers (e.g. claude-bridge) now captures `streamSimple` functions from pi\'s public registry API (`getRegisteredProviderIds`/`getRegisteredProviderConfig`) on every `agent_start`, instead of wrapping `pi.registerProvider` and reading the private `registeredProviders` field. Works regardless of extension load order and includes providers added after startup; the legacy discovery path remains available for older pi releases.\n- **Precompiled extension bundle for faster startup.** The extension now ships a prebuilt `dist/index.js` bundle (tsup/esbuild) instead of being transpiled file-by-file by jiti at startup \u2014 module loading drops from ~85 source files to a single ESM file, measured ~1.6\u20132\xD7 faster extension load. The `@earendil-works/pi-*` packages and `typebox` stay external and resolve to the host pi\'s copies at runtime via its loader aliases. `pnpm build` produces the bundle; `prepare` builds automatically on install. The package manifest points at `./dist/index.js` and falls back to `index.ts` (slow path) when `dist/` is absent, so a fresh checkout still works pre-build.\n\n### Fixed\n\n- **Manual-mode pending files now contain full observation payloads.** ([#41](https://github.com/k0valik/pi-blackhole/pull/41)) The `noAutoCompact` \u2192 `compaction:\'manual\'` migration is completed: `isManualMode()` now checks both keys across all save/load gates, so manual-mode observations are written to the pending file (`savePendingObservation`) instead of falling through to `appendEntry()` (JSONL) \u2014 restoring crash-safe mid-run interruption recovery and `/blackhole flush` parity.\n- **Config modal could overwrite the user\'s config with defaults.** `openSettings` did not pass `globalConfigDir` to the settings modal, so the modal initialized every field from the schema default (it read a nonexistent config in the extensions dir) instead of the actual config file. Saving then wrote those defaults over the real values (e.g. `compactAfterTokens` 185000 \u2192 81000) while the runtime kept the correct values in memory \u2014 a confusing half-applied state. The modal now initializes from the real config file.\n- **Number-field editing could get stuck.** While inline-editing a number field, typing/backspace/escape were swallowed by the step-cycling branch, leaving the modal in an editing state with no way out (Enter showed a cursor but nothing worked, and `ctrl+c` couldn\'t close it). All editing keys now flow through the inline editor, and `ctrl+c` closes the modal even mid-edit.\n- **Typed input failed in Kitty terminals.** Kitty reports printable characters as CSI-u sequences (e.g. `5` arrives as `\\x1b[53u`); they were rejected by the input filter \u2014 and after the first fix, inserted as raw escape bytes. The input filter and the insert path now decode them, so typing works in Kitty terminals.\n- **Config save failures on read-only filesystems are now visible.** `ConfigManager.save()` throws when the write fails (e.g. config managed by Nix), and `/blackhole om-off`/`om-on` surface a warning \u2014 previously the failure was silently swallowed while the in-memory runtime state changed, diverging from disk without explanation.\n- **`PI_BLACKHOLE_*` env overrides now apply at runtime.** The declarative env map (`memory`, `debug`, `compactAfterTokens`, \u2026) was only honored by the modal path; the runtime config loader ignored it. The env map + application logic moved to a shared module used by both paths, so e.g. `PI_BLACKHOLE_COMPACT_AFTER_TOKENS=200000` now affects the actual compaction threshold, not just the modal display.\n\n### Testing\n\n- **Ported the upstream pi-base test suite (246 tests)** from `pi-utils/packages/pi-base` \u2014 config manager, settings modal (buffered mode, smoke, inline-edit, field validation) plus the 4 small modules (env, shell, types, ui) they cover. Only import-path adaptation was needed; zero semantic drift, which also confirms the vendored modal is behaviorally aligned with upstream.\n- **New regression tests pin this release\'s fixes:** config-manager `globalConfigDir` forwarding, number-field inline editing (including a Kitty CSI-u integration case driving the full renderer path), Kitty decode, and runtime env overrides.\n- **Tests no longer touch the system clipboard.** The memory-command tests ran the real `copyTextToClipboard` (spawning `wl-copy`/`xclip`/`xsel`) and overwrote the user\'s clipboard with fixture data; the module is now mocked and the mock\'s use is asserted so a regression fails the suite instead of mutating the clipboard.\n\n### Dependencies\n\n- **Bumped `@earendil-works/pi-*` devDependencies to `0.83.0`** (agent-core, ai, coding-agent, tui); the peer range stays `>=0.81.1 <1.0.0`. CI re-verifies typecheck + tests against the minimum supported `0.81.1` on every push/PR, so both the oldest and newest supported pi versions stay green.\n\n### Packaging\n\n- **Tolerant `prepare` build hook.** The `prepare` script is now a dependency-free `node scripts/prepare.mjs` that builds `dist/` only when the toolchain is present, and otherwise skips silently \u2014 it can never abort an install for git/checkout consumers running npm, pnpm, or bun in any devDependency configuration. Husky hooks install best-effort (dev checkouts only). Registry installs are unaffected (npm/pnpm/bun never run `prepare` on registry packages).\n- **npm publishing now uses provenance.** The publish workflow runs `npm publish --provenance` (GitHub OIDC attestation), so every tarball carries a signed signature linking it to this repo + workflow \u2014 verifiable with `npm audit signatures` / `gh attestation verify`. The release gate now matches CI (build, typecheck, lint, test, format check).\n- **Dev tooling.** Prettier (repo normalized once, enforced via lint-staged), husky pre-commit (lint+format staged files, then typecheck) and pre-push (typecheck + full test suite), ESLint extended to `tests/` and root configs, and CI now runs tests + format check alongside the build.\n\n---\n\n## [0.4.2] - 2026-07-27\n\n### Changed\n\n- **`midRunCompaction` default changed from `"resume"` to `"off"`.** ([#40](https://github.com/k0valik/pi-blackhole/issues/40), thanks @daoguademeng) `ctx.compact()` aborts the active agent operation before compacting, which is not lifecycle-safe at `turn_end` for subagent/background-work extensions: it propagates through the shared `AbortSignal` and cannot be distinguished from user cancellation. This affects both parent-side subagent workflows (active/queued children aborted, parent stalled) and child-side nested sessions (runner terminated, orphan transcript continues, `blackhole-resume` resumes a session the parent already sees as completed). `off` defers compaction to `agent_end`, which is the only currently safe boundary for extension-owned work. `resume` and `pause` are preserved as explicit opt-in for users without subagent workflows.\n\n---\n\n## [0.4.1] - 2026-07-24\n\n### Added\n\n- **Mid-run auto-compaction (`midRunCompaction`).** ([#38](https://github.com/k0valik/pi-blackhole/pull/38), thanks @daoguademeng) The threshold trigger previously only ran on `agent_end`, which never fires while the agent is looping through tool calls \u2014 during long runs `compactAfterTokens` could be exceeded many times over without a single evaluation, and the post-run wait was aborted by any new `agent_start`, deferring compaction indefinitely under continuous use. The threshold is now also evaluated at every `turn_end` (after each assistant message + tool executions). New config enum `midRunCompaction: "resume" | "pause" | "off"` (default `"resume"`): `resume` compacts at the threshold and injects a `blackhole-resume` message (`triggerTurn`) so the agent continues the task with the compacted context; `pause` compacts and hands control back; `off` restores the old end-of-run-only behavior. Available in `/blackhole configure`.\n- **`/blackhole <text>` follow-up prompt.** After compaction, `/blackhole` optionally sends `<text>` as a follow-up message so the model continues the task without re-typing. Wrapped in `void Promise.resolve(...).catch(() => {})` for robust error handling.\n- **Subcommand near-miss detection.** `/blackhole configure foo` now shows a warning instead of silently becoming a follow-up prompt.\n\n- **`/blackhole cleanup` command for orphaned pending files.** Per-session pending files (`*-pending.json`, `*-pending.stale.json`) accumulate when compaction is manual and sessions are abandoned or deleted. The command scans the `pi-blackhole/` directory, cross-references session IDs against all session JSONL files, and provides an interactive TUI picker to safely remove orphaned files. Non-TUI modes (RPC/JSON/print) list orphaned files as a notification without deleting.\n\n### Command formatting cleanup\n\n- `/blackhole` and `/blackhole-memory` subcommands and modes now use `[bracketed]` syntax (e.g. `[om-on]`, `[hybrid]`) with shortened descriptions, making the command palette visually consistent and easier to scan.\n\n### Notification & session goal reorg\n\n- Session goal now derives from the first user message and is persisted at the top across compactions, with `(#N)` entry indexing for traceability.\n- OM info notifications are gated to one per phase/turn \u2014 warnings and errors still fire immediately.\n- Git commit extraction now handles tool_call, bash, and post-convert user-text formats.\n- Cooldown skip messages now strip raw JSON from the reason for cleaner display, with a log pointer for debugging.\n\n### Fixed\n\n- **Mid-run compaction failure resilience.** ([#38](https://github.com/k0valik/pi-blackhole/pull/38), thanks @daoguademeng) If the before-compact hook cancels (or compaction errors) after `ctx.compact()` has already aborted the run, resume mode still re-triggers the agent so the task doesn\'t stall, and further mid-run attempts are suspended until a compaction lowers pressure below the threshold (prevents abort/cancel thrash loops).\n- **Early-session reflection/drop starvation on first compaction.** Added `fullFoldAlways` config flag (default `true`). When no prior full-fold boundary exists, reflections and drops now use the observation boundary instead of being excluded. Previously, fresh sessions silently lost all durable memory on the first compaction because there was no full-fold history to anchor the maintenance boundary.\n- **`capBrief` omission count now computed after `firstHeader` trim.** Previously the "N earlier lines omitted" header was computed before the section-header anchor trim, so the count was understated when headers caused additional trimming. This matched an upstream bug that was already fixed there.\n\n- **Recall-note bloat across multiple compactions.** `compile()` now strips OM content first, then removes all recall-note paragraphs from the previous summary using paragraph-level matching (instead of only stripping a trailing exact match). After 3+ compactions, the summary no longer accumulates 3+ embedded copies of the recall note.\n\n## [0.4.0] - 2026-07-24\n\n### Added\n\n- **`/blackhole cleanup` command for orphaned pending files.** Per-session pending files (`*-pending.json`, `*-pending.stale.json`) accumulate when compaction is manual and sessions are abandoned or deleted. Provides an interactive TUI picker to safely remove orphaned files. Non-TUI modes (RPC/JSON/print) list them without deleting.\n- **`dropperPressureThreshold` in configure overlay.** Already in config schema but missing from `/blackhole configure` TUI. Now editable alongside other OM thresholds.\n- **`fullFoldAlways` in TUI overlay.** Added to the configure overlay under Observational Memory section.\n- **Session goal from first user message.** Persisted at the top across compactions with `(#N)` entry indexing for traceability.\n- **OM info notifications gated to one per phase/turn.** Warnings and errors still fire immediately.\n- **Git commit extraction expanded.** Now handles `tool_call`, `bash`, and post-convert user-text formats.\n- **Cooldown skip messages strip raw JSON** from the reason for cleaner display, with a log pointer for debugging.\n- **`/blackhole` and `/blackhole-memory` subcommands now use `[bracketed]` syntax** (e.g. `[om-on]`, `[hybrid]`) with shortened descriptions for visual consistency.\n\n### Fixed\n\n- **Early-session reflection/drop starvation on first compaction.** Added `fullFoldAlways` config flag (default `true`). When no prior full-fold boundary exists, reflections and drops use the observation boundary instead of being excluded.\n- **Recall-note bloat across multiple compactions.** `compile()` strips OM content first, then removes all recall-note paragraphs using paragraph-level matching (instead of only stripping a trailing exact match).\n- **OAuth/ADC-backed providers (Vertex, custom OAuth) now accepted by OM pipeline.** `resolveModel` uses `modelRegistry.hasConfiguredAuth()` instead of requiring a truthy `auth.apiKey`. Falls back to legacy behavior on older pi versions. ([#38](https://github.com/k0valik/pi-blackhole/issues/38))\n- **`ResolveResult.apiKey` is always a string.** Defaults to `""` instead of casting `undefined`.\n- **jiti provider bridge type-safe for pi 0.81.1+.** `pi.registerProvider` wrapper satisfies the overloaded signature in pi-coding-agent 0.81.1.\n- **Config overlay blocks save on invalid JSON.** Red error banner and Ctrl+S block prevent wiping model configs on corrupt files. ([#35](https://github.com/k0valik/pi-blackhole/issues/35))\n- **Config reloads after overlay save.** `Runtime.reloadConfig()` forces a fresh disk read after `/blackhole configure` saves. ([#36](https://github.com/k0valik/pi-blackhole/issues/36))\n- **Invalid JSON warning surfaced via TUI.** Yellow warning notification shown at every config load point instead of only `console.warn`.\n- **Defensive null guards for `b.args` and `ui.notify`.** Prevents crashes from stale extension context.\n- **`streamSimple` import updated to `pi-ai/compat`.** Removed from main export in pi 0.80.3.\n- **Legacy fallback config errors now passed to `onWarn` callback.** JSON parse errors in legacy fallback files (`pi-vcc-config.json`, `settings.json`, `.pi/settings.json`) are surfaced via the warning callback, not just `console.warn`.\n- **`saveUnifiedConfig` warns before overwriting corrupt config.** If the config file has invalid JSON, a warning is logged before overwriting.\n- **`dropperPressureThreshold` clamped to `[0.01, 1]` in overlay save.** Previously could silently lose value on reload.\n- **`deleteOrphanedBatch` reports partial failures.** "Delete all" now shows `Deleted X/Y (Y-X failed)` when individual unlinks fail.\n- 4 new tests for `fullFoldAlways` behavior in `buildCompactionProjection`: reflections survive first compaction when enabled, excluded when disabled, full-fold boundary still takes precedence, and post-boundary reflections remain excluded.\n- 3 new tests for recall-note deduplication in `compile`: wrapped recall note stripped, OM content stripped before recall note, and three-cycle accumulation produces exactly one recall note.\n- 5 new tests for follow-up prompt: extraction, subcommand exclusion, empty-args suppression, send after completion, compaction-failure suppression.\n- 6 new tests for CompactionStats population: all fields populated, compactAll flag, totalUserTurns count, keptUserTurns count, compactAll zero kept, and format string coverage.\n- 2 new tests for capBrief omission count: header-trimmed count is correct (99 for 200 lines with header at line 100), and no-header fallback still correct.\n\n### Changed\n\n- **New config key:** `fullFoldAlways` (boolean, default `true`). Added to `UnifiedConfig` schema, defaults, and config file parsing.\n- **CompactionStats expanded from 3 to 11 fields.** Added `compactAll`, `totalUserTurns`, `keptUserTurns`, `requestedKeepUserTurns`, `keepUserTurnsExplicit`, `keepFallbackToCompactAll`, `smartKeepAdjusted`, `smartFromKeep`. All populated from `buildOwnCut` return data (Bug A fix).\n- **Shared `formatCompactionStats` exported.** Both the `/blackhole` command handler and hook\'s `session_compact` handler now use a single shared formatter, eliminating the duplicate inline toast strings and the private `formatTokens` helper.\n- **Dead ternary collapsed.** `effectiveTailBehavior` no longer has an `isPiVcc` branch with identical values on both sides (Bug B fix).\n- **Dependencies: bumped `@earendil-works/pi-*` packages to `0.81.1`** (agent-core, ai, coding-agent, tui).\n- **Removed 6 unused exports from `om/cleanup.ts`** (`scanPendingFiles`, `findSessionDirs`, `collectAllSessionIds`, `crossReference`, `formatSize`, `formatAge`).\n\n### Tests\n\n- 4 new tests for `fullFoldAlways` behavior in `buildCompactionProjection`.\n- 3 new tests for recall-note deduplication in `compile`.\n- 6 new tests for OAuth/ADC auth paths.\n- Tightened capping assertions in robust tests.\n- Added robust coverage for OM and CCC pipelines.\n\n---\n\n## [0.3.9] - 2026-06-24\n\n### Auto-compaction idle race fix (#31, #33)\n\nThe auto-compaction trigger used to bail permanently when `ctx.isIdle()`\nreturned `false` at the first `setTimeout(0)` check after `agent_end`.\nWhen another extension (e.g. pi-rewind) registered an async `agent_end`\nhandler whose I/O kept the agent state busy past the next macrotask,\nthe trigger logged `"bail: not_idle"` and never retried \u2014 auto-compaction\neffectively never fired in this configuration.\n\n**New behavior:** the trigger keeps `compactInFlight = true` and polls\n`isIdle()` every 200ms (in 50ms slices) until the agent truly settles,\nor one of two cancellation signals:\n\n- `agent_start` fires \u2014 the user (or another extension) started a new\n  turn. `AbortController.abort()` cancels the wait; the new turn\'s own\n  `agent_end` will re-evaluate and start a fresh wait if still needed.\n- Session change (e.g. `/resume`) \u2014 detected inside the wait loop.\n\nOnly the cell `compaction:auto + compactionEngine:blackhole` is affected.\nAll other config combinations (off, manual, pi-default) are unchanged.\n\n### CI: fallow audit job\n\n- Added `fallow-audit` CI job (PR only, changed-code audit with compact\n  format, review comments, no SARIF)\n\n### Test cleanup\n\n- Removed stale `transcript-mode` tests left orphaned when the feature\n  was deliberately dropped in v0.3.7 as redundant with hybrid search.\n\n---\n\n## [0.3.8] - 2026-06-19\n\n### Pipeline progress cursors - fix re-run loop (#28, #29)\n\nThe pipeline previously coupled progress tracking to output markers: if a stage\nproduced empty output or errored, no marker was written, causing the stage to\nre-process the same data on every `agent_start`/`turn_end` trigger. In real-world\nlogs the dropper ran 8,350\xD7 vs observer 1,124\xD7, with zero drops selected.\n\n- **Per-stage progress cursors** decouple progress from output. Each stage\n  (observer, reflector, dropper) gets a cursor entry ID that advances whenever\n  the stage runs - regardless of whether it produced output. "I looked and\n  found nothing" is a valid answer that blocks re-processing.\n- **Cursor `state` field** (`recorded` | `empty` | `error` | `skipped` | `not_due` | `initial`)\n  distinguishes empty runs from skipped stages from actual output.\n- **Reflector gates on new data.** If no new `OM_OBSERVATIONS_RECORDED` batches\n  exist since the reflector cursor, and `reflectAfterTokens` threshold not met,\n  skip entirely - no LLM call.\n- **Dropper gates on pressure or new data.** Runs only when pool \u2265 10% fullness AND\n  (new data exists OR pool \u2265 `dropperPressureThreshold` \xD7 `reflectorInputMaxTokens`).\n  Previously always returned `not_over_target` with 0 drops - now correctly skipped.\n- **Cursor storage:** in-memory primary (zero-I/O gating), async flush to\n  `{sessionId}-pending.json` for durability across restarts. Degrades gracefully\n  on read-only filesystems.\n- **Stale cursor recovery:** if a cursor\'s entry ID disappears (fork, navigation,\n  compaction), falls back to coverage-marker logic for one run, then writes fresh cursors.\n\n### New config key: `dropperPressureThreshold`\n\n- Fraction of `reflectorInputMaxTokens` at which the dropper fires even without\n  new data (pressure relief valve). Default `0.70` (70%). Set to `1.0` to disable\n  pressure-driven dropper entirely.\n\n### Debug log additions\n\n- `observer.skip`, `reflector.start`, `reflector.skip`, `dropper.start`,\n  `dropper.skip`, `cursor.loaded`, `cursor.saved`\n\n### Deferred pipeline concerns (pre-merge review)\n\nAudit surfaced 7 correctness/performance edge cases in the cursor pipeline.\nFour were fixed; three were deferred as harmless or cosmetic.\n\n**Fixed:**\n- **Session fork cursor bleed (#2).** `cursorsLoaded` was a one-shot boolean\n  \u2014 on session fork, stale cursors bled into the new branch because\n  `validateCursors` was never re-invoked. Now keyed by `cursorsLoadedSessionId`\n  so cursors are re-loaded and re-validated whenever the session ID changes.\n- **Manual-mode pool fullness underestimation (#1).** `anyStageDue` had no\n  visibility into pending observations in `compaction: "manual"` mode (branch\n  has no OM markers). Reflector and dropper due checks now accept an optional\n  `PendingOMState` so pending batches contribute to new-data scans and pool\n  token counts. Prevents the pipeline from stalling after the first run in\n  manual mode.\n- **foldLedger on every agent_start/turn_end (#3).** `dropperDue` called\n  `foldLedger` (O(n) on branch) unconditionally \u2014 even when the observer or\n  reflector alone made the pipeline due. Now short-circuits: the fold is\n  only computed when both observer and reflector are not due.\n- **Observer cursor to non-source entry (#6).** When the observer skipped\n  (not due), the cursor advanced to `entries.at(-1)` which could be a custom\n  OM marker rather than a conversation source entry. Now advances to the\n  last source entry (`findLast(isSourceEntry)`).\n\n**Deferred:**\n- **"unknown" magic entry ID (#4).** Functional but cosmetic \u2014 the sentinel\n  triggers fallback on next load. 9 call sites; zero behavioral change.\n- **Observer re-checks tokens (#5).** Harmless \u2014 only reached when pipeline\n  launched for a different stage. Correctly advances cursor to `not_due`.\n- **Dropper cursor fallback cascade (#7).** The 4-step `coversUpToId ??`\n  `observationCoverageId ?? entries.at(-1)?.id` cascade is already reasonable\n  fallback ordering.\n\n### Tests\n\n- 17 new tests for cursor gating, persistence, stale recovery, and debug log events\n- 3 new tests for manual-mode pending awareness (reflector, dropper, post-first-run)\n- `dropperPressureThreshold` added to config validation tests\n\n\n\n# Changelog\n\n## [0.3.7] - 2026-06-10\n\n### Recall tool simplification (#27)\n\n- Dropped `mode:transcript` \u2014 strict subset of `mode:hybrid` with no unique capability. (#27)\n- Consolidated 5 scattered `promptGuidelines` into 2 focused entries; removed "NOT semantic" redundancy and JSONL implementation leak. (#27)\n- Removed internal taxonomy from mode descriptions ("transcript + file indicators" \u2192 "all session content"). (#27)\n- Added `mode:touched` support to `/blackhole-recall` command (previously only worked via agent tool). (#27)\n- Collapsed drill-down examples to `#N:path with optional :offset:limit or :full`. (#27)\n\n### Stale context crash protection (#26)\n\n- Added `getErrorMessage()` to normalize cross-process error serialization (Error objects, plain objects with `message`, arbitrary thrown values). (#26)\n- Added `isStaleExtensionContextError()` to detect stale-context error patterns. (#26)\n- Added `notifySafely()` wrapper around `ui.notify()` calls to prevent stale-context notification errors from propagating. (#26)\n- Wrapped `agent_end` handler, async compaction callbacks (`onComplete`, `onError`), and deferred timer callback to silently bail on stale-context errors. (#26)\n\n### Lockstep sync \u2014 2026-06-05 (#25)\n\n- Ported [pi-observational-memory/58f05fa](https://github.com/elpapi42/pi-observational-memory/commit/58f05fa): remove `Math.min(100)` cap from `pct()` helper so overfull observation pool (>100%) is displayed accurately instead of silently capping at 100%. (#25)\n- Skipped [pi-observational-memory/58f05fa](https://github.com/elpapi42/pi-observational-memory/commit/58f05fa) command renames (`/om-status`\u2192`/om:status`, `/om-view`\u2192`/om:view`) \u2014 our equivalent commands (`/blackhole-memory`) already use a different naming scheme. (#25)\n- Deferred [pi-observational-memory/bf79ff7](https://github.com/elpapi42/pi-observational-memory/commit/bf79ff7) and [pi-observational-memory/52b5844](https://github.com/elpapi42/pi-observational-memory/commit/52b5844): pool metrics extraction + `budgetTokens`\u2192`targetTokens` rename. Blocking branch (`noautocompact-reflector-dropper`) is now stale/dropped, but changes touch heavily diverged files. (#25)\n\n## [0.3.5] - 2026-06-04\n\n### Added\n\n- **`sessionFallback` config option.** When `false`, skip the main session model as last-resort fallback when all OM-specific model candidates are exhausted. Default `true` for backward compatibility. Useful for keeping OM workers on cheaper/faster models. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Session-file LRU cache.** `loadAllMessages` now caches up to 3 session files with mtime + TTL (2s) invalidation. Reduces redundant I/O on repeated recall searches in the same session. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Pending state sanitization.** `readSessionState` now filters corrupted batch entries (missing `coversUpToId` or `data` fields) instead of returning them as-is. Prevents crashes from edge cases like a partial write to `pending.json`. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Shared `isRetryableError` / `RETRYABLE_ERROR_RE`.** Extracted from `cooldown.ts` and `compaction-trigger.ts` into `retryable-error.ts` \u2014 single source of truth, re-exports Pi\'s `isContextOverflow` for provider-specific overflow detection. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Shared provider-stream bridge.** `createBridgeStreamFn` extracted from all three OM agents (observer, reflector, dropper) into `provider-stream.ts`. Custom providers registered by other extensions (e.g., claude-bridge) continue working through jiti-loaded consolidation agents. ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **Async buffered debug logging.** `debugLog()` now buffers JSONL writes in memory and flushes on a 1-second background timer, with synchronous flush on `exit`. Reduces event-loop blocking during high-frequency debug events. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Windows path support in file extraction.** `longestCommonDirPrefix` normalizes backslashes and recognizes `C:\\`-style drive letters. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n\n### Fixed\n\n- **Context window check uses actual input size, not configured cap.** Observer/reflector/dropper now compute `observerEstimatedInput` from the actual chunk tokens after capping, not from `observerChunkMaxTokens`. More accurate \u2014 fewer false "context window exceeded" rejections on smaller-than-cap inputs. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`coversUpToId` now points past capping, not before.** Observer stage captured the last entry ID before capping source entries to `maxChunkTokens`, so the coverage marker could point to an entry that was dropped. Now captured after capping. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`capSourceEntriesToTokens` counts all entry types.** Previously only `"message"` entries counted toward the token budget \u2014 custom OM entries (`observations_recorded`, `reflections_recorded`, etc.) and summary-bearing entries were invisible, risking context overflow in the observer. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Reflector/dropper avoid redundant disk reads.** Both stages now use the outer-scope `pending` variable (already read in the `noAutoCompact` block) instead of calling `readPendingState(sessionId)` again inside the for loop. Neutral correctness win. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Observer rejects invalid observation IDs gracefully.** `normalizeSourceEntryIds` now filters out unknown/duplicate IDs instead of returning `undefined` and discarding the entire observation batch. One hallucinated ID from the LLM no longer loses valid observations. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`pendingObservationsCreatedAfter` properly typed.** Changed from `pending: any` to `pending: PendingOMState` \u2014 catches type mismatches at compile time. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Section headers in summaries use line-boundary regex.** `sectionOf` and `stripOMContent` now match `## Reflections` / `## Observations` at the start of a line instead of using bare `indexOf`. Prevents false positives when those phrases appear inside file paths or conversation text. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Read+same-path-Modified dedup in file summaries.** `mergeFileLines` now removes a path from `Read` if it also appears in `Modified` \u2014 a file that was read then edited shouldn\'t show twice. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`reverse-recall` outputs related reflections.** The `_reflections` dead parameter is now used \u2014 related reflections are shown alongside observations when expanding session entries. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Cooldown reason in UI notification.** The `getCooldownEntry` function now returns the actual entry (with reason), so the status notification shows *why* a model was cooled down, not just "cooldown active". ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Env override validation.** Invalid `PI_BLACKHOLE_COMPACTION` / `PI_BLACKHOLE_COMPACTION_ENGINE` values now print a warning instead of being silently ignored. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`observerPreambleMaxTokens` accepts 0.** Now uses `nonNegativeInt` validator instead of `positiveInt` \u2014 0 means "auto-compute", which was the intended semantics. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n\n### Changed\n\n- **Replaced hand-rolled text wrapping with `wrapTextWithAnsi` from pi-tui.** The custom `wrapLine` function was replaced with `wrapLineWithContinuation` using pi-tui\'s ANSI-aware wrapping. Handles list continuation indentation and ANSI mid-sequence splits correctly. ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **`visibleWidth` re-exported from pi-tui.** The local CJK-width implementation in `key-matcher.ts` was replaced with a re-export from `@earendil-works/pi-tui`. Fallback note retained if the import fails in overlay context. ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **Bash command compression improved.** Multi-line commands joined with semicolons instead of first-line-only. Pipe tails strip `awk`/`python3`/`node`/`bun` excluded (their output carries semantic meaning). Word-boundary truncation instead of mid-word cut. Up to 10 tail-strip iterations with stability guard. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`fuzzyMatch` \u2192 `prefixMatch`.** The `/blackhole` subcommand filter changed from fuzzy/subsequence matching to simple prefix matching. Predictable narrowing: typing "om" matches "om-on" and "om-off". ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **`read` tool summary field corrected.** `TOOL_SUMMARY_FIELDS` now maps lowercase `read` \u2192 `"path"` (not `"file_path"`), matching the actual tool argument. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Tool error blank-line suppression.** `stringifyBrief` now suppresses blank lines between consecutive tool/error summaries (previously only between consecutive tool summaries). ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Recall header distinguishes matches vs expands.** The search result header now shows `"X matches (+ Y expanded)"` when entries were pulled in via `#N` expand rather than matching the query. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Compaction output instructions split into full/basic variants.** `CONTEXT_USAGE_INSTRUCTIONS` shortened to 4 lines (previously 10). When observations/reflections are present, the full version includes the bracketed-ids preamble + recall footer. When none exist (or OM is off), a basic 2-line recall-guidance footer is appended instead. `renderSummary` always returns a footer, and `stripOMContent` handles both variants to prevent compounding. ([#23](https://github.com/k0valik/pi-blackhole/pull/23))\n\n### Removed\n\n- **Dead `loadSettings()` / `PiVccSettings`.** Config loading unified in `unified-config.ts` \u2014 the `settings.ts` wrapper had zero callers. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Dead `transcriptEntries` from `SectionData`.** Removed from `sections.ts` and `build-sections.ts`. (dead since v0.3.3) ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Dead toggle helpers.** `toggleCompaction`, `toggleCompactionEngine`, `toggleTailBehavior` removed from `unified-config.ts` (zero callers \u2014 toggling is handled by the configure overlay). ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Dead `vcc-report.test.ts`.** Test file was testing a non-existent `src/core/report.js` module. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Dead `config-simplification.test.ts`.** Tested old config migration that\'s been stable since v0.3.3. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n\n### Docs\n\n- **Renamed example configs.** `example-config-v2.json` \u2192 canonical `example-config.json` (new config surface). Old `example-config.json` \u2192 `example-config-old.json` (legacy keys). ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **README: updated "What the agent sees" example** to match actual output ordering and expanded RECALL_NOTE text. ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **README: added `sessionFallback` to settings table.** ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **example-config.json: added `sessionFallback` field.** ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **README: updated "What the agent sees" example** to match the new shorter CONTEXT_USAGE_INSTRUCTIONS text and note about basic footer when OM is off. ([#23](https://github.com/k0valik/pi-blackhole/pull/23))\n\n## [0.3.4] - 2026-06-02\n\n### Added\n\n- **`cooldownHours: 0` disables cooldown without disk writes.** Previously `cooldownHours: 0` was rejected by the positive-int validator and silently replaced with a 1-hour cooldown. Now 0 is a valid value that disables cooldown entirely \u2014 no disk writes, no persistent state. Failed models are tracked in-memory within each consolidation stage (via `failedInCycle` set) so the fallback chain still advances past them. ([#16](https://github.com/k0valik/pi-blackhole/issues/16), [#18](https://github.com/k0valik/pi-blackhole/pull/18))\n- **Kitty CSI-u keyboard protocol support for overlays.** The configure and status overlays use pi-tui\'s `matchesKey` (which handles both legacy terminal sequences and Kitty\'s CSI-u protocol) instead of the homegrown `matchKey`. Digit input uses `decodeKittyPrintable` to decode CSI-u encoded characters. ([#17](https://github.com/k0valik/pi-blackhole/issues/17), [#19](https://github.com/k0valik/pi-blackhole/pull/19))\n- **Per-stage failure notification isolation.** When cooldown is disabled, each consolidation stage (observer, reflector, dropper) now shows its own failure notification \u2014 observer failure no longer suppresses reflector/dropper notifications. ([#19](https://github.com/k0valik/pi-blackhole/pull/19))\n\n### Fixed\n\n- **Keyboard freeze in `/blackhole configure` on Kitty terminal.** The homegrown `matchKey` function did not recognize Kitty\'s CSI-u keyboard protocol sequences (used by Kitty, WezTerm, and other modern terminals). Switched to pi-tui\'s `matchesKey` which supports both legacy and CSI-u input. ([#17](https://github.com/k0valik/pi-blackhole/issues/17), [#19](https://github.com/k0valik/pi-blackhole/pull/19))\n- **Config error notifications no longer downgraded to info.** When a session model has no API key configured, the notification correctly shows a "warning" level message instead of the misleading "info" message previously shown when `failedInCycle` was non-empty. ([#16](https://github.com/k0valik/pi-blackhole/issues/16), [#18](https://github.com/k0valik/pi-blackhole/pull/18))\n\n### Changed\n\n- **Removed `key-matcher.ts` `matchKey` export** (replaced by pi-tui\'s `matchesKey`). The `visibleWidth` export is retained.\n\n## [0.3.3] - 2026-06-02\n\n### Added\n\n- **New config surface:** `compaction` (`"auto"` | `"manual"` | `"off"`), `compactionEngine` (`"blackhole"` | `"pi-default"`), `tailBehavior` (`"pi-default"` | `"minimal"`). These replace the old `overrideDefaultCompaction`, `noAutoCompact`, and `passive` keys. See [`MIGRATION-GUIDE.md`](MIGRATION-GUIDE.md) for the full mapping. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Config overlay (`/blackhole configure`):** interactive TUI with \u2191\u2193 navigation, Enter to edit/toggle, Ctrl+S to save. 17 fields across 3 sections (Compaction, Observational Memory, Debug) with inline help text. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Status overlay (`/blackhole-memory`):** new render with compaction config readout, OM pipeline state, and inline actions (configure, om-off/on). ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Tail behavior control:** `tailBehavior: "minimal"` keeps only the last user message (aggressive pi-vcc cut, default); `tailBehavior: "pi-default"` keeps Pi\'s ~20k token tail visible (opt-in). Both auto-triggered and `/blackhole` now default to `"minimal"`. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **12 permutation tests** covering all compaction \xD7 memory \xD7 threshold combinations for the new config keys. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Documentation:** CONFIG.md (new reference), OLD_CONFIG.md (legacy docs), MIGRATION-GUIDE.md (migration path from old keys), README.md and llms.txt updated for the new surface. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Per-model context window override:** `OmModelConfig` now supports an optional `contextWindow` field. When set on any stage model or fallback, it overrides Pi\'s model registry value for the context window check. Unset models inherit from Pi normally. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Context window pre-check:** before calling each OM stage agent (observer, reflector, dropper), the estimated input tokens (stage cap + 8K reserve for system prompt/tools/turns) are checked against the model\'s effective context window. If the input exceeds the window, the model is skipped and the next fallback is tried. If all models are exhausted, a warning is shown. Strictly opt-in \u2014 with default caps (40K\u201380K) and typical models (128K+), the check is a no-op unless a `contextWindow` override is explicitly set. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **8 tests** covering context window parsing from config, priority resolution, rejection of invalid values, and `effectiveContextWindow` logic. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n\n### Changed\n\n- **`memory: false` no longer blocks auto-compaction.** Memory and compaction are now truly independent \u2014 `memory: false` stops OM workers but compaction still runs. Use `compaction: "manual"` or `compaction: "off"` to control compaction separately. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **`compaction: "off"` semantics refined:** blocks blackhole\'s auto-trigger and returns early from the before-compact hook for auto-triggered compactions (letting Pi handle them), but explicit `/blackhole` still uses blackhole\'s pipeline. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Config migration is automatic:** old keys (`overrideDefaultCompaction`, `noAutoCompact`, `passive`) are migrated to new keys in memory at load time. The on-disk file is never mutated. New keys take priority when present. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Permutation tests updated** to reflect the new behavior: `overrideDefaultCompaction` now gates the legacy trigger path, `memory` no longer gates the trigger, and the 16-permutation matrix uses the correct formula. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n\n### Fixed\n\n- **Save error handling:** `save()` returns boolean and wraps writes in try/catch \u2014 read-only filesystems (e.g., Nix-managed config) no longer crash with an unhandled exception. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Number input restriction:** configure overlay now only accepts digits for number fields, preventing garbage values from being entered. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Defensive bounds:** section header pads in configure-overlay and status-overlay use `Math.max(0, ...)` / `Math.max(2, ...)` to prevent negative `.repeat()` counts on tiny terminals. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Config save failure warning:** `/blackhole configure` now shows a "warning" notification when the config file can\'t be written instead of a misleading "info" notification. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Legacy config tests:** updated `config.test.ts` to check new config keys (`compaction`, `compactionEngine`, `memory`) instead of deleted legacy fields (`passive`, `overrideDefaultCompaction`), fixing 10 pre-existing test failures. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **pi-default non-message firstKeptEntryId resolution:** when Pi\'s `firstKeptEntryId` points to a non-message entry (e.g., OM metadata or compaction), `buildOwnCut` now resolves to the next actual message entry instead of falling through to the minimal cut. ([#15](https://github.com/k0valik/pi-blackhole/pull/15))\n- **Array micro-optimization in buildOwnCut:** replaced `branchEntries.slice(cutInBranch + 1).find()` with `branchEntries.find()` using an index check, avoiding a temporary array allocation. ([#15](https://github.com/k0valik/pi-blackhole/pull/15))\n\n## [0.3.2] - 2026-06-01\n\n### Fixed\n\n- **Auto-compaction gating:** added explicit guard at the top of the compaction trigger that returns early when `overrideDefaultCompaction` is `false` (the default). Previously, blackhole would still evaluate token thresholds and call Pi\'s default compaction hook even when not opted in \u2014 causing confusing log entries and unnecessary evaluations. Now blackhole stays completely out of Pi\'s compaction unless the user explicitly opts in. ([#13](https://github.com/k0valik/pi-blackhole/pull/13))\n\n### Added\n\n- **README top banner:** prominent NOTE at the top instructing users to set `"overrideDefaultCompaction": true` for blackhole to handle compaction automatically. Existing config matrix in the IMPORTANT section retained for reference.\n\n## [0.3.1] - 2026-05-31\n\n### Fixed\n\n- **Auto-compaction idle detection timing:** changed compaction scheduling from `queueMicrotask` to `setTimeout(..., 0)`. The microtask fired before Pi completed its post-response processing cycle, causing `ctx.isIdle()` to always return `false` and compaction to be deferred indefinitely. `setTimeout` yields to the event loop, allowing Pi to mark itself idle before the callback runs. ([#13](https://github.com/k0valik/pi-blackhole/pull/13))\n\n### Added\n\n- **Debug logging for compaction pipeline:** structured `debugLog` instrumentation at every decision point \u2014 guard checks, token threshold evaluation, branch entry inspection, session identity validation, idle check, and compaction completion/error. Opt-in via `"debugLog": true` in config, zero overhead otherwise. ([#13](https://github.com/k0valik/pi-blackhole/pull/13))\n- **Permutation test suite:** 36 new tests covering all 16 configuration knob combinations for auto-compaction trigger behavior. ([#13](https://github.com/k0valik/pi-blackhole/pull/13))\n\n## [0.2.4] - 2026-05-29\n\n### Recall: progressive discovery\n\n- **Touched mode (`mode:touched`):** aggregate view of all files written/edited across the session, grouped by path with entry indices. Accessible via `recall` tool and `/blackhole-recall` command. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n- **Drill-down (`#N:path`):** read file content from tool call arguments in any transcript entry. Supports `#42:auth.ts` (preview first 30 lines), `#42:auth.ts:full` (all lines), `#42:auth.ts:offset:limit` (paged). Path auto-selects when unique; ambiguous paths list options. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n- **Search mode filtering (`mode:file`, `mode:transcript`, `mode:hybrid`):** `mode:file` searches only write/edit file content; `mode:transcript` searches only conversation text; `mode:hybrid` (default) searches both. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n- **Merged expand + search:** `#N` expand entries are now merged into search results (rather than being mutually exclusive), with proper pagination and sorting. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n- **`scope` parameter as `StringEnum`:** tool schema now uses `StringEnum` (strict literal union) instead of `Type.Union` for `scope` and `mode` parameters. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n\n### Fixed\n\n- **Null-safe entry IDs in `load-messages.ts`:** gracefully handles entries with `null` IDs instead of crashing with `String(null)` \u2192 `"null"`. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n- **`formatRecallOutput` preserves legacy `files:[...]` format:** the expand-only path (no query) was silently dropping file info from entries that have the `files` field but no `fileMatches` \u2014 now falls back to the old `files:[path1, path2]` suffix. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n\n### Crash protection \u2014 jiti bridge, EACCES guards, config safety\n\n- **Jiti bridge for custom providers:** `index.ts` now wraps `pi.registerProvider` to capture `streamSimple` functions into a `Symbol.for()` global, and scans `modelRegistry.registeredProviders` once on `agent_start`. This prevents crashes when consolidation agents (loaded via jiti with `moduleCache: false`) resolve a custom provider like `claude-bridge` \u2014 previously the jiti-loaded pi-ai instance had an empty `apiProviderRegistry` and threw `"No API provider registered"`. ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **Lazy bridge evaluation:** the bridge stream function now checks the provider map at call time instead of at import time, fixing an IIFE race condition where the bridge was permanently disabled because provider registration hadn\'t happened yet at module load. ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **Always-run fallback scan:** replaced `providerStreams.size > 0` guard with a dedicated `hasScannedFallback` flag \u2014 the fallback scan now always runs once regardless of how many providers the wrapper already captured, handling extensions that register before blackhole loads. ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **EACCES guards:** `writeCooldownMap()` and `writeSessionState()` now wrapped in try/catch. Prevents process crash on read-only filesystems (e.g., Nix-managed config). Cooldown loss is advisory (slightly more API traffic); pending state loss is safe (idempotent re-processing). ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **Numeric config validation:** all numeric fields are validated at load \u2014 NaN, infinity, and negative values are reset to defaults. Prevents silent math errors in pipeline logic. ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **`observerPreambleMaxTokens=0` explicitly allowed** in numeric validation (means "auto-compute"). ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **Better error messages for config save failures:** `/blackhole om-on` / `om-off` now use `"warning"`-level notification with an explanation about read-only filesystems when the config save fails, instead of a misleading `"info"`-level "Failed to save config.". ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n\n## [0.2.3] - 2026-05-27\n\n### Lockstep sync \u2014 2026-05-27\n\n- Ported upstream OM prompt refinements: coverage tiers in dropper prompt, "highest-resistance" critical framing in observer, coverage stewardship in reflector (#safe)\n- Ported upstream debug logging: `dropper.agent_start`, `dropper.tool_call`, `dropper.result` with full coverage/relevance diagnostics (#d6b02c0)\n- Ported upstream coverage-aware pruning: new `coverage.ts` module, drop candidate sort by coverage\u2192relevance\u2192age, critical observations no longer hard-rejected (#e00363a)\n- Adapted config: added `observationsPoolTargetTokens` as forward-compat no-op (upstream 52b5844 budgetTokens\u2192targetTokens rename)\n- Skipped upstream pool refactor (bf79ff7) and rename (52b5844): kept our ratio-based urgency algorithm\n- Recovered output cap from feat/compaction-output-cap: `buildCompactionProjection` now caps rendered observations to `observationsPoolMaxTokens` budget via relevance+recency scoring\n\n## [0.2.2] - 2026-05-26\n\n### Added\n\n- `/blackhole-memory` pipeline display reworked: renamed "Coverage" to "Pipeline", replaced percentage-based metrics with `X tokens (triggers at Y)` format to eliminate false-alarm 100% readings, added `[auto-disabled]` annotation for compaction in noAutoCompact mode, and show preamble cap in Pending section ([#7](https://github.com/k0valik/pi-blackhole/pull/7))\n- Default `observeAfterTokens` increased from 10,000 to 15,000 and `reflectAfterTokens` from 20,000 to 25,000 for better cost-efficiency on mid/high context sessions ([#7](https://github.com/k0valik/pi-blackhole/pull/7))\n- Observer preamble cap in noAutoCompact mode: the observer stage\'s `CURRENT OBSERVATIONS` preamble is now capped to prevent unbounded prompt growth from accumulated observation batches. High-relevance observations are always kept; medium and low observations are scored by relevance tier and relative recency (array position, not wall-clock time), with the best-scoring kept within the token budget. Reflections are never trimmed. The cap is governed by the new `observerPreambleMaxTokens` config setting (default `0` = auto-compute 30% of `observerChunkMaxTokens`). Only applies in `noAutoCompact` mode \u2014 the auto-compact path is unchanged. ([#7](https://github.com/k0valik/pi-blackhole/pull/7))\n- Accumulated batch history for noAutoCompact mode: the observer, reflector, and dropper stages now feed accumulated pending.json batches (observationBatches/reflectionBatches) to the LLM instead of reading from the (empty) branch. This restores the same historical context the pipeline receives in autoCompact mode \u2014 prior observations/reflections, existing summaries \u2014 but without writing markers to the visible branch. Each pipeline run appends its output batch to the pending store; on /blackhole flush, all accumulated batches are written as separate branch markers, preserving per-run coverage. ([#7](https://github.com/k0valik/pi-blackhole/pull/7))\n- Accumulated dropper batches (`droppedBatches`) in pending.json so that earlier dropper runs are not lost when a subsequent cycle overwrites `pending.dropped` before a /blackhole flush. The flush now writes all accumulated dropper batches to the branch, preventing observations dropped in earlier cycles from being "un-dropped" on compaction. ([#7](https://github.com/k0valik/pi-blackhole/pull/7))\n\n### Fixed\n\n- Reflector and dropper now read from `pending.json` in `noAutoCompact` mode instead of scanning the branch for observation markers that are never written there. Previously the early-exit gates in both stages returned immediately because `latestCoverageMarkerId(entries, OM_OBSERVATIONS_RECORDED)` found nothing in the branch (observations are saved to pending only). This caused the reflector and dropper to skip entirely, leaving the pipeline half-functional \u2014 no reflections were ever generated, the dropper never pruned, and the display showed misleading pool values. The fix adds `noAutoCompact`-aware early-exit gates that check `pending.observation`, `pending.reflection`, and `pending.dropped` state, using their `coversUpToId` values to calculate token gaps and gate correctly on `reflectAfterTokens`. Observations and reflections are fed from pending data instead of the empty branch. The notification token-adjustment logic (which already existed for all three stages) is now effective because the stages actually run. ([#6](https://github.com/k0valik/pi-blackhole/pull/6))\n\n## [0.2.1] - 2026-05-24\n\n### Fixed\n\n- Prevent repeated `Intl.Segmenter` constructor fallback retries on unsupported runtimes ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- `/blackhole-memory` accumulated token counts now factor in pending `coversUpToId` as virtual coverage markers in `noAutoCompact` mode ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Pipeline notifications (observer/reflector/dropper) show accurate accumulated values accounting for pending coverage ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- `stageThinkingLevel()` resolves per-model thinking config instead of using the primary stage model\'s setting for all fallback attempts ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Move `@earendil-works/*` packages to `peerDependencies` (provided by pi host at runtime), `typebox` to `devDependencies` (import type only) ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Dead code removal: deleted `src/om/compaction-hook.ts` and `src/core/report.ts` ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Module-level state leak: compaction stats moved to `Runtime` instance for session isolation ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Unified config loading: removed dual `loadSettings` path, `ensureConfig` called at handler start ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Stale context in deferred compaction: replaced `setTimeout(..., 0)` with `queueMicrotask` and session ID validation ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Silent JSON parse failures in `load-messages.ts` \u2014 now logged ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Silent `scaffoldConfig` errors \u2014 now logged ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- `visibleProjection` falls through to `fullProjection` when no compaction has run ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- `renderMessage` calls in `report.ts` and test types missing required `Message` properties ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- CI publish workflow uses `npm` instead of `pnpm` (not available in runner) ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Added `typescript` devDependency for CI `tsc` check ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n\n### Changed\n\n- Improved model fallback: `resolveModel` iterates fallback chain (stage \u2192 fallbacks \u2192 base \u2192 session), records per-model cooldown on retryable errors ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n\n### Added\n\n- Bi-directional recall coupling: `#N` transcript expansion shows related OM observations/reflections; OM hex-id recall shows `#N` entry index annotations ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- `id` field on `RenderedEntry` for cross-referencing with session entries ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n\n## [0.2.0] - 2026-05-24\n\n### Added\n\n- Initial release: unified compaction (pi-vcc) + observational memory (pi-observational-memory)\n- `/blackhole` command for manual compaction with OM content injection\n- `/blackhole-memory` command for pipeline status display\n- `/blackhole-recall` command for unified recall (transcript + OM)\n- Three-stage consolidation pipeline: observer \u2192 reflector \u2192 dropper with fallback retry\n- Per-session pending file isolation\n- Model cooldown persistence across restarts\n- CI/CD publish workflow for npm\n';
+var BUNDLED_CHANGELOG_TEXT = '## [2.0.0-alpha.2] - 2026-09-06\n\n### Fixed\n\n- Cross-session recall: scope:all now surfaces lineage claims across all project sessions\n- Import/export preserves visibility, dependency chains, and supersedes relationships\n- Migration preserves v1 timestamps, relevance levels, and auto-accepts migrated facts\n- Worker dispatch serialized to prevent close-during-embed crashes\n- Extension ensure() race condition fixed\n- Compiler token estimation changed from O(N\xB2) to O(N)\n- Embeddings await-in-finally error masking fixed\n- compactInFlight permanent wedge on synchronous throw fixed\n- Doctor now reports pending chunk backlog and failed job count\n\n### Changed\n\n- Full rebranding from pi-blackhole to pi-remendra\n- Default RPC timeout increased from 5s to 15s\n- SQLite PRAGMA synchronous changed from FULL to NORMAL (safe for WAL mode)\n- Prepared statement cache uses LRU eviction\n- setScope() caches last fingerprint to avoid redundant DELETE/INSERT cycles\n- usable() passes visited set by reference instead of copying\n- Conflict detection uses two indexed queries instead of OR-degraded scan\n- assertJob buffer increased from 2s to 5s\n- Schema version handling gives clearer error messages\n\n---\n\n## [2.0.0-alpha.1] - 2026-09-06\n\n### Added\n\n- New default memory engine with worker-backed SQLite, exact source evidence, typed claims, revision history, and explicit lineage/project/user scope.\n- Transactional corrections, conflict handling, dependency invalidation, and retired evidence spans that prevent stale re-extraction.\n- Bounded context compiler, durable extraction leases, native Pi model dispatch, cancellation, retries, and shared token reservations.\n- Unicode FTS5 recall, historical/source lookup, optional semantic indexing, procedure trials, direct v1 migration, exports, backups, and diagnostics.\n- Standalone CLI, focused v2 regression suite, real Pi SDK smoke test, and reproducible synthetic benchmark.\n\n### Changed\n\n- Pi owns native compaction and foreground scheduling. The default engine no longer patches private AgentSession methods or captures provider streams.\n- Supported Pi peer version is pinned to 0.85.1; validated Node runtime is 24.\n- Installed packages load the built dist/index.js entry and include the storage worker. Original behavior remains available through dist/legacy.js.\n\n### Release status\n\n- Installable alpha. See docs/VALIDATION-V2.md for measured tests and outstanding live-provider/platform gates.\n\n---\n\n## [0.4.10] - 2026-08-29\n\n### Changed\n\n- **Upgraded recall & export algorithms (BM25+, SimHash64, c-TF-IDF, and technical density scoring).**\n  - Upgraded session history search to **BM25+** with lower-bound delta term ($\\delta = 0.5$) preventing length bias against concise observations.\n  - Added lightweight morphological stemming (`stemToken`) to `dedup.ts` for higher token-set overlap across grammatical variants.\n  - Added 64-bit SimHash locality-sensitive fingerprinting (`computeSimHash64`, `simHashHammingDistance`) and cluster drift guards to speed up pairwise candidate filtering and prevent transitive clustering drift.\n  - Added technical entity density scoring (`technicalDensityFactor`) in `format-export.ts` to reward concrete code artifacts (paths, symbols, flags, hashes) over conversational transcripts.\n  - Expanded stemming and technical-artifact detection for common software terminology, major language file types, framework constructs, API routes, DevOps/configuration signals, errors, and semantic versions.\n  - Topic labels now preserve readable surface words while using stems only for internal matching and scoring.\n  - Upgraded topic labeling from standard TF-IDF to **c-TF-IDF** (Class-based TF-IDF with sublinear saturation).\n  - Export preamble now shows a best-effort heuristic warning instead of a Key Topics index.\n\n### Fixed\n\n- **Git-based installs no longer require interactive `pnpm approve-builds`.** `simple-git-hooks` is explicitly trusted through pnpm 11\'s workspace `allowBuilds` configuration, and the prepare lifecycle now initializes hooks and builds the bundle exactly once.\n- **Export pipeline hardening for large corpora.** Fixed `token.charCodeAt is not a function` crash caused by `TECHNICAL_ROOTS` prototype pollution on tokens like `constructor`/`toString` (now guarded with `hasOwnProperty`) and added a malformed-token guard in `computeSimHash64`; topic labels now preserve surface forms and the export warning clarifies heuristic ranking.\n\n---\n\n## [0.4.9] - 2026-08-28\n\n### Added\n\n- **Distilled project-memory export (`/remendra-export`).** ([#65](https://github.com/k0valik/pi-blackhole/pull/65)) New command that scans project-scoped session JSONL files plus global OM pending buffers, deduplicates/clusters observations, and writes a single import-ready Markdown file (tiered as `Reflections \u2192 Critical \u2192 High \u2192 Medium \u2192 Low` plus an `Unattributed pending memory` section for orphaned buffers). Scoring is tier-weighted with recency decay, log-scaled recurrence and evidence-mass boosts, consensus rerank, burst penalty and length factor; viability gating keeps low/medium only with multi-session support or length/quality, high/critical always. Hierarchical topic assignment via S\xF8rensen-Dice graph + TF-IDF labeling; three-pass dedup (exact normalized, Levenshtein@0.88 after bigram-Jaccard prefilter, S\xF8rensen-Dice@0.70 with Levenshtein floor). Output parsing via `out:<path>.md` or a timestamped default; deterministic and stateless. New modules `src/project-recall/corpus.ts`, `dedup.ts`, `format-export.ts`, `session-dir.ts` and handler `src/commands/remendra-export.ts` (wired in `index.ts`). Appendix A slice of the project-recall plan \u2014 future project-aware recall search remains out of scope for this release.\n\n### Fixed\n\n- **Capture `AgentSession` from bundled Pi CLI entrypoint.** ([#62](https://github.com/k0valik/pi-blackhole/pull/62), thanks @daoguademeng) `installHostInlineCompactionAdapter` now resolves the host `AgentSession` from the bundled CLI\'s runtime chunk (when the entrypoint is `dist/bundle/cli.js`) in addition to `dist/index.js`, so inline (mid-run) compaction works when Pi is launched via its bundled CLI instead of silently falling back to settled compaction.\n- **Unified `session_compact_failed` handling (pi >=0.84.3).** Ported from [ceblan/pi-remendra#ceb-dev](https://github.com/ceblan/pi-remendra/compare/main...ceblan:pi-remendra:ceb-dev) (thanks @ceblan / Carlos Estrada): new `src/hooks/compact-failed.ts` closes gaps in failure coverage \u2014 structured `compact_failed.received` trace with corrected `attributedFromExtension` (`fromExtension || compactWasPiVcc || lastCompactCancelled`), defensive `compactInFlight` + `autoCompactionController` reset (aborts orphaned idle-wait so it cannot launch a second compaction after a later turn), overflow-retry `willRetry` visibility (`"overflow compaction aborted, retrying turn"`), and `compactionEngine: pi-default` noise filtering. `Runtime.lastCompactCancelled` is set on every `{ cancel: true }` from `before-compact` and consumed attempt-scoped with `compactWasPiVcc` (leak-free lifecycle: set at `session_before_compact` start, consumed on `session_compact` success or `session_compact_failed`). Covers pi #8328 overflow path.\n\n---\n\n## [0.4.8] - 2026-08-23\n\n### Added\n\n- **Opt-in append compaction (`compactionSummaryMode`).** New config key (`default` | `append`; `default` is the default) plus `PI_REMENDRA_COMPACTION_SUMMARY_MODE` override. In append mode each automatic Remendra compaction appends one immutable provider-visible segment (`S1 | S2 | \u2026`) while every stored summary stays a complete fallback; `/remendra` rebases the active chain into one clean segment; a legacy v1 summary enters through one marked rebase. A new `context` hook projects segments before each model call and fails closed to the fallback on any malformed state. When the projected chain passes half of the model\'s context window, the next automatic compaction folds it back into one segment. Falls back to rewrite surgery once per session when append mode encounters unsupported state. See `docs/APPEND_COMPACTION.md`. ([#58](https://github.com/k0valik/pi-blackhole/pull/58), thanks @sonSunnoi)\n\n### Changed\n\n- **Mid-run compaction failures now use exponential backoff** (1s doubling to a 30s cap) instead of suspending retries until context pressure drops. A single transient failure no longer wedges auto-compaction for the rest of the pressure episode; failure notices now include "retrying in Xs".\n- **Permanent inline-compaction unavailability (pi version lacks the adapter API) is now classified once** and reported as a single warning ("using settled compaction fallback") instead of surfacing as a retryable failure every episode. With `midRunCompaction: resume`, later turn-end attempts skip the adapter immediately, and agent start warns once if resume mode is configured against a known-unsupported adapter.\n- **Compaction token counting now uses real provider usage when available.** `rawTokensSinceLastCompaction` reads the last valid assistant message\'s usage (`calculateContextTokens`: `totalTokens` or the input/output/cache component sum) after the latest compaction entry, plus a chars/4 estimate for trailing entries, instead of estimating the whole window from characters. Chars/4 remains the fallback for sessions without usage data. Error/aborted assistant turns are never used as baselines; usage from before the latest compaction is ignored (it reflects the pre-compaction context). Approach from tavasti@360f24a (pi-vcc upstream PR #40); hardened implementation ported from plan-01 of the token-rework work.\n- **Minimal tails honor later Pi split-turn boundaries.** An oversized current turn can now be cut at Pi\'s safe assistant/user boundary instead of being retained whole after compaction.\n\n### Fixed\n\n- **Inline compaction ignores aborted/errored assistant turns.** Assistant messages with `stopReason: "error"` or `"aborted"` are now skipped when checking for trailing in-flight tool calls, matching Pi\'s own transform-messages behavior.\n- **Inline compaction ignores stale tool calls** that reference cleared state from a prior turn ([#57](https://github.com/k0valik/pi-blackhole/pull/57), thanks @daoguademeng)\n- **Settings modal footer and key dispatch guard against section rows.** Prevents a crash when the focused row in `/remendra configure` is a section header instead of an editable field.\n\n---\n\n## [0.4.7] - 2026-08-15\n\n### Fixed\n\n- **Installation from git now works without a prebuilt `dist/`.** The package manifest entrypoint now points at `./index.ts` instead of `./dist/index.js`. Because `dist/` is gitignored, direct Git installs were missing the extension entrypoint and failing to load. Pi can load the TypeScript entrypoint directly, so this restores functionality for `npm install github:k0valik/pi-blackhole` and similar Git-based installs. Registry installs are unaffected (npm/pnpm/bun ship the prebuilt `dist/` bundle).\n\n---\n\n## [0.4.6] - 2026-08-14\n\n### Added\n\n- **Session-local config.** Config values can now be set at session scope via `/remendra configure` or the config modal\'s scope selector. Session config is ephemeral \u2014 it lives only for the current session and overrides project-local and env values, so you can experiment with settings like `midRunCompaction` or `compactionEngine` without touching files or environment variables.\n\n- **All env overrides are visible in the config modal.** `PI_REMENDRA_MID_RUN_COMPACTION`, `PI_REMENDRA_COMPACTION`, and `PI_REMENDRA_COMPACTION_ENGINE` (alongside existing overrides like `PI_REMENDRA_SKIP_PROVIDERS` and `PI_REMENDRA_PROVIDER_IDLE_TIMEOUT_MS`) now appear in the env tab of the config modal with their current effective values, so you can see at a glance what the environment is contributing.\n\n### Changed\n\n- **Config modal migrated to the canonical `pi-base` config-rework surface.** The modal now uses the upstream scope-selector and config-flow, replacing the legacy `openSettingsModal` path. The layer precedence is: global \u2192 project \u2192 env \u2192 session, matching pi-utils behavior.\n\n### Removed\n\n- **Dead monolith-era config code.** Removed `src/pi-base/config-settings.ts`, `settings-registry.ts`, `settings-ui.ts`, `registry.ts`, `report.ts`, `llm.ts`, `hash.ts`, `context-provider.ts`, `once.ts`, `debug.ts`, `config-manager-howto.md`, `settings/README.md`, and the obsolete `scope-action.test.ts`. Remendra-specific wiring (kitty decode, NixOS read-only warnings, key migration, clamping) remains in `remendra-settings.ts`.\n\n### Fixed\n\n- **Recall drill-down honors lineage scope.** ([#54](https://github.com/k0valik/pi-blackhole/issues/54)) `#N:path` drill-down now checks the active lineage before expanding off-lineage entries, matching every other recall path. Off-lineage indices are blocked under the default `scope:"lineage"` and require `scope:"all"` to access.\n- **Inline compaction restores the Working indicator.** ([#52](https://github.com/k0valik/pi-blackhole/pull/52), thanks @daoguademeng) After inline compaction completes, the UI "Working" indicator is restored so the user sees activity resumed.\n\n### Dependencies\n\n- Bumped dev-dependency group across 2 PRs (#45, #53): `@typescript-eslint/eslint-plugin` to `8.66.0`, `eslint` to `10.8.0`, `lint-staged` to `17.3.0`, `typebox` to `1.3.10`, `typescript` to `6.0.3` (pinned for `@typescript-eslint` v8 compatibility), and `vitest` to `4.1.10`.\n\n## [0.4.4] - 2026-08-06\n\n### Added\n\n- **Experimental compatibility shim for pi-codex-compaction coexistence.** ([#47](https://github.com/k0valik/pi-blackhole/pull/47), thanks @danielmrdev) Optional `skipForProviders` (config key or `PI_REMENDRA_SKIP_PROVIDERS` env override) makes remendra step aside entirely \u2014 no compaction, no observational-memory consolidation \u2014 for listed providers, giving exactly-one-engine semantics when pi-codex-compaction also registers a `session_before_compact` handler. **Niche surface by design**: unsurfaced in README/CONFIG.md until a second consumer exists (see shim notes in `src/core/provider-skip.ts`); surfaced only in example-config.json.\n\n- **Isolated provider idle timeout for background memory jobs.** ([#48](https://github.com/k0valik/pi-blackhole/pull/48), thanks @FelikZ) Optional `providerIdleTimeoutMs` lets observer/reflector/dropper worker HTTP requests tolerate longer silent provider intervals without forcing interactive Pi requests to wait equally long, by wrapping the provider `fetch` with an undici dispatcher that injects `bodyTimeout`. Unset inherits pi\'s global default; `0` disables; `> 0` sets a millisecond cap. Configurable via config file, `/remendra configure`, or `PI_REMENDRA_PROVIDER_IDLE_TIMEOUT_MS`.\n\n### Fixed\n\n- **Credential-resolved provider endpoints are preserved for observational-memory workers on Pi versions whose registry exposes `getProviderAuth()`.** Observer, reflector, and dropper now use the endpoint selected by Pi\'s auth resolver, preventing GitHub Copilot Business/Enterprise requests from falling back to the Individual endpoint and returning HTTP 421. On older registries without `getProviderAuth()`, the fix degrades silently to the previous behavior.\n- **`midRunCompaction: "resume"` no longer aborts or replaces the active run.** ([#50](https://github.com/k0valik/pi-blackhole/pull/50), thanks @daoguademeng) The old `ctx.compact()` + `remendra-resume` path propagated a false interrupt to background/subagent extensions and let nested child runners resolve before Remendra\'s detached resume run finished. Resume mode now performs Pi\'s native compaction pipeline inline from the awaited `turn_end` handler, refreshes the next low-level turn from the compacted messages, and continues inside the original `session.prompt()` promise. Completed tool calls remain paired; no synthetic user/custom message is injected. `"resume"` is an **experimental opt-in** \u2014 it monkey-patches Pi host internals and can silently deactivate on host drift.\n- **Mid-run compaction compatibility fails closed.** A reload-idempotent, weakly referenced runtime adapter recognizes the known Pi 0.81 and 0.84 `AgentSession.compact()` shapes. Unknown internal drift refuses transparent compaction and leaves the active run alive instead of falling back to the unsafe aborting path. External abort/cancellation still passes through normally.\n\n### Testing\n\n- Added adapter contract coverage for Pi 0.81/0.84 compact shapes, no-abort behavior, compacted next-turn context refresh, external cancellation, unpaired-tool rejection, fail-closed drift handling, and reload idempotency. A real `AgentSession` + faux-provider integration test runs on both the 0.81.1 compatibility baseline and 0.84.0 dev baseline, proving the active run signal stays live, the next provider request receives the compacted context, and the original `session.prompt()` remains pending through compaction. Trigger tests prove no `ctx.compact()` or `remendra-resume` dispatch.\n\n### Dependencies\n\n- Bumped `@earendil-works/pi-*` devDependencies from `0.83.0` to `0.84.0`; the peer range remains `>=0.81.1 <1.0.0`, and the adapter retains a tested legacy-shape path for the minimum supported host.\n\n## [0.4.3] - 2026-08-01\n\n### Added\n\n- **pi-base config modal for `/remendra configure`.** ([#41](https://github.com/k0valik/pi-blackhole/pull/41)) The hand-rolled configure overlay is replaced with pi-base\'s ConfigManager + settings modal (vendored into `src/pi-base/`), with scope-aware editing: global config lives at `<agentDir>/pi-remendra/` (respecting `PI_CODING_AGENT_DIR`), project config overlays `<cwd>/.pi/pi-remendra-config.json`.\n\n### Changed\n\n- **Number fields edit inline in `/remendra configure`.** Number fields (e.g. `compactAfterTokens`, `observeAfterTokens`) no longer cycle in fixed steps on every Enter \u2014 pressing Enter drops into inline editing where you type the value directly; `\u2190`/`\u2192` still fine-tune by step when not editing.\n- **Destructive-action confirmations are safer.** The delete/reset scope confirm now lists **Cancel first (pre-selected)** and shows a warning-color line stating what the action will do \u2014 tabbing into the confirm can never land on a destructive action by accident.\n- **Custom provider streams discovered through pi\'s model registry.** ([#42](https://github.com/k0valik/pi-blackhole/pull/42), thanks @FelikZ) The bridge that lets OM agents (observer/reflector/dropper) use custom providers (e.g. claude-bridge) now captures `streamSimple` functions from pi\'s public registry API (`getRegisteredProviderIds`/`getRegisteredProviderConfig`) on every `agent_start`, instead of wrapping `pi.registerProvider` and reading the private `registeredProviders` field. Works regardless of extension load order and includes providers added after startup; the legacy discovery path remains available for older pi releases.\n- **Precompiled extension bundle for faster startup.** The extension now ships a prebuilt `dist/index.js` bundle (tsup/esbuild) instead of being transpiled file-by-file by jiti at startup \u2014 module loading drops from ~85 source files to a single ESM file, measured ~1.6\u20132\xD7 faster extension load. The `@earendil-works/pi-*` packages and `typebox` stay external and resolve to the host pi\'s copies at runtime via its loader aliases. `pnpm build` produces the bundle; `prepare` builds automatically on install. The package manifest points at `./dist/index.js` and falls back to `index.ts` (slow path) when `dist/` is absent, so a fresh checkout still works pre-build.\n\n### Fixed\n\n- **Manual-mode pending files now contain full observation payloads.** ([#41](https://github.com/k0valik/pi-blackhole/pull/41)) The `noAutoCompact` \u2192 `compaction:\'manual\'` migration is completed: `isManualMode()` now checks both keys across all save/load gates, so manual-mode observations are written to the pending file (`savePendingObservation`) instead of falling through to `appendEntry()` (JSONL) \u2014 restoring crash-safe mid-run interruption recovery and `/remendra flush` parity.\n- **Config modal could overwrite the user\'s config with defaults.** `openSettings` did not pass `globalConfigDir` to the settings modal, so the modal initialized every field from the schema default (it read a nonexistent config in the extensions dir) instead of the actual config file. Saving then wrote those defaults over the real values (e.g. `compactAfterTokens` 185000 \u2192 81000) while the runtime kept the correct values in memory \u2014 a confusing half-applied state. The modal now initializes from the real config file.\n- **Number-field editing could get stuck.** While inline-editing a number field, typing/backspace/escape were swallowed by the step-cycling branch, leaving the modal in an editing state with no way out (Enter showed a cursor but nothing worked, and `ctrl+c` couldn\'t close it). All editing keys now flow through the inline editor, and `ctrl+c` closes the modal even mid-edit.\n- **Typed input failed in Kitty terminals.** Kitty reports printable characters as CSI-u sequences (e.g. `5` arrives as `\\x1b[53u`); they were rejected by the input filter \u2014 and after the first fix, inserted as raw escape bytes. The input filter and the insert path now decode them, so typing works in Kitty terminals.\n- **Config save failures on read-only filesystems are now visible.** `ConfigManager.save()` throws when the write fails (e.g. config managed by Nix), and `/remendra om-off`/`om-on` surface a warning \u2014 previously the failure was silently swallowed while the in-memory runtime state changed, diverging from disk without explanation.\n- **`PI_REMENDRA_*` env overrides now apply at runtime.** The declarative env map (`memory`, `debug`, `compactAfterTokens`, \u2026) was only honored by the modal path; the runtime config loader ignored it. The env map + application logic moved to a shared module used by both paths, so e.g. `PI_REMENDRA_COMPACT_AFTER_TOKENS=200000` now affects the actual compaction threshold, not just the modal display.\n\n### Testing\n\n- **Ported the upstream pi-base test suite (246 tests)** from `pi-utils/packages/pi-base` \u2014 config manager, settings modal (buffered mode, smoke, inline-edit, field validation) plus the 4 small modules (env, shell, types, ui) they cover. Only import-path adaptation was needed; zero semantic drift, which also confirms the vendored modal is behaviorally aligned with upstream.\n- **New regression tests pin this release\'s fixes:** config-manager `globalConfigDir` forwarding, number-field inline editing (including a Kitty CSI-u integration case driving the full renderer path), Kitty decode, and runtime env overrides.\n- **Tests no longer touch the system clipboard.** The memory-command tests ran the real `copyTextToClipboard` (spawning `wl-copy`/`xclip`/`xsel`) and overwrote the user\'s clipboard with fixture data; the module is now mocked and the mock\'s use is asserted so a regression fails the suite instead of mutating the clipboard.\n\n### Dependencies\n\n- **Bumped `@earendil-works/pi-*` devDependencies to `0.83.0`** (agent-core, ai, coding-agent, tui); the peer range stays `>=0.81.1 <1.0.0`. CI re-verifies typecheck + tests against the minimum supported `0.81.1` on every push/PR, so both the oldest and newest supported pi versions stay green.\n\n### Packaging\n\n- **Tolerant `prepare` build hook.** The `prepare` script is now a dependency-free `node scripts/prepare.mjs` that builds `dist/` only when the toolchain is present, and otherwise skips silently \u2014 it can never abort an install for git/checkout consumers running npm, pnpm, or bun in any devDependency configuration. Husky hooks install best-effort (dev checkouts only). Registry installs are unaffected (npm/pnpm/bun never run `prepare` on registry packages).\n- **npm publishing now uses provenance.** The publish workflow runs `npm publish --provenance` (GitHub OIDC attestation), so every tarball carries a signed signature linking it to this repo + workflow \u2014 verifiable with `npm audit signatures` / `gh attestation verify`. The release gate now matches CI (build, typecheck, lint, test, format check).\n- **Dev tooling.** Prettier (repo normalized once, enforced via lint-staged), husky pre-commit (lint+format staged files, then typecheck) and pre-push (typecheck + full test suite), ESLint extended to `tests/` and root configs, and CI now runs tests + format check alongside the build.\n\n---\n\n## [0.4.2] - 2026-07-27\n\n### Changed\n\n- **`midRunCompaction` default changed from `"resume"` to `"off"`.** ([#40](https://github.com/k0valik/pi-blackhole/issues/40), thanks @daoguademeng) `ctx.compact()` aborts the active agent operation before compacting, which is not lifecycle-safe at `turn_end` for subagent/background-work extensions: it propagates through the shared `AbortSignal` and cannot be distinguished from user cancellation. This affects both parent-side subagent workflows (active/queued children aborted, parent stalled) and child-side nested sessions (runner terminated, orphan transcript continues, `remendra-resume` resumes a session the parent already sees as completed). `off` defers compaction to `agent_end`, which is the only currently safe boundary for extension-owned work. `resume` and `pause` are preserved as explicit opt-in for users without subagent workflows.\n\n---\n\n## [0.4.1] - 2026-07-24\n\n### Added\n\n- **Mid-run auto-compaction (`midRunCompaction`).** ([#38](https://github.com/k0valik/pi-blackhole/pull/38), thanks @daoguademeng) The threshold trigger previously only ran on `agent_end`, which never fires while the agent is looping through tool calls \u2014 during long runs `compactAfterTokens` could be exceeded many times over without a single evaluation, and the post-run wait was aborted by any new `agent_start`, deferring compaction indefinitely under continuous use. The threshold is now also evaluated at every `turn_end` (after each assistant message + tool executions). New config enum `midRunCompaction: "resume" | "pause" | "off"` (default `"resume"`): `resume` compacts at the threshold and injects a `remendra-resume` message (`triggerTurn`) so the agent continues the task with the compacted context; `pause` compacts and hands control back; `off` restores the old end-of-run-only behavior. Available in `/remendra configure`.\n- **`/remendra <text>` follow-up prompt.** After compaction, `/remendra` optionally sends `<text>` as a follow-up message so the model continues the task without re-typing. Wrapped in `void Promise.resolve(...).catch(() => {})` for robust error handling.\n- **Subcommand near-miss detection.** `/remendra configure foo` now shows a warning instead of silently becoming a follow-up prompt.\n\n- **`/remendra cleanup` command for orphaned pending files.** Per-session pending files (`*-pending.json`, `*-pending.stale.json`) accumulate when compaction is manual and sessions are abandoned or deleted. The command scans the `pi-remendra/` directory, cross-references session IDs against all session JSONL files, and provides an interactive TUI picker to safely remove orphaned files. Non-TUI modes (RPC/JSON/print) list orphaned files as a notification without deleting.\n\n### Command formatting cleanup\n\n- `/remendra` and `/remendra-memory` subcommands and modes now use `[bracketed]` syntax (e.g. `[om-on]`, `[hybrid]`) with shortened descriptions, making the command palette visually consistent and easier to scan.\n\n### Notification & session goal reorg\n\n- Session goal now derives from the first user message and is persisted at the top across compactions, with `(#N)` entry indexing for traceability.\n- OM info notifications are gated to one per phase/turn \u2014 warnings and errors still fire immediately.\n- Git commit extraction now handles tool_call, bash, and post-convert user-text formats.\n- Cooldown skip messages now strip raw JSON from the reason for cleaner display, with a log pointer for debugging.\n\n### Fixed\n\n- **Mid-run compaction failure resilience.** ([#38](https://github.com/k0valik/pi-blackhole/pull/38), thanks @daoguademeng) If the before-compact hook cancels (or compaction errors) after `ctx.compact()` has already aborted the run, resume mode still re-triggers the agent so the task doesn\'t stall, and further mid-run attempts are suspended until a compaction lowers pressure below the threshold (prevents abort/cancel thrash loops).\n- **Early-session reflection/drop starvation on first compaction.** Added `fullFoldAlways` config flag (default `true`). When no prior full-fold boundary exists, reflections and drops now use the observation boundary instead of being excluded. Previously, fresh sessions silently lost all durable memory on the first compaction because there was no full-fold history to anchor the maintenance boundary.\n- **`capBrief` omission count now computed after `firstHeader` trim.** Previously the "N earlier lines omitted" header was computed before the section-header anchor trim, so the count was understated when headers caused additional trimming. This matched an upstream bug that was already fixed there.\n\n- **Recall-note bloat across multiple compactions.** `compile()` now strips OM content first, then removes all recall-note paragraphs from the previous summary using paragraph-level matching (instead of only stripping a trailing exact match). After 3+ compactions, the summary no longer accumulates 3+ embedded copies of the recall note.\n\n## [0.4.0] - 2026-07-24\n\n### Added\n\n- **`/remendra cleanup` command for orphaned pending files.** Per-session pending files (`*-pending.json`, `*-pending.stale.json`) accumulate when compaction is manual and sessions are abandoned or deleted. Provides an interactive TUI picker to safely remove orphaned files. Non-TUI modes (RPC/JSON/print) list them without deleting.\n- **`dropperPressureThreshold` in configure overlay.** Already in config schema but missing from `/remendra configure` TUI. Now editable alongside other OM thresholds.\n- **`fullFoldAlways` in TUI overlay.** Added to the configure overlay under Observational Memory section.\n- **Session goal from first user message.** Persisted at the top across compactions with `(#N)` entry indexing for traceability.\n- **OM info notifications gated to one per phase/turn.** Warnings and errors still fire immediately.\n- **Git commit extraction expanded.** Now handles `tool_call`, `bash`, and post-convert user-text formats.\n- **Cooldown skip messages strip raw JSON** from the reason for cleaner display, with a log pointer for debugging.\n- **`/remendra` and `/remendra-memory` subcommands now use `[bracketed]` syntax** (e.g. `[om-on]`, `[hybrid]`) with shortened descriptions for visual consistency.\n\n### Fixed\n\n- **Early-session reflection/drop starvation on first compaction.** Added `fullFoldAlways` config flag (default `true`). When no prior full-fold boundary exists, reflections and drops use the observation boundary instead of being excluded.\n- **Recall-note bloat across multiple compactions.** `compile()` strips OM content first, then removes all recall-note paragraphs using paragraph-level matching (instead of only stripping a trailing exact match).\n- **OAuth/ADC-backed providers (Vertex, custom OAuth) now accepted by OM pipeline.** `resolveModel` uses `modelRegistry.hasConfiguredAuth()` instead of requiring a truthy `auth.apiKey`. Falls back to legacy behavior on older pi versions. ([#38](https://github.com/k0valik/pi-blackhole/issues/38))\n- **`ResolveResult.apiKey` is always a string.** Defaults to `""` instead of casting `undefined`.\n- **jiti provider bridge type-safe for pi 0.81.1+.** `pi.registerProvider` wrapper satisfies the overloaded signature in pi-coding-agent 0.81.1.\n- **Config overlay blocks save on invalid JSON.** Red error banner and Ctrl+S block prevent wiping model configs on corrupt files. ([#35](https://github.com/k0valik/pi-blackhole/issues/35))\n- **Config reloads after overlay save.** `Runtime.reloadConfig()` forces a fresh disk read after `/remendra configure` saves. ([#36](https://github.com/k0valik/pi-blackhole/issues/36))\n- **Invalid JSON warning surfaced via TUI.** Yellow warning notification shown at every config load point instead of only `console.warn`.\n- **Defensive null guards for `b.args` and `ui.notify`.** Prevents crashes from stale extension context.\n- **`streamSimple` import updated to `pi-ai/compat`.** Removed from main export in pi 0.80.3.\n- **Legacy fallback config errors now passed to `onWarn` callback.** JSON parse errors in legacy fallback files (`pi-vcc-config.json`, `settings.json`, `.pi/settings.json`) are surfaced via the warning callback, not just `console.warn`.\n- **`saveUnifiedConfig` warns before overwriting corrupt config.** If the config file has invalid JSON, a warning is logged before overwriting.\n- **`dropperPressureThreshold` clamped to `[0.01, 1]` in overlay save.** Previously could silently lose value on reload.\n- **`deleteOrphanedBatch` reports partial failures.** "Delete all" now shows `Deleted X/Y (Y-X failed)` when individual unlinks fail.\n- 4 new tests for `fullFoldAlways` behavior in `buildCompactionProjection`: reflections survive first compaction when enabled, excluded when disabled, full-fold boundary still takes precedence, and post-boundary reflections remain excluded.\n- 3 new tests for recall-note deduplication in `compile`: wrapped recall note stripped, OM content stripped before recall note, and three-cycle accumulation produces exactly one recall note.\n- 5 new tests for follow-up prompt: extraction, subcommand exclusion, empty-args suppression, send after completion, compaction-failure suppression.\n- 6 new tests for CompactionStats population: all fields populated, compactAll flag, totalUserTurns count, keptUserTurns count, compactAll zero kept, and format string coverage.\n- 2 new tests for capBrief omission count: header-trimmed count is correct (99 for 200 lines with header at line 100), and no-header fallback still correct.\n\n### Changed\n\n- **New config key:** `fullFoldAlways` (boolean, default `true`). Added to `UnifiedConfig` schema, defaults, and config file parsing.\n- **CompactionStats expanded from 3 to 11 fields.** Added `compactAll`, `totalUserTurns`, `keptUserTurns`, `requestedKeepUserTurns`, `keepUserTurnsExplicit`, `keepFallbackToCompactAll`, `smartKeepAdjusted`, `smartFromKeep`. All populated from `buildOwnCut` return data (Bug A fix).\n- **Shared `formatCompactionStats` exported.** Both the `/remendra` command handler and hook\'s `session_compact` handler now use a single shared formatter, eliminating the duplicate inline toast strings and the private `formatTokens` helper.\n- **Dead ternary collapsed.** `effectiveTailBehavior` no longer has an `isPiVcc` branch with identical values on both sides (Bug B fix).\n- **Dependencies: bumped `@earendil-works/pi-*` packages to `0.81.1`** (agent-core, ai, coding-agent, tui).\n- **Removed 6 unused exports from `om/cleanup.ts`** (`scanPendingFiles`, `findSessionDirs`, `collectAllSessionIds`, `crossReference`, `formatSize`, `formatAge`).\n\n### Tests\n\n- 4 new tests for `fullFoldAlways` behavior in `buildCompactionProjection`.\n- 3 new tests for recall-note deduplication in `compile`.\n- 6 new tests for OAuth/ADC auth paths.\n- Tightened capping assertions in robust tests.\n- Added robust coverage for OM and CCC pipelines.\n\n---\n\n## [0.3.9] - 2026-06-24\n\n### Auto-compaction idle race fix (#31, #33)\n\nThe auto-compaction trigger used to bail permanently when `ctx.isIdle()`\nreturned `false` at the first `setTimeout(0)` check after `agent_end`.\nWhen another extension (e.g. pi-rewind) registered an async `agent_end`\nhandler whose I/O kept the agent state busy past the next macrotask,\nthe trigger logged `"bail: not_idle"` and never retried \u2014 auto-compaction\neffectively never fired in this configuration.\n\n**New behavior:** the trigger keeps `compactInFlight = true` and polls\n`isIdle()` every 200ms (in 50ms slices) until the agent truly settles,\nor one of two cancellation signals:\n\n- `agent_start` fires \u2014 the user (or another extension) started a new\n  turn. `AbortController.abort()` cancels the wait; the new turn\'s own\n  `agent_end` will re-evaluate and start a fresh wait if still needed.\n- Session change (e.g. `/resume`) \u2014 detected inside the wait loop.\n\nOnly the cell `compaction:auto + compactionEngine:remendra` is affected.\nAll other config combinations (off, manual, pi-default) are unchanged.\n\n### CI: fallow audit job\n\n- Added `fallow-audit` CI job (PR only, changed-code audit with compact\n  format, review comments, no SARIF)\n\n### Test cleanup\n\n- Removed stale `transcript-mode` tests left orphaned when the feature\n  was deliberately dropped in v0.3.7 as redundant with hybrid search.\n\n---\n\n## [0.3.8] - 2026-06-19\n\n### Pipeline progress cursors - fix re-run loop (#28, #29)\n\nThe pipeline previously coupled progress tracking to output markers: if a stage\nproduced empty output or errored, no marker was written, causing the stage to\nre-process the same data on every `agent_start`/`turn_end` trigger. In real-world\nlogs the dropper ran 8,350\xD7 vs observer 1,124\xD7, with zero drops selected.\n\n- **Per-stage progress cursors** decouple progress from output. Each stage\n  (observer, reflector, dropper) gets a cursor entry ID that advances whenever\n  the stage runs - regardless of whether it produced output. "I looked and\n  found nothing" is a valid answer that blocks re-processing.\n- **Cursor `state` field** (`recorded` | `empty` | `error` | `skipped` | `not_due` | `initial`)\n  distinguishes empty runs from skipped stages from actual output.\n- **Reflector gates on new data.** If no new `OM_OBSERVATIONS_RECORDED` batches\n  exist since the reflector cursor, and `reflectAfterTokens` threshold not met,\n  skip entirely - no LLM call.\n- **Dropper gates on pressure or new data.** Runs only when pool \u2265 10% fullness AND\n  (new data exists OR pool \u2265 `dropperPressureThreshold` \xD7 `reflectorInputMaxTokens`).\n  Previously always returned `not_over_target` with 0 drops - now correctly skipped.\n- **Cursor storage:** in-memory primary (zero-I/O gating), async flush to\n  `{sessionId}-pending.json` for durability across restarts. Degrades gracefully\n  on read-only filesystems.\n- **Stale cursor recovery:** if a cursor\'s entry ID disappears (fork, navigation,\n  compaction), falls back to coverage-marker logic for one run, then writes fresh cursors.\n\n### New config key: `dropperPressureThreshold`\n\n- Fraction of `reflectorInputMaxTokens` at which the dropper fires even without\n  new data (pressure relief valve). Default `0.70` (70%). Set to `1.0` to disable\n  pressure-driven dropper entirely.\n\n### Debug log additions\n\n- `observer.skip`, `reflector.start`, `reflector.skip`, `dropper.start`,\n  `dropper.skip`, `cursor.loaded`, `cursor.saved`\n\n### Deferred pipeline concerns (pre-merge review)\n\nAudit surfaced 7 correctness/performance edge cases in the cursor pipeline.\nFour were fixed; three were deferred as harmless or cosmetic.\n\n**Fixed:**\n- **Session fork cursor bleed (#2).** `cursorsLoaded` was a one-shot boolean\n  \u2014 on session fork, stale cursors bled into the new branch because\n  `validateCursors` was never re-invoked. Now keyed by `cursorsLoadedSessionId`\n  so cursors are re-loaded and re-validated whenever the session ID changes.\n- **Manual-mode pool fullness underestimation (#1).** `anyStageDue` had no\n  visibility into pending observations in `compaction: "manual"` mode (branch\n  has no OM markers). Reflector and dropper due checks now accept an optional\n  `PendingOMState` so pending batches contribute to new-data scans and pool\n  token counts. Prevents the pipeline from stalling after the first run in\n  manual mode.\n- **foldLedger on every agent_start/turn_end (#3).** `dropperDue` called\n  `foldLedger` (O(n) on branch) unconditionally \u2014 even when the observer or\n  reflector alone made the pipeline due. Now short-circuits: the fold is\n  only computed when both observer and reflector are not due.\n- **Observer cursor to non-source entry (#6).** When the observer skipped\n  (not due), the cursor advanced to `entries.at(-1)` which could be a custom\n  OM marker rather than a conversation source entry. Now advances to the\n  last source entry (`findLast(isSourceEntry)`).\n\n**Deferred:**\n- **"unknown" magic entry ID (#4).** Functional but cosmetic \u2014 the sentinel\n  triggers fallback on next load. 9 call sites; zero behavioral change.\n- **Observer re-checks tokens (#5).** Harmless \u2014 only reached when pipeline\n  launched for a different stage. Correctly advances cursor to `not_due`.\n- **Dropper cursor fallback cascade (#7).** The 4-step `coversUpToId ??`\n  `observationCoverageId ?? entries.at(-1)?.id` cascade is already reasonable\n  fallback ordering.\n\n### Tests\n\n- 17 new tests for cursor gating, persistence, stale recovery, and debug log events\n- 3 new tests for manual-mode pending awareness (reflector, dropper, post-first-run)\n- `dropperPressureThreshold` added to config validation tests\n\n\n\n# Changelog\n\n## [0.3.7] - 2026-06-10\n\n### Recall tool simplification (#27)\n\n- Dropped `mode:transcript` \u2014 strict subset of `mode:hybrid` with no unique capability. (#27)\n- Consolidated 5 scattered `promptGuidelines` into 2 focused entries; removed "NOT semantic" redundancy and JSONL implementation leak. (#27)\n- Removed internal taxonomy from mode descriptions ("transcript + file indicators" \u2192 "all session content"). (#27)\n- Added `mode:touched` support to `/remendra-recall` command (previously only worked via agent tool). (#27)\n- Collapsed drill-down examples to `#N:path with optional :offset:limit or :full`. (#27)\n\n### Stale context crash protection (#26)\n\n- Added `getErrorMessage()` to normalize cross-process error serialization (Error objects, plain objects with `message`, arbitrary thrown values). (#26)\n- Added `isStaleExtensionContextError()` to detect stale-context error patterns. (#26)\n- Added `notifySafely()` wrapper around `ui.notify()` calls to prevent stale-context notification errors from propagating. (#26)\n- Wrapped `agent_end` handler, async compaction callbacks (`onComplete`, `onError`), and deferred timer callback to silently bail on stale-context errors. (#26)\n\n### Lockstep sync \u2014 2026-06-05 (#25)\n\n- Ported [pi-observational-memory/58f05fa](https://github.com/elpapi42/pi-observational-memory/commit/58f05fa): remove `Math.min(100)` cap from `pct()` helper so overfull observation pool (>100%) is displayed accurately instead of silently capping at 100%. (#25)\n- Skipped [pi-observational-memory/58f05fa](https://github.com/elpapi42/pi-observational-memory/commit/58f05fa) command renames (`/om-status`\u2192`/om:status`, `/om-view`\u2192`/om:view`) \u2014 our equivalent commands (`/remendra-memory`) already use a different naming scheme. (#25)\n- Deferred [pi-observational-memory/bf79ff7](https://github.com/elpapi42/pi-observational-memory/commit/bf79ff7) and [pi-observational-memory/52b5844](https://github.com/elpapi42/pi-observational-memory/commit/52b5844): pool metrics extraction + `budgetTokens`\u2192`targetTokens` rename. Blocking branch (`noautocompact-reflector-dropper`) is now stale/dropped, but changes touch heavily diverged files. (#25)\n\n## [0.3.5] - 2026-06-04\n\n### Added\n\n- **`sessionFallback` config option.** When `false`, skip the main session model as last-resort fallback when all OM-specific model candidates are exhausted. Default `true` for backward compatibility. Useful for keeping OM workers on cheaper/faster models. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Session-file LRU cache.** `loadAllMessages` now caches up to 3 session files with mtime + TTL (2s) invalidation. Reduces redundant I/O on repeated recall searches in the same session. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Pending state sanitization.** `readSessionState` now filters corrupted batch entries (missing `coversUpToId` or `data` fields) instead of returning them as-is. Prevents crashes from edge cases like a partial write to `pending.json`. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Shared `isRetryableError` / `RETRYABLE_ERROR_RE`.** Extracted from `cooldown.ts` and `compaction-trigger.ts` into `retryable-error.ts` \u2014 single source of truth, re-exports Pi\'s `isContextOverflow` for provider-specific overflow detection. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Shared provider-stream bridge.** `createBridgeStreamFn` extracted from all three OM agents (observer, reflector, dropper) into `provider-stream.ts`. Custom providers registered by other extensions (e.g., claude-bridge) continue working through jiti-loaded consolidation agents. ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **Async buffered debug logging.** `debugLog()` now buffers JSONL writes in memory and flushes on a 1-second background timer, with synchronous flush on `exit`. Reduces event-loop blocking during high-frequency debug events. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Windows path support in file extraction.** `longestCommonDirPrefix` normalizes backslashes and recognizes `C:\\`-style drive letters. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n\n### Fixed\n\n- **Context window check uses actual input size, not configured cap.** Observer/reflector/dropper now compute `observerEstimatedInput` from the actual chunk tokens after capping, not from `observerChunkMaxTokens`. More accurate \u2014 fewer false "context window exceeded" rejections on smaller-than-cap inputs. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`coversUpToId` now points past capping, not before.** Observer stage captured the last entry ID before capping source entries to `maxChunkTokens`, so the coverage marker could point to an entry that was dropped. Now captured after capping. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`capSourceEntriesToTokens` counts all entry types.** Previously only `"message"` entries counted toward the token budget \u2014 custom OM entries (`observations_recorded`, `reflections_recorded`, etc.) and summary-bearing entries were invisible, risking context overflow in the observer. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Reflector/dropper avoid redundant disk reads.** Both stages now use the outer-scope `pending` variable (already read in the `noAutoCompact` block) instead of calling `readPendingState(sessionId)` again inside the for loop. Neutral correctness win. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Observer rejects invalid observation IDs gracefully.** `normalizeSourceEntryIds` now filters out unknown/duplicate IDs instead of returning `undefined` and discarding the entire observation batch. One hallucinated ID from the LLM no longer loses valid observations. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`pendingObservationsCreatedAfter` properly typed.** Changed from `pending: any` to `pending: PendingOMState` \u2014 catches type mismatches at compile time. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Section headers in summaries use line-boundary regex.** `sectionOf` and `stripOMContent` now match `## Reflections` / `## Observations` at the start of a line instead of using bare `indexOf`. Prevents false positives when those phrases appear inside file paths or conversation text. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Read+same-path-Modified dedup in file summaries.** `mergeFileLines` now removes a path from `Read` if it also appears in `Modified` \u2014 a file that was read then edited shouldn\'t show twice. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`reverse-recall` outputs related reflections.** The `_reflections` dead parameter is now used \u2014 related reflections are shown alongside observations when expanding session entries. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Cooldown reason in UI notification.** The `getCooldownEntry` function now returns the actual entry (with reason), so the status notification shows *why* a model was cooled down, not just "cooldown active". ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Env override validation.** Invalid `PI_REMENDRA_COMPACTION` / `PI_REMENDRA_COMPACTION_ENGINE` values now print a warning instead of being silently ignored. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`observerPreambleMaxTokens` accepts 0.** Now uses `nonNegativeInt` validator instead of `positiveInt` \u2014 0 means "auto-compute", which was the intended semantics. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n\n### Changed\n\n- **Replaced hand-rolled text wrapping with `wrapTextWithAnsi` from pi-tui.** The custom `wrapLine` function was replaced with `wrapLineWithContinuation` using pi-tui\'s ANSI-aware wrapping. Handles list continuation indentation and ANSI mid-sequence splits correctly. ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **`visibleWidth` re-exported from pi-tui.** The local CJK-width implementation in `key-matcher.ts` was replaced with a re-export from `@earendil-works/pi-tui`. Fallback note retained if the import fails in overlay context. ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **Bash command compression improved.** Multi-line commands joined with semicolons instead of first-line-only. Pipe tails strip `awk`/`python3`/`node`/`bun` excluded (their output carries semantic meaning). Word-boundary truncation instead of mid-word cut. Up to 10 tail-strip iterations with stability guard. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **`fuzzyMatch` \u2192 `prefixMatch`.** The `/remendra` subcommand filter changed from fuzzy/subsequence matching to simple prefix matching. Predictable narrowing: typing "om" matches "om-on" and "om-off". ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **`read` tool summary field corrected.** `TOOL_SUMMARY_FIELDS` now maps lowercase `read` \u2192 `"path"` (not `"file_path"`), matching the actual tool argument. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Tool error blank-line suppression.** `stringifyBrief` now suppresses blank lines between consecutive tool/error summaries (previously only between consecutive tool summaries). ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Recall header distinguishes matches vs expands.** The search result header now shows `"X matches (+ Y expanded)"` when entries were pulled in via `#N` expand rather than matching the query. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Compaction output instructions split into full/basic variants.** `CONTEXT_USAGE_INSTRUCTIONS` shortened to 4 lines (previously 10). When observations/reflections are present, the full version includes the bracketed-ids preamble + recall footer. When none exist (or OM is off), a basic 2-line recall-guidance footer is appended instead. `renderSummary` always returns a footer, and `stripOMContent` handles both variants to prevent compounding. ([#23](https://github.com/k0valik/pi-blackhole/pull/23))\n\n### Removed\n\n- **Dead `loadSettings()` / `PiVccSettings`.** Config loading unified in `unified-config.ts` \u2014 the `settings.ts` wrapper had zero callers. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Dead `transcriptEntries` from `SectionData`.** Removed from `sections.ts` and `build-sections.ts`. (dead since v0.3.3) ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Dead toggle helpers.** `toggleCompaction`, `toggleCompactionEngine`, `toggleTailBehavior` removed from `unified-config.ts` (zero callers \u2014 toggling is handled by the configure overlay). ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Dead `vcc-report.test.ts`.** Test file was testing a non-existent `src/core/report.js` module. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **Dead `config-simplification.test.ts`.** Tested old config migration that\'s been stable since v0.3.3. ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n\n### Docs\n\n- **Renamed example configs.** `example-config-v2.json` \u2192 canonical `example-config.json` (new config surface). Old `example-config.json` \u2192 `example-config-old.json` (legacy keys). ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **README: updated "What the agent sees" example** to match actual output ordering and expanded RECALL_NOTE text. ([#21](https://github.com/k0valik/pi-blackhole/pull/21))\n- **README: added `sessionFallback` to settings table.** ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **example-config.json: added `sessionFallback` field.** ([#20](https://github.com/k0valik/pi-blackhole/pull/20))\n- **README: updated "What the agent sees" example** to match the new shorter CONTEXT_USAGE_INSTRUCTIONS text and note about basic footer when OM is off. ([#23](https://github.com/k0valik/pi-blackhole/pull/23))\n\n## [0.3.4] - 2026-06-02\n\n### Added\n\n- **`cooldownHours: 0` disables cooldown without disk writes.** Previously `cooldownHours: 0` was rejected by the positive-int validator and silently replaced with a 1-hour cooldown. Now 0 is a valid value that disables cooldown entirely \u2014 no disk writes, no persistent state. Failed models are tracked in-memory within each consolidation stage (via `failedInCycle` set) so the fallback chain still advances past them. ([#16](https://github.com/k0valik/pi-blackhole/issues/16), [#18](https://github.com/k0valik/pi-blackhole/pull/18))\n- **Kitty CSI-u keyboard protocol support for overlays.** The configure and status overlays use pi-tui\'s `matchesKey` (which handles both legacy terminal sequences and Kitty\'s CSI-u protocol) instead of the homegrown `matchKey`. Digit input uses `decodeKittyPrintable` to decode CSI-u encoded characters. ([#17](https://github.com/k0valik/pi-blackhole/issues/17), [#19](https://github.com/k0valik/pi-blackhole/pull/19))\n- **Per-stage failure notification isolation.** When cooldown is disabled, each consolidation stage (observer, reflector, dropper) now shows its own failure notification \u2014 observer failure no longer suppresses reflector/dropper notifications. ([#19](https://github.com/k0valik/pi-blackhole/pull/19))\n\n### Fixed\n\n- **Keyboard freeze in `/remendra configure` on Kitty terminal.** The homegrown `matchKey` function did not recognize Kitty\'s CSI-u keyboard protocol sequences (used by Kitty, WezTerm, and other modern terminals). Switched to pi-tui\'s `matchesKey` which supports both legacy and CSI-u input. ([#17](https://github.com/k0valik/pi-blackhole/issues/17), [#19](https://github.com/k0valik/pi-blackhole/pull/19))\n- **Config error notifications no longer downgraded to info.** When a session model has no API key configured, the notification correctly shows a "warning" level message instead of the misleading "info" message previously shown when `failedInCycle` was non-empty. ([#16](https://github.com/k0valik/pi-blackhole/issues/16), [#18](https://github.com/k0valik/pi-blackhole/pull/18))\n\n### Changed\n\n- **Removed `key-matcher.ts` `matchKey` export** (replaced by pi-tui\'s `matchesKey`). The `visibleWidth` export is retained.\n\n## [0.3.3] - 2026-06-02\n\n### Added\n\n- **New config surface:** `compaction` (`"auto"` | `"manual"` | `"off"`), `compactionEngine` (`"remendra"` | `"pi-default"`), `tailBehavior` (`"pi-default"` | `"minimal"`). These replace the old `overrideDefaultCompaction`, `noAutoCompact`, and `passive` keys. See [`MIGRATION-GUIDE.md`](MIGRATION-GUIDE.md) for the full mapping. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Config overlay (`/remendra configure`):** interactive TUI with \u2191\u2193 navigation, Enter to edit/toggle, Ctrl+S to save. 17 fields across 3 sections (Compaction, Observational Memory, Debug) with inline help text. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Status overlay (`/remendra-memory`):** new render with compaction config readout, OM pipeline state, and inline actions (configure, om-off/on). ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Tail behavior control:** `tailBehavior: "minimal"` keeps only the last user message (aggressive pi-vcc cut, default); `tailBehavior: "pi-default"` keeps Pi\'s ~20k token tail visible (opt-in). Both auto-triggered and `/remendra` now default to `"minimal"`. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **12 permutation tests** covering all compaction \xD7 memory \xD7 threshold combinations for the new config keys. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Documentation:** CONFIG.md (new reference), OLD_CONFIG.md (legacy docs), MIGRATION-GUIDE.md (migration path from old keys), README.md and llms.txt updated for the new surface. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Per-model context window override:** `OmModelConfig` now supports an optional `contextWindow` field. When set on any stage model or fallback, it overrides Pi\'s model registry value for the context window check. Unset models inherit from Pi normally. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Context window pre-check:** before calling each OM stage agent (observer, reflector, dropper), the estimated input tokens (stage cap + 8K reserve for system prompt/tools/turns) are checked against the model\'s effective context window. If the input exceeds the window, the model is skipped and the next fallback is tried. If all models are exhausted, a warning is shown. Strictly opt-in \u2014 with default caps (40K\u201380K) and typical models (128K+), the check is a no-op unless a `contextWindow` override is explicitly set. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **8 tests** covering context window parsing from config, priority resolution, rejection of invalid values, and `effectiveContextWindow` logic. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n\n### Changed\n\n- **`memory: false` no longer blocks auto-compaction.** Memory and compaction are now truly independent \u2014 `memory: false` stops OM workers but compaction still runs. Use `compaction: "manual"` or `compaction: "off"` to control compaction separately. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **`compaction: "off"` semantics refined:** blocks remendra\'s auto-trigger and returns early from the before-compact hook for auto-triggered compactions (letting Pi handle them), but explicit `/remendra` still uses remendra\'s pipeline. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Config migration is automatic:** old keys (`overrideDefaultCompaction`, `noAutoCompact`, `passive`) are migrated to new keys in memory at load time. The on-disk file is never mutated. New keys take priority when present. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Permutation tests updated** to reflect the new behavior: `overrideDefaultCompaction` now gates the legacy trigger path, `memory` no longer gates the trigger, and the 16-permutation matrix uses the correct formula. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n\n### Fixed\n\n- **Save error handling:** `save()` returns boolean and wraps writes in try/catch \u2014 read-only filesystems (e.g., Nix-managed config) no longer crash with an unhandled exception. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Number input restriction:** configure overlay now only accepts digits for number fields, preventing garbage values from being entered. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Defensive bounds:** section header pads in configure-overlay and status-overlay use `Math.max(0, ...)` / `Math.max(2, ...)` to prevent negative `.repeat()` counts on tiny terminals. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Config save failure warning:** `/remendra configure` now shows a "warning" notification when the config file can\'t be written instead of a misleading "info" notification. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **Legacy config tests:** updated `config.test.ts` to check new config keys (`compaction`, `compactionEngine`, `memory`) instead of deleted legacy fields (`passive`, `overrideDefaultCompaction`), fixing 10 pre-existing test failures. ([#14](https://github.com/k0valik/pi-blackhole/pull/14))\n- **pi-default non-message firstKeptEntryId resolution:** when Pi\'s `firstKeptEntryId` points to a non-message entry (e.g., OM metadata or compaction), `buildOwnCut` now resolves to the next actual message entry instead of falling through to the minimal cut. ([#15](https://github.com/k0valik/pi-blackhole/pull/15))\n- **Array micro-optimization in buildOwnCut:** replaced `branchEntries.slice(cutInBranch + 1).find()` with `branchEntries.find()` using an index check, avoiding a temporary array allocation. ([#15](https://github.com/k0valik/pi-blackhole/pull/15))\n\n## [0.3.2] - 2026-06-01\n\n### Fixed\n\n- **Auto-compaction gating:** added explicit guard at the top of the compaction trigger that returns early when `overrideDefaultCompaction` is `false` (the default). Previously, remendra would still evaluate token thresholds and call Pi\'s default compaction hook even when not opted in \u2014 causing confusing log entries and unnecessary evaluations. Now remendra stays completely out of Pi\'s compaction unless the user explicitly opts in. ([#13](https://github.com/k0valik/pi-blackhole/pull/13))\n\n### Added\n\n- **README top banner:** prominent NOTE at the top instructing users to set `"overrideDefaultCompaction": true` for remendra to handle compaction automatically. Existing config matrix in the IMPORTANT section retained for reference.\n\n## [0.3.1] - 2026-05-31\n\n### Fixed\n\n- **Auto-compaction idle detection timing:** changed compaction scheduling from `queueMicrotask` to `setTimeout(..., 0)`. The microtask fired before Pi completed its post-response processing cycle, causing `ctx.isIdle()` to always return `false` and compaction to be deferred indefinitely. `setTimeout` yields to the event loop, allowing Pi to mark itself idle before the callback runs. ([#13](https://github.com/k0valik/pi-blackhole/pull/13))\n\n### Added\n\n- **Debug logging for compaction pipeline:** structured `debugLog` instrumentation at every decision point \u2014 guard checks, token threshold evaluation, branch entry inspection, session identity validation, idle check, and compaction completion/error. Opt-in via `"debugLog": true` in config, zero overhead otherwise. ([#13](https://github.com/k0valik/pi-blackhole/pull/13))\n- **Permutation test suite:** 36 new tests covering all 16 configuration knob combinations for auto-compaction trigger behavior. ([#13](https://github.com/k0valik/pi-blackhole/pull/13))\n\n## [0.2.4] - 2026-05-29\n\n### Recall: progressive discovery\n\n- **Touched mode (`mode:touched`):** aggregate view of all files written/edited across the session, grouped by path with entry indices. Accessible via `recall` tool and `/remendra-recall` command. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n- **Drill-down (`#N:path`):** read file content from tool call arguments in any transcript entry. Supports `#42:auth.ts` (preview first 30 lines), `#42:auth.ts:full` (all lines), `#42:auth.ts:offset:limit` (paged). Path auto-selects when unique; ambiguous paths list options. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n- **Search mode filtering (`mode:file`, `mode:transcript`, `mode:hybrid`):** `mode:file` searches only write/edit file content; `mode:transcript` searches only conversation text; `mode:hybrid` (default) searches both. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n- **Merged expand + search:** `#N` expand entries are now merged into search results (rather than being mutually exclusive), with proper pagination and sorting. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n- **`scope` parameter as `StringEnum`:** tool schema now uses `StringEnum` (strict literal union) instead of `Type.Union` for `scope` and `mode` parameters. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n\n### Fixed\n\n- **Null-safe entry IDs in `load-messages.ts`:** gracefully handles entries with `null` IDs instead of crashing with `String(null)` \u2192 `"null"`. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n- **`formatRecallOutput` preserves legacy `files:[...]` format:** the expand-only path (no query) was silently dropping file info from entries that have the `files` field but no `fileMatches` \u2014 now falls back to the old `files:[path1, path2]` suffix. ([#12](https://github.com/k0valik/pi-blackhole/pull/12))\n\n### Crash protection \u2014 jiti bridge, EACCES guards, config safety\n\n- **Jiti bridge for custom providers:** `index.ts` now wraps `pi.registerProvider` to capture `streamSimple` functions into a `Symbol.for()` global, and scans `modelRegistry.registeredProviders` once on `agent_start`. This prevents crashes when consolidation agents (loaded via jiti with `moduleCache: false`) resolve a custom provider like `claude-bridge` \u2014 previously the jiti-loaded pi-ai instance had an empty `apiProviderRegistry` and threw `"No API provider registered"`. ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **Lazy bridge evaluation:** the bridge stream function now checks the provider map at call time instead of at import time, fixing an IIFE race condition where the bridge was permanently disabled because provider registration hadn\'t happened yet at module load. ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **Always-run fallback scan:** replaced `providerStreams.size > 0` guard with a dedicated `hasScannedFallback` flag \u2014 the fallback scan now always runs once regardless of how many providers the wrapper already captured, handling extensions that register before remendra loads. ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **EACCES guards:** `writeCooldownMap()` and `writeSessionState()` now wrapped in try/catch. Prevents process crash on read-only filesystems (e.g., Nix-managed config). Cooldown loss is advisory (slightly more API traffic); pending state loss is safe (idempotent re-processing). ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **Numeric config validation:** all numeric fields are validated at load \u2014 NaN, infinity, and negative values are reset to defaults. Prevents silent math errors in pipeline logic. ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **`observerPreambleMaxTokens=0` explicitly allowed** in numeric validation (means "auto-compute"). ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n- **Better error messages for config save failures:** `/remendra om-on` / `om-off` now use `"warning"`-level notification with an explanation about read-only filesystems when the config save fails, instead of a misleading `"info"`-level "Failed to save config.". ([#11](https://github.com/k0valik/pi-blackhole/pull/11))\n\n## [0.2.3] - 2026-05-27\n\n### Lockstep sync \u2014 2026-05-27\n\n- Ported upstream OM prompt refinements: coverage tiers in dropper prompt, "highest-resistance" critical framing in observer, coverage stewardship in reflector (#safe)\n- Ported upstream debug logging: `dropper.agent_start`, `dropper.tool_call`, `dropper.result` with full coverage/relevance diagnostics (#d6b02c0)\n- Ported upstream coverage-aware pruning: new `coverage.ts` module, drop candidate sort by coverage\u2192relevance\u2192age, critical observations no longer hard-rejected (#e00363a)\n- Adapted config: added `observationsPoolTargetTokens` as forward-compat no-op (upstream 52b5844 budgetTokens\u2192targetTokens rename)\n- Skipped upstream pool refactor (bf79ff7) and rename (52b5844): kept our ratio-based urgency algorithm\n- Recovered output cap from feat/compaction-output-cap: `buildCompactionProjection` now caps rendered observations to `observationsPoolMaxTokens` budget via relevance+recency scoring\n\n## [0.2.2] - 2026-05-26\n\n### Added\n\n- `/remendra-memory` pipeline display reworked: renamed "Coverage" to "Pipeline", replaced percentage-based metrics with `X tokens (triggers at Y)` format to eliminate false-alarm 100% readings, added `[auto-disabled]` annotation for compaction in noAutoCompact mode, and show preamble cap in Pending section ([#7](https://github.com/k0valik/pi-blackhole/pull/7))\n- Default `observeAfterTokens` increased from 10,000 to 15,000 and `reflectAfterTokens` from 20,000 to 25,000 for better cost-efficiency on mid/high context sessions ([#7](https://github.com/k0valik/pi-blackhole/pull/7))\n- Observer preamble cap in noAutoCompact mode: the observer stage\'s `CURRENT OBSERVATIONS` preamble is now capped to prevent unbounded prompt growth from accumulated observation batches. High-relevance observations are always kept; medium and low observations are scored by relevance tier and relative recency (array position, not wall-clock time), with the best-scoring kept within the token budget. Reflections are never trimmed. The cap is governed by the new `observerPreambleMaxTokens` config setting (default `0` = auto-compute 30% of `observerChunkMaxTokens`). Only applies in `noAutoCompact` mode \u2014 the auto-compact path is unchanged. ([#7](https://github.com/k0valik/pi-blackhole/pull/7))\n- Accumulated batch history for noAutoCompact mode: the observer, reflector, and dropper stages now feed accumulated pending.json batches (observationBatches/reflectionBatches) to the LLM instead of reading from the (empty) branch. This restores the same historical context the pipeline receives in autoCompact mode \u2014 prior observations/reflections, existing summaries \u2014 but without writing markers to the visible branch. Each pipeline run appends its output batch to the pending store; on /remendra flush, all accumulated batches are written as separate branch markers, preserving per-run coverage. ([#7](https://github.com/k0valik/pi-blackhole/pull/7))\n- Accumulated dropper batches (`droppedBatches`) in pending.json so that earlier dropper runs are not lost when a subsequent cycle overwrites `pending.dropped` before a /remendra flush. The flush now writes all accumulated dropper batches to the branch, preventing observations dropped in earlier cycles from being "un-dropped" on compaction. ([#7](https://github.com/k0valik/pi-blackhole/pull/7))\n\n### Fixed\n\n- Reflector and dropper now read from `pending.json` in `noAutoCompact` mode instead of scanning the branch for observation markers that are never written there. Previously the early-exit gates in both stages returned immediately because `latestCoverageMarkerId(entries, OM_OBSERVATIONS_RECORDED)` found nothing in the branch (observations are saved to pending only). This caused the reflector and dropper to skip entirely, leaving the pipeline half-functional \u2014 no reflections were ever generated, the dropper never pruned, and the display showed misleading pool values. The fix adds `noAutoCompact`-aware early-exit gates that check `pending.observation`, `pending.reflection`, and `pending.dropped` state, using their `coversUpToId` values to calculate token gaps and gate correctly on `reflectAfterTokens`. Observations and reflections are fed from pending data instead of the empty branch. The notification token-adjustment logic (which already existed for all three stages) is now effective because the stages actually run. ([#6](https://github.com/k0valik/pi-blackhole/pull/6))\n\n## [0.2.1] - 2026-05-24\n\n### Fixed\n\n- Prevent repeated `Intl.Segmenter` constructor fallback retries on unsupported runtimes ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- `/remendra-memory` accumulated token counts now factor in pending `coversUpToId` as virtual coverage markers in `noAutoCompact` mode ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Pipeline notifications (observer/reflector/dropper) show accurate accumulated values accounting for pending coverage ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- `stageThinkingLevel()` resolves per-model thinking config instead of using the primary stage model\'s setting for all fallback attempts ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Move `@earendil-works/*` packages to `peerDependencies` (provided by pi host at runtime), `typebox` to `devDependencies` (import type only) ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Dead code removal: deleted `src/om/compaction-hook.ts` and `src/core/report.ts` ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Module-level state leak: compaction stats moved to `Runtime` instance for session isolation ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Unified config loading: removed dual `loadSettings` path, `ensureConfig` called at handler start ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Stale context in deferred compaction: replaced `setTimeout(..., 0)` with `queueMicrotask` and session ID validation ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Silent JSON parse failures in `load-messages.ts` \u2014 now logged ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Silent `scaffoldConfig` errors \u2014 now logged ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- `visibleProjection` falls through to `fullProjection` when no compaction has run ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- `renderMessage` calls in `report.ts` and test types missing required `Message` properties ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- CI publish workflow uses `npm` instead of `pnpm` (not available in runner) ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- Added `typescript` devDependency for CI `tsc` check ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n\n### Changed\n\n- Improved model fallback: `resolveModel` iterates fallback chain (stage \u2192 fallbacks \u2192 base \u2192 session), records per-model cooldown on retryable errors ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n\n### Added\n\n- Bi-directional recall coupling: `#N` transcript expansion shows related OM observations/reflections; OM hex-id recall shows `#N` entry index annotations ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n- `id` field on `RenderedEntry` for cross-referencing with session entries ([#5](https://github.com/k0valik/pi-blackhole/pull/5))\n\n## [0.2.0] - 2026-05-24\n\n### Added\n\n- Initial release: unified compaction (pi-vcc) + observational memory (pi-observational-memory)\n- `/remendra` command for manual compaction with OM content injection\n- `/remendra-memory` command for pipeline status display\n- `/remendra-recall` command for unified recall (transcript + OM)\n- Three-stage consolidation pipeline: observer \u2192 reflector \u2192 dropper with fallback retry\n- Per-session pending file isolation\n- Model cooldown persistence across restarts\n- CI/CD publish workflow for npm\n';
 function getOwnPackageRoot() {
   try {
     const metaUrl = import.meta.url;
@@ -8300,7 +8300,7 @@ function getOwnPackageRoot() {
       while (dir !== dirname(dir)) {
         try {
           const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8"));
-          if (pkg.name === "pi-blackhole") return dir;
+          if (pkg.name === "pi-remendra") return dir;
         } catch {
         }
         const parent = dirname(dir);
@@ -8315,7 +8315,7 @@ function getOwnPackageRoot() {
     while (dir !== dirname(dir)) {
       try {
         const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8"));
-        if (pkg.name === "pi-blackhole") return dir;
+        if (pkg.name === "pi-remendra") return dir;
       } catch {
       }
       const parent = dirname(dir);
@@ -8331,7 +8331,7 @@ function getOwnPackageRoot() {
       while (dir !== dirname(dir)) {
         try {
           const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8"));
-          if (pkg.name === "pi-blackhole") return dir;
+          if (pkg.name === "pi-remendra") return dir;
         } catch {
         }
         const parent = dirname(dir);
@@ -8479,7 +8479,7 @@ var PREFERRED_INNER_ROWS2 = 45;
 function createChangelogViewer(args) {
   const { tui, theme, done, packageRoot, maxEntries } = args;
   const version = getPackageVersion(packageRoot);
-  const title = version ? `pi-blackhole v${version} \u2014 Changelog` : "pi-blackhole \u2014 Changelog";
+  const title = version ? `pi-remendra v${version} \u2014 Changelog` : "pi-remendra \u2014 Changelog";
   const raw = readChangelogText(packageRoot);
   let allLines;
   if (!raw) {
@@ -8623,41 +8623,41 @@ async function openChangelogView(ctx) {
   );
 }
 
-// src/pi-base/blackhole-settings.ts
-var CONFIG_FILENAME = "pi-blackhole-config.json";
-var GLOBAL_CONFIG_DIR = join(getPiAgentDir(), "pi-blackhole");
+// src/pi-base/remendra-settings.ts
+var CONFIG_FILENAME = "pi-remendra-config.json";
+var GLOBAL_CONFIG_DIR = join(getPiAgentDir(), "pi-remendra");
 var config = new ConfigManager({
-  id: "pi-blackhole",
-  label: "pi-blackhole",
+  id: "pi-remendra",
+  label: "pi-remendra",
   filename: CONFIG_FILENAME,
   configDir: GLOBAL_CONFIG_DIR,
   defaults: DEFAULTS,
   scopes: { global: true, project: true, session: true },
-  sessionConfig: { entryType: "session-config-pi-blackhole" },
+  sessionConfig: { entryType: "session-config-pi-remendra" },
   fields: (cfg) => [
     // ── Compaction ──
     {
       key: "compaction",
       type: "enum",
       label: "Compaction mode",
-      description: "auto=trigger on threshold, manual=only /blackhole, off=auto:Pi handles, /blackhole:blackhole pipeline",
+      description: "auto=trigger on threshold, manual=only /remendra, off=auto:Pi handles, /remendra:remendra pipeline",
       value: cfg.compaction,
       options: ["auto", "manual", "off"],
       optionLabels: {
         auto: "auto \u2014 trigger on threshold",
-        manual: "manual \u2014 only /blackhole",
-        off: "off \u2014 auto:Pi handles, /blackhole:blackhole pipeline"
+        manual: "manual \u2014 only /remendra",
+        off: "off \u2014 auto:Pi handles, /remendra:remendra pipeline"
       }
     },
     {
       key: "compactionEngine",
       type: "enum",
       label: "Compaction engine",
-      description: "blackhole=structured summary+OM, pi-default=built-in Pi summarization",
+      description: "remendra=structured summary+OM, pi-default=built-in Pi summarization",
       value: cfg.compactionEngine,
-      options: ["blackhole", "pi-default"],
+      options: ["remendra", "pi-default"],
       optionLabels: {
-        blackhole: "blackhole \u2014 structured summary + OM",
+        remendra: "remendra \u2014 structured summary + OM",
         "pi-default": "pi-default \u2014 built-in Pi summarization"
       }
     },
@@ -8665,12 +8665,12 @@ var config = new ConfigManager({
       key: "compactionSummaryMode",
       type: "enum",
       label: "Summary history",
-      description: "default=replace one complete summary, append=freeze automatic segments and rebase on /blackhole",
+      description: "default=replace one complete summary, append=freeze automatic segments and rebase on /remendra",
       value: cfg.compactionSummaryMode,
       options: ["default", "append"],
       optionLabels: {
         default: "default \u2014 one complete replacement summary",
-        append: "append \u2014 immutable auto segments; /blackhole rebases"
+        append: "append \u2014 immutable auto segments; /remendra rebases"
       }
     },
     {
@@ -8859,7 +8859,7 @@ var config = new ConfigManager({
       key: "debug",
       type: "boolean",
       label: "Debug snapshots",
-      description: "Write detailed debug snapshots to /tmp/pi-blackhole-debug.json",
+      description: "Write detailed debug snapshots to /tmp/pi-remendra-debug.json",
       value: cfg.debug
     },
     {
@@ -8885,7 +8885,7 @@ var config = new ConfigManager({
         parsed.compaction = "manual";
       }
       if (parsed.overrideDefaultCompaction === true) {
-        parsed.compactionEngine = "blackhole";
+        parsed.compactionEngine = "remendra";
         if (parsed.tailBehavior === void 0) {
           parsed.tailBehavior = "minimal";
         }
@@ -8896,7 +8896,7 @@ var config = new ConfigManager({
       delete parsed.noAutoCompact;
       delete parsed.overrideDefaultCompaction;
     }
-    const envPassive = process.env.PI_BLACKHOLE_PASSIVE ?? process.env.PI_VCC_OM_PASSIVE ?? process.env.PI_OBSERVATIONAL_MEMORY_PASSIVE;
+    const envPassive = process.env.PI_REMENDRA_PASSIVE ?? process.env.PI_VCC_OM_PASSIVE ?? process.env.PI_OBSERVATIONAL_MEMORY_PASSIVE;
     if (envPassive !== void 0) {
       const v = envPassive.trim().toLowerCase();
       if (["1", "true", "yes", "on"].includes(v)) {
@@ -8909,39 +8909,37 @@ var config = new ConfigManager({
         }
       }
     }
-    const envCompaction = process.env.PI_BLACKHOLE_COMPACTION;
+    const envCompaction = process.env.PI_REMENDRA_COMPACTION;
     if (envCompaction !== void 0) {
       const trimmed = envCompaction.trim().toLowerCase();
       if (!["auto", "manual", "off"].includes(trimmed)) {
-        console.warn(
-          `blackhole: invalid PI_BLACKHOLE_COMPACTION value "${envCompaction}"; ignoring`
-        );
+        console.warn(`remendra: invalid PI_REMENDRA_COMPACTION value "${envCompaction}"; ignoring`);
       }
     }
-    const envCompactionEngine = process.env.PI_BLACKHOLE_COMPACTION_ENGINE;
+    const envCompactionEngine = process.env.PI_REMENDRA_COMPACTION_ENGINE;
     if (envCompactionEngine !== void 0) {
       const trimmed = envCompactionEngine.trim().toLowerCase();
-      if (!["blackhole", "pi-default"].includes(trimmed)) {
+      if (!["remendra", "pi-default"].includes(trimmed)) {
         console.warn(
-          `blackhole: invalid PI_BLACKHOLE_COMPACTION_ENGINE value "${envCompactionEngine}"; ignoring`
+          `remendra: invalid PI_REMENDRA_COMPACTION_ENGINE value "${envCompactionEngine}"; ignoring`
         );
       }
     }
-    const envCompactionSummaryMode = process.env.PI_BLACKHOLE_COMPACTION_SUMMARY_MODE;
+    const envCompactionSummaryMode = process.env.PI_REMENDRA_COMPACTION_SUMMARY_MODE;
     if (envCompactionSummaryMode !== void 0) {
       const trimmed = envCompactionSummaryMode.trim().toLowerCase();
       if (!["default", "append"].includes(trimmed)) {
         console.warn(
-          `blackhole: invalid PI_BLACKHOLE_COMPACTION_SUMMARY_MODE value "${envCompactionSummaryMode}"; ignoring`
+          `remendra: invalid PI_REMENDRA_COMPACTION_SUMMARY_MODE value "${envCompactionSummaryMode}"; ignoring`
         );
       }
     }
-    const envMidRunCompaction = process.env.PI_BLACKHOLE_MID_RUN_COMPACTION;
+    const envMidRunCompaction = process.env.PI_REMENDRA_MID_RUN_COMPACTION;
     if (envMidRunCompaction !== void 0) {
       const trimmed = envMidRunCompaction.trim().toLowerCase();
       if (!["resume", "pause", "off"].includes(trimmed)) {
         console.warn(
-          `blackhole: invalid PI_BLACKHOLE_MID_RUN_COMPACTION value "${envMidRunCompaction}"; ignoring`
+          `remendra: invalid PI_REMENDRA_MID_RUN_COMPACTION value "${envMidRunCompaction}"; ignoring`
         );
       }
     }
@@ -8980,7 +8978,7 @@ var config = new ConfigManager({
   },
   env: DECLARATIVE_ENV_OVERRIDES
 });
-async function openBlackholeSettings(ctx) {
+async function openRemendraSettings(ctx) {
   await config.openSettings(
     ctx,
     ctx.cwd,
@@ -9006,7 +9004,7 @@ var registerPiVccCommand = (pi, runtime) => {
   const prefixMatch = (value, prefix) => {
     return value.toLowerCase().startsWith(prefix.toLowerCase());
   };
-  pi.registerCommand("blackhole", {
+  pi.registerCommand("remendra", {
     description: "Manual compact with structural summary. Subcommands: [settings] config overlay, [changelog] display changelog, [cleanup] remove orphaned files, [om-off]/[om-on] disable/enable observational memory.",
     getArgumentCompletions: (prefix) => {
       const subcommands = [
@@ -9034,7 +9032,7 @@ var registerPiVccCommand = (pi, runtime) => {
       const sessionId = ctx.sessionManager.getSessionId();
       const trimmed = (typeof args === "string" ? args : "").trim();
       if (trimmed === "configure" || trimmed === "settings") {
-        await openBlackholeSettings(ctx);
+        await openRemendraSettings(ctx);
         return;
       }
       if (trimmed === "changelog") {
@@ -9054,10 +9052,7 @@ var registerPiVccCommand = (pi, runtime) => {
             GLOBAL_CONFIG_DIR
           );
           runtime.config = config.loadWithWarnings(ctx.cwd, GLOBAL_CONFIG_DIR).config;
-          ctx.ui.notify(
-            "Observational memory disabled. Use /blackhole om-on to re-enable.",
-            "info"
-          );
+          ctx.ui.notify("Observational memory disabled. Use /remendra om-on to re-enable.", "info");
         } catch {
           ctx.ui.notify(
             "Failed to save config \u2014 the config file may be read-only (e.g., managed by Nix). Runtime state updated for this session only.",
@@ -9090,7 +9085,7 @@ var registerPiVccCommand = (pi, runtime) => {
       );
       if (nearMiss) {
         ctx.ui.notify(
-          `/blackhole ${nearMiss} accepts no arguments. Did you mean "/blackhole ${nearMiss}"?`,
+          `/remendra ${nearMiss} accepts no arguments. Did you mean "/remendra ${nearMiss}"?`,
           "warning"
         );
         return;
@@ -9120,7 +9115,7 @@ var registerPiVccCommand = (pi, runtime) => {
           if (stats) {
             ctx.ui.notify(formatCompactionStats(stats), "info");
           } else {
-            ctx.ui.notify("Compacted with blackhole", "info");
+            ctx.ui.notify("Compacted with remendra", "info");
           }
           notifyMigrationReminder(sessionId, (msg, level) => ctx.ui.notify(msg, level));
           if (followUpPrompt) {
@@ -9226,8 +9221,8 @@ function renderContentOnlyProjection(projection, emptyScope) {
   ].join("\n");
 }
 function registerMemoryCommand(pi, runtime) {
-  pi.registerCommand("blackhole-memory", {
-    description: "Show memory pipeline status & token counters. /blackhole-memory [view] visible observations & reflections, [full] complete recorded memory (copies to clipboard).",
+  pi.registerCommand("remendra-memory", {
+    description: "Show memory pipeline status & token counters. /remendra-memory [view] visible observations & reflections, [full] complete recorded memory (copies to clipboard).",
     handler: async (args, ctx) => {
       runtime.ensureConfig(ctx.cwd, (msg) => ctx.ui?.notify?.(msg, "warning"));
       const entries = ctx.sessionManager.getBranch();
@@ -9262,7 +9257,7 @@ Failed to copy to clipboard.`,
         return;
       }
       if (mode && mode !== "status") {
-        ctx.ui.notify("Usage: /blackhole-memory [status|view|full]", "info");
+        ctx.ui.notify("Usage: /remendra-memory [status|view|full]", "info");
         return;
       }
       const folded = foldLedger(entries);
@@ -9332,7 +9327,7 @@ Failed to copy to clipboard.`,
           lines.push(
             `Preamble cap: ${preambleCap.toLocaleString()} tokens for observations${pctNote}`
           );
-          lines.push("Run /blackhole to flush and compact.");
+          lines.push("Run /remendra to flush and compact.");
         }
       }
       if (runtime.consolidationInFlight || runtime.compactInFlight || runtime.compactHookInFlight) {
@@ -9464,7 +9459,7 @@ var loadAllMessages = (sessionFile, full, allowedEntryIds) => {
     }
   }
   if (parseErrors > 0) {
-    console.warn(`blackhole: ${parseErrors} malformed JSONL line(s) in ${sessionFile}`);
+    console.warn(`remendra: ${parseErrors} malformed JSONL line(s) in ${sessionFile}`);
   }
   const rendered = [];
   const rawMessages = [];
@@ -10018,8 +10013,8 @@ async function augmentWithObservations(output, rendered, ctx) {
   return output;
 }
 var registerVccRecallCommand = (pi) => {
-  pi.registerCommand("blackhole-recall", {
-    description: "Search session history. Defaults to active lineage. Usage: /blackhole-recall <query> [page:N] [scope:all] [mode:file|touched]",
+  pi.registerCommand("remendra-recall", {
+    description: "Search session history. Defaults to active lineage. Usage: /remendra-recall <query> [page:N] [scope:all] [mode:file|touched]",
     handler: async (args, ctx) => {
       const sessionFile = ctx.sessionManager.getSessionFile();
       if (!sessionFile) {
@@ -10037,7 +10032,7 @@ var registerVccRecallCommand = (pi) => {
         const touched = getTouchedFiles(rawMessages2, rendered2);
         const text = formatTouchedOutput(touched, page2);
         pi.sendMessage(
-          { customType: "blackhole-recall", content: text, display: true },
+          { customType: "remendra-recall", content: text, display: true },
           { triggerTurn: true }
         );
         return;
@@ -10048,7 +10043,7 @@ var registerVccRecallCommand = (pi) => {
         const base2 = (parsed.scope === "all" ? "Scope: all\n\n" : "") + formatRecallOutput(recent);
         const output2 = await augmentWithObservations(base2, recent, ctx);
         pi.sendMessage(
-          { customType: "blackhole-recall", content: output2, display: true },
+          { customType: "remendra-recall", content: output2, display: true },
           { triggerTurn: true }
         );
         return;
@@ -10062,7 +10057,7 @@ var registerVccRecallCommand = (pi) => {
         const base2 = (parsed.scope === "all" ? "Scope: all\n\n" : "") + formatRecallOutput(recent);
         const output2 = await augmentWithObservations(base2, recent, ctx);
         pi.sendMessage(
-          { customType: "blackhole-recall", content: output2, display: true },
+          { customType: "remendra-recall", content: output2, display: true },
           { triggerTurn: true }
         );
         return;
@@ -10075,18 +10070,18 @@ var registerVccRecallCommand = (pi) => {
       const scopeSuffix = parsed.scope === "all" ? " (scope: all)" : "";
       const header = totalPages > 1 ? `Page ${page}/${totalPages} (${allResults.length} total matches${scopeSuffix})` : `${allResults.length} matches${scopeSuffix}`;
       const footer = page < totalPages ? `
---- /blackhole-recall ${query}${parsed.scope === "all" ? " scope:all" : ""} page:${page + 1} ---` : "";
+--- /remendra-recall ${query}${parsed.scope === "all" ? " scope:all" : ""} page:${page + 1} ---` : "";
       const base = formatRecallOutput(pageResults, query, header) + footer;
       const output = await augmentWithObservations(base, pageResults, ctx);
       pi.sendMessage(
-        { customType: "blackhole-recall", content: output, display: true },
+        { customType: "remendra-recall", content: output, display: true },
         { triggerTurn: true }
       );
     }
   });
 };
 var LEGACY_OM_OBSERVATION = "om.observation";
-var PENDING_DIR3 = "pi-blackhole";
+var PENDING_DIR3 = "pi-remendra";
 var PENDING_SUFFIX3 = "-pending.json";
 var STALE_SUFFIX3 = "-pending.stale.json";
 var HEADER_CHUNK = 4096;
@@ -11078,7 +11073,7 @@ function technicalDensityFactor(content) {
   );
   if (apiMatches) entityCount += apiMatches.length * 1.5;
   const configMatches = content.match(
-    /\b(?:REACT_APP_|NEXT_PUBLIC_|VITE_|DATABASE_|NODE_|AWS_|DOCKER_|KUBE_|PI_|PI_BLACKHOLE_)[A-Z0-9_]+\b|\b[A-Z][A-Z0-9_]{3,}\b|\b(?:--[a-z0-9_-]+(?:=[^\s]+)?|-[a-zA-Z]{1,3})\b|\b(?:npm|pnpm|yarn|bun|cargo|go|rustc|docker|kubectl|git|make|pytest|pip|uv)\s+[a-z0-9_-]+/g
+    /\b(?:REACT_APP_|NEXT_PUBLIC_|VITE_|DATABASE_|NODE_|AWS_|DOCKER_|KUBE_|PI_|PI_REMENDRA_)[A-Z0-9_]+\b|\b[A-Z][A-Z0-9_]{3,}\b|\b(?:--[a-z0-9_-]+(?:=[^\s]+)?|-[a-zA-Z]{1,3})\b|\b(?:npm|pnpm|yarn|bun|cargo|go|rustc|docker|kubectl|git|make|pytest|pip|uv)\s+[a-z0-9_-]+/g
   );
   if (configMatches) entityCount += configMatches.length * 1.5;
   const systemMatches = content.match(
@@ -11568,7 +11563,7 @@ function buildExportMarkdown(corpus, opts) {
   const introParagraphs = [
     `> **\u26A0\uFE0F Best-effort heuristic export \u2014 semantic review required.** Ranking, relevance tiers, and topic grouping are heuristic (tier-weighted recency decay, coverage/consensus signals, and c-TF-IDF / S\xF8rensen-Dice similarity) and not ground truth. This artifact is distilled automatically from observational memory and may contain noise, duplicates, or stale observations. The export pushes the most relevant reflections and observations to the top, but agents and humans should verify, distill, and de-duplicate before ingesting into any long-term memory system.`,
     ``,
-    `_This file is a distilled artifact of pi-blackhole's observational memory for this project._`,
+    `_This file is a distilled artifact of pi-remendra's observational memory for this project._`,
     ``,
     `_Observations carry an LLM-assigned **relevance tier** ([critical] > [high] > [medium] > [low]) and are organized by tier into sections below. The **Reflections** section at the top contains curator-verified insights from a second LLM pass \u2014 these are the most authoritative entries._${topicNote} _The **viability gate** filters single-session unsupported low/medium observations as likely transient noise (${pctFiltered})._`,
     ""
@@ -11689,22 +11684,22 @@ async function findGitRoot(cwd) {
       const message = errnoError.message ?? String(error);
       return {
         root: null,
-        warning: `[pi-blackhole] git lookup failed for ${cwd}: ${message}; falling back to cwd-only scoping`
+        warning: `[pi-remendra] git lookup failed for ${cwd}: ${message}; falling back to cwd-only scoping`
       };
     }
     return { root: null };
   }
 }
 
-// src/commands/blackhole-export.ts
+// src/commands/remendra-export.ts
 function defaultOutPath(cwd, now) {
   const iso = now.toISOString();
   const stamp = iso.slice(0, 13).replace(/[-T]/g, "") + iso.slice(14, 16);
   return join(cwd, `memory-export-${stamp}.md`);
 }
-var registerBlackholeExportCommand = (pi) => {
-  pi.registerCommand("blackhole-export", {
-    description: "Export distilled project memory (observations/reflections from past sessions) to markdown. Usage: /blackhole-export [out:<path>]. If no out: is provided, writes to the project local cwd.",
+var registerRemendraExportCommand = (pi) => {
+  pi.registerCommand("remendra-export", {
+    description: "Export distilled project memory (observations/reflections from past sessions) to markdown. Usage: /remendra-export [out:<path>]. If no out: is provided, writes to the project local cwd.",
     handler: async (args, ctx) => {
       ctx.ui.notify(
         "Exporting project memory\u2026 this may take a few minutes depending on the number of session files for the project.",
@@ -11803,7 +11798,7 @@ var registerBlackholeExportCommand = (pi) => {
       }
       lines.push("", "The file is plain markdown \u2014 curate it, then import into any memory system.");
       pi.sendMessage({
-        customType: "blackhole-export",
+        customType: "remendra-export",
         content: lines.join("\n"),
         display: true
       });
@@ -11839,7 +11834,7 @@ function getGlobalDispatcher() {
       return dispatcher;
     }
   }
-  throw new Error("Blackhole provider idle timeout requires Pi's Undici dispatcher");
+  throw new Error("Remendra provider idle timeout requires Pi's Undici dispatcher");
 }
 function createProviderFetch(timeoutMs) {
   if (timeoutMs === void 0 || timeoutMs === 0) return void 0;
@@ -11862,7 +11857,7 @@ function createProviderFetch(timeoutMs) {
   };
 }
 function createBridgeStreamFn(streamSimple4) {
-  const PROVIDER_STREAMS_KEY = /* @__PURE__ */ Symbol.for("pi-blackhole:provider-streams");
+  const PROVIDER_STREAMS_KEY = /* @__PURE__ */ Symbol.for("pi-remendra:provider-streams");
   return (model, ctx, opts) => {
     const providerStreams = globalThis[PROVIDER_STREAMS_KEY];
     if (!providerStreams) return streamSimple4(model, ctx, opts);
@@ -13988,7 +13983,7 @@ async function runDropperStage(pi, runtime, ctx, resolveModel, sameRunReflection
   );
   return "abort";
 }
-var REGISTRY_KEY = /* @__PURE__ */ Symbol.for("pi-blackhole:inline-compaction-adapter:v1");
+var REGISTRY_KEY = /* @__PURE__ */ Symbol.for("pi-remendra:inline-compaction-adapter:v1");
 var InlineCompactionUnavailableError = class extends Error {
   constructor(message) {
     super(message);
@@ -14323,7 +14318,7 @@ async function installHostInlineCompactionAdapter(options = {}) {
   const details = failureReasons.length > 0 ? ` (${failureReasons.join("; ")})` : "";
   return {
     supported: false,
-    reason: "Blackhole inline compaction is unavailable: host AgentSession module could not be resolved" + details
+    reason: "Remendra inline compaction is unavailable: host AgentSession module could not be resolved" + details
   };
 }
 function installInlineCompactionAdapter(options = {}) {
@@ -14389,7 +14384,7 @@ async function compactInlineAtTurnBoundary(sessionManager, customInstructions) {
   const record = registry.sessions.get(sessionManager);
   if (!record) {
     throw new InlineCompactionUnavailableError(
-      `Blackhole inline compaction is unavailable: owning AgentSession was not captured or Pi internals are unsupported (host candidates: ${registry.hostCandidateCount ?? 0}; captured sessions: ${registry.capturedSessionCount ?? 0})`
+      `Remendra inline compaction is unavailable: owning AgentSession was not captured or Pi internals are unsupported (host candidates: ${registry.hostCandidateCount ?? 0}; captured sessions: ${registry.capturedSessionCount ?? 0})`
     );
   }
   const { session, originalCompact, shape } = record;
@@ -14416,7 +14411,7 @@ async function compactInlineAtTurnBoundary(sessionManager, customInstructions) {
         const realDisconnect = session._disconnectFromAgent;
         if (!realDisconnect) {
           throw new InlineCompactionUnavailableError(
-            "Blackhole inline compaction is unavailable: disconnect hook disappeared"
+            "Remendra inline compaction is unavailable: disconnect hook disappeared"
           );
         }
         restores.push(
@@ -14451,7 +14446,7 @@ async function compactInlineAtTurnBoundary(sessionManager, customInstructions) {
       registry.refreshPending.add(session);
       if (!abortSuppressed || shape.disconnectsAgent && !disconnectSuppressed) {
         throw new InlineCompactionUnavailableError(
-          "Blackhole inline compaction invariant failed: Pi quiesce hooks were not invoked as expected"
+          "Remendra inline compaction invariant failed: Pi quiesce hooks were not invoked as expected"
         );
       }
     } catch (error) {
@@ -14475,7 +14470,7 @@ async function compactInlineAtTurnBoundary(sessionManager, customInstructions) {
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [operationError, ...cleanupErrors],
-        "Blackhole inline compaction failed and could not restore all session properties"
+        "Remendra inline compaction failed and could not restore all session properties"
       );
     }
     throw operationError;
@@ -14483,7 +14478,7 @@ async function compactInlineAtTurnBoundary(sessionManager, customInstructions) {
   if (cleanupErrors.length > 0) {
     throw new AggregateError(
       cleanupErrors,
-      "Blackhole inline compaction could not restore all session properties"
+      "Remendra inline compaction could not restore all session properties"
     );
   }
   return result;
@@ -14681,36 +14676,43 @@ async function handleTurnEnd(ctx, runtime, inlineCompact) {
     }
     return;
   }
-  ctx.compact({
-    onComplete: () => {
-      runtime.compactInFlight = false;
-      resetMidRunRetry(runtime);
-      dbg2("compaction_trigger.turn_end.pause_complete");
-      runtime.tryEmitInfo(
-        hasUI,
-        ui,
-        "Observational memory: mid-run compaction complete; agent paused"
-      );
-    },
-    onError: (error) => {
-      runtime.compactInFlight = false;
-      const delay = recordMidRunFailure(runtime);
-      const message = error?.message ?? String(error);
-      dbg2("compaction_trigger.turn_end.pause_error", {
-        message,
-        failures: runtime.midRunCompactionRetry.failures,
-        retryAfter: runtime.midRunCompactionRetry.retryAfter
-      });
-      if (message !== "Compaction cancelled") {
-        notifySafely2(
+  try {
+    ctx.compact({
+      onComplete: () => {
+        runtime.compactInFlight = false;
+        resetMidRunRetry(runtime);
+        dbg2("compaction_trigger.turn_end.pause_complete");
+        runtime.tryEmitInfo(
           hasUI,
           ui,
-          `Observational memory: mid-run compaction failed: ${message}${retryInSeconds(delay)}`,
-          "error"
+          "Observational memory: mid-run compaction complete; agent paused"
         );
+      },
+      onError: (error) => {
+        runtime.compactInFlight = false;
+        const delay = recordMidRunFailure(runtime);
+        const message = error?.message ?? String(error);
+        dbg2("compaction_trigger.turn_end.pause_error", {
+          message,
+          failures: runtime.midRunCompactionRetry.failures,
+          retryAfter: runtime.midRunCompactionRetry.retryAfter
+        });
+        if (message !== "Compaction cancelled") {
+          notifySafely2(
+            hasUI,
+            ui,
+            `Observational memory: mid-run compaction failed: ${message}${retryInSeconds(delay)}`,
+            "error"
+          );
+        }
       }
-    }
-  });
+    });
+  } catch (error) {
+    runtime.compactInFlight = false;
+    dbg2("compaction_trigger.turn_end.pause_sync_throw", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
 }
 function handleAgentEnd(event, ctx, runtime) {
   runtime.ensureConfig(ctx.cwd, (msg) => ctx.ui?.notify?.(msg, "warning"));
@@ -15361,8 +15363,8 @@ function registerRecallTool(pi) {
 
 // src/om/config.ts
 var DEFAULTS2 = DEFAULTS;
-var CONFIG_DIR2 = "pi-blackhole";
-var COOLDOWN_FILE = "pi-blackhole-cooldown.json";
+var CONFIG_DIR2 = "pi-remendra";
+var COOLDOWN_FILE = "pi-remendra-cooldown.json";
 function cooldownPath() {
   return join(getAgentDir(), CONFIG_DIR2, COOLDOWN_FILE);
 }
@@ -15488,13 +15490,13 @@ var Runtime = class {
   lastConsolidationErrorAt;
   /** Stats from the most recent compaction run (session-scoped via handler closure). */
   compactionStats = null;
-  /** Whether the current compaction attempt was triggered by /blackhole.
+  /** Whether the current compaction attempt was triggered by /remendra.
    *  Overwritten at every session_before_compact and consumed by either the
    *  session_compact or session_compact_failed handler, preventing stale
    *  attribution from leaking into a later pi-default attempt. */
   compactWasPiVcc = false;
   /** True when the current session_before_compact returned { cancel: true } from
-   *  blackhole's own-cut guards. Set immediately before the cancel return and reset
+   *  remendra's own-cut guards. Set immediately before the cancel return and reset
    *  at the start of every session_before_compact; consumed by the
    *  session_compact_failed handler to attribute aborted compactions that pi
    *  mislabels as fromExtension: false (pi only flags content-bearing compactions). */
@@ -15806,7 +15808,7 @@ var Runtime = class {
 // legacy.ts
 var legacy_default = async (pi) => {
   await installHostInlineCompactionAdapter();
-  const PROVIDER_STREAMS_KEY = /* @__PURE__ */ Symbol.for("pi-blackhole:provider-streams");
+  const PROVIDER_STREAMS_KEY = /* @__PURE__ */ Symbol.for("pi-remendra:provider-streams");
   const providerStreams = globalThis[PROVIDER_STREAMS_KEY] ??= /* @__PURE__ */ new Map();
   pi.on("agent_start", (_event, ctx) => {
     captureRegisteredProviderStreams(ctx.modelRegistry, providerStreams);
@@ -15821,7 +15823,7 @@ var legacy_default = async (pi) => {
   registerPiVccCommand(pi, omRuntime);
   registerMemoryCommand(pi, omRuntime);
   registerVccRecallCommand(pi);
-  registerBlackholeExportCommand(pi);
+  registerRemendraExportCommand(pi);
   registerRecallTool(pi);
 };
 
