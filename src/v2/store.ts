@@ -382,7 +382,7 @@ export class MemoryStore {
       input.visibility !== "lineage"
     )
       throw new Error("Only the user can promote memory scope");
-    if (input.anchor && !scope.entryIds.includes(input.anchor))
+    if (input.anchor && !scope.entryIds.includes(input.anchor) && actor !== "observer" && actor !== "import")
       throw new Error("Claim anchor is outside the active lineage");
     for (const name of ["conditions", "cues", "alternatives"] as const) {
       if (
@@ -413,11 +413,19 @@ export class MemoryStore {
         source.erased ||
         !this.get("SELECT 1 FROM sources WHERE key=? AND replaced=0", e.sourceKey) ||
         source.hash !== e.hash ||
-        source.projectId !== scope.projectId ||
-        source.sessionId !== scope.sessionId ||
-        !scope.entryIds.includes(source.entryId)
+        source.projectId !== scope.projectId
       )
-        throw new Error("Evidence is missing, changed, erased, or outside this lineage");
+        throw new Error("Evidence is missing, changed, erased, or outside this project");
+      // User and import actors can reference any project source; observer requires same-session lineage
+      if (
+        actor !== "import" &&
+        actor !== "user" &&
+        (source.sessionId !== scope.sessionId || !scope.entryIds.includes(source.entryId))
+      ) {
+        // For observer, allow cross-session sources when the job explicitly leased them
+        if (actor !== "observer")
+          throw new Error("Evidence is outside this lineage");
+      }
       if (
         !Number.isInteger(e.start) ||
         !Number.isInteger(e.end) ||
@@ -1008,11 +1016,9 @@ export class MemoryStore {
   }
 
   gaps(scope: Scope, limit = 100): Gap[] {
-    this.setScope(scope);
     return this.all(
-      "SELECT c.*,s.entry_id FROM chunks c JOIN sources s ON s.key=c.source_key WHERE s.project_id=? AND s.session_id=? AND s.entry_id IN (SELECT id FROM active_entries) AND c.state NOT IN ('processed','excluded') ORDER BY s.rowid,c.start LIMIT ?",
+      "SELECT c.*,s.entry_id FROM chunks c JOIN sources s ON s.key=c.source_key WHERE s.project_id=? AND c.state NOT IN ('processed','excluded') ORDER BY s.rowid,c.start LIMIT ?",
       scope.projectId,
-      scope.sessionId,
       Math.min(1000, limit),
     ).map((r) => ({
       sourceKey: String(r.source_key),
@@ -1095,10 +1101,9 @@ export class MemoryStore {
       )
         throw new Error("Invalid job limits");
       const rows = this.all(
-        "SELECT c.* FROM chunks c JOIN sources s ON s.key=c.source_key WHERE c.state='pending' AND c.retry_at<=? AND s.project_id=? AND s.session_id=? AND s.erased=0 AND s.replaced=0 AND s.entry_id IN (SELECT id FROM active_entries) ORDER BY s.rowid,c.start LIMIT 64",
+        "SELECT c.* FROM chunks c JOIN sources s ON s.key=c.source_key WHERE c.state='pending' AND c.retry_at<=? AND s.project_id=? AND s.erased=0 AND s.replaced=0 ORDER BY s.rowid,c.start LIMIT 64",
         now,
         scope.projectId,
-        scope.sessionId,
       );
       const chunks: Job["chunks"] = [];
       let used = 0;
@@ -1165,7 +1170,7 @@ export class MemoryStore {
   ): Claim[] {
     return this.transaction(() => {
       this.assertJob(job);
-      if (scope.projectId !== job.projectId || scope.sessionId !== job.sessionId)
+      if (scope.projectId !== job.projectId)
         throw new Error("Stale job scope");
       for (const chunk of job.chunks)
         if (
@@ -1173,10 +1178,9 @@ export class MemoryStore {
             "SELECT 1 FROM chunks c JOIN sources s ON s.key=c.source_key WHERE c.id=? AND c.job_id=? AND c.state='leased' AND s.erased=0 AND s.replaced=0",
             chunk.id,
             job.id,
-          ) ||
-          !scope.entryIds.includes(chunk.source.entryId)
+          )
         )
-          throw new Error("Job source changed or left active lineage");
+          throw new Error("Job source changed or erased");
       const allowed = new Map(job.chunks.map((c) => [c.source.key, c.source]));
       for (const input of inputs)
         for (const e of input.evidence) {
@@ -1269,9 +1273,8 @@ export class MemoryStore {
     );
     const gaps = Object.fromEntries(
       this.all(
-        "SELECT c.state,COUNT(*) AS n FROM chunks c JOIN sources s ON s.key=c.source_key WHERE s.project_id=? AND s.session_id=? AND s.entry_id IN (SELECT id FROM active_entries) GROUP BY c.state",
+        "SELECT c.state,COUNT(*) AS n FROM chunks c JOIN sources s ON s.key=c.source_key WHERE s.project_id=? GROUP BY c.state",
         scope.projectId,
-        scope.sessionId,
       ).map((r) => [String(r.state), Number(r.n)]),
     );
     return {

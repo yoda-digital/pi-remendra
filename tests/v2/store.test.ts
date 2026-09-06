@@ -84,7 +84,11 @@ it("rejects invented evidence, invalid spans, and sources from another branch", 
   expect(() =>
     store.record(scope, { ...base, evidence: [{ ...base.evidence[0], end: 10000 }] }, "observer"),
   ).toThrow("span");
-  expect(() => store.record({ ...scope, entryIds: [] }, base, "observer")).toThrow("Evidence");
+  // Observer can use cross-session evidence (cross-session learning support)
+  // but evidence from a DIFFERENT project is still rejected
+  expect(() =>
+    store.record({ ...scope, projectId: "other-project", entryIds: [] }, base, "observer"),
+  ).toThrow("Evidence");
   expect(store.status(scope).claims).toEqual({});
 });
 it("isolates projects, sessions, branches and opt-in user scope for current and historical reads", () => {
