@@ -49,13 +49,13 @@ it("resolves exact quotes to original source offsets and stable IDs", () => {
   expect(parseObservations(output(), job)[0].id).toBe(a.id);
   expect(observerInput(job)).not.toContain("Header:");
 });
-it("rejects imaginary quotes, unknown chunks, and malformed output atomically", () => {
-  expect(() =>
-    parseObservations(
-      output({ evidence: [{ chunk: 0, quote: "Delete all production data" }] }),
-      job,
-    ),
-  ).toThrow("missing");
+it("skips claims with imaginary quotes, rejects unknown chunks and malformed output", () => {
+  // Imaginary quotes are skipped (not thrown) — the claim is dropped
+  const result = parseObservations(
+    output({ evidence: [{ chunk: 0, quote: "Delete all production data" }] }),
+    job,
+  );
+  expect(result).toEqual([]); // Claim dropped because all evidence failed
   expect(() =>
     parseObservations(output({ evidence: [{ chunk: 99, quote: "Never" }] }), job),
   ).toThrow("unknown");

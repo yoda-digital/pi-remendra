@@ -210,8 +210,39 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         result.stopReason === "length"
       )
         throw new Error(result.errorMessage ?? `Observer stopped: ${result.stopReason}`);
+      let text = messageText(result.content);
+      // Some models (Qwen 3.x thinking mode) put all output in reasoning, leaving content empty.
+      // Fall back to reasoning_content or extract from raw response if available.
+      if (!text.trim()) {
+        const raw = result as unknown as Record<string, unknown>;
+        // Pi may expose reasoning in different shapes depending on the provider adapter
+        for (const key of ["reasoning", "reasoning_content", "thinkingContent"]) {
+          const candidate = raw[key] ?? (raw.content as unknown as Record<string, unknown>)?.[key];
+          if (typeof candidate === "string" && candidate.length > 2) {
+            // Try to extract JSON from the reasoning — the model may have put it there
+            const jsonMatch = candidate.match(/\{[\s\S]*"claims"[\s\S]*\}/);
+            if (jsonMatch) { text = jsonMatch[0]; break; }
+          }
+        }
+        // Also check content array blocks for thinking blocks
+        if (!text.trim() && Array.isArray(result.content)) {
+          for (const block of result.content as unknown as Array<Record<string, unknown>>) {
+            if (
+              block?.type === "thinking" &&
+              typeof block.text === "string"
+            ) {
+              const jsonMatch = block.text.match(/\{[\s\S]*"claims"[\s\S]*\}/);
+              if (jsonMatch) { text = jsonMatch[0]; break; }
+            }
+          }
+        }
+        if (!text.trim())
+          throw new Error(
+            "Observer model returned empty content (possible thinking-mode issue; try a non-thinking model or disable thinking)",
+          );
+      }
       return {
-        text: messageText(result.content),
+        text,
         tokens: result.usage.totalTokens,
         dollars: result.usage.cost.total,
       };
