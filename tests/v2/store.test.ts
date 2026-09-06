@@ -344,7 +344,10 @@ it("filters optional semantic matches by scope and revision", () => {
   const a = remember("Semantic memory");
   store.putVector(scope, a.id, a.revision, "local", [1, 0, 0]);
   expect(store.semantic(scope, "local", [1, 0, 0])[0].claim.id).toBe(a.id);
-  expect(store.semantic({ ...scope, sessionId: "other" }, "local", [1, 0, 0])).toEqual([]);
+  // Semantic search uses project-wide scope (mode "all") so cross-session results are visible
+  expect(store.semantic({ ...scope, sessionId: "other" }, "local", [1, 0, 0])[0].claim.id).toBe(a.id);
+  // Different project should still return empty
+  expect(store.semantic({ ...scope, projectId: "other-project" }, "local", [1, 0, 0])).toEqual([]);
   store.change(scope, a.id, a.revision, "pin");
   expect(store.semantic(scope, "local", [1, 0, 0])).toEqual([]);
 });

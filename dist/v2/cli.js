@@ -727,8 +727,8 @@ var MemoryStore = class {
       return claim;
     });
   }
-  usable(claim, scope, at = nowISO(), visited = /* @__PURE__ */ new Set()) {
-    if (visited.has(claim.id) || !this.inScope(claim, scope) || claim.hidden || claim.status !== "active")
+  usable(claim, scope, at = nowISO(), visited = /* @__PURE__ */ new Set(), all = false) {
+    if (visited.has(claim.id) || !this.inScope(claim, scope, all) || claim.hidden || claim.status !== "active")
       return false;
     if (claim.validFrom && Date.parse(claim.validFrom) > Date.parse(at) || claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(at))
       return false;
@@ -1343,7 +1343,7 @@ var MemoryStore = class {
     });
   }
   putVector(scope, id, revision, model, vector) {
-    const claim = this.claim(id, scope);
+    const claim = this.claim(id, scope, true);
     if (!claim || claim.revision !== revision || !vector.length || vector.length > 8192 || !vector.every(Number.isFinite))
       throw new Error("Invalid or stale embedding");
     this.run(
@@ -1356,13 +1356,12 @@ var MemoryStore = class {
     );
   }
   embeddingCandidates(scope, model, limit = 32) {
-    this.setScope(scope);
-    const f = this.scopeSQL(scope);
+    const f = this.scopeSQL(scope, "all");
     return this.all(
       `SELECT c.data FROM claims c LEFT JOIN vectors v ON v.claim_id=c.id AND v.revision=c.revision AND v.model=? WHERE ${f.sql} AND c.status='active' AND v.claim_id IS NULL ORDER BY c.rowid DESC LIMIT 200`,
       model,
       ...f.args
-    ).map((r) => parse(r)).filter((c) => this.usable(c, scope)).slice(0, limit);
+    ).map((r) => parse(r)).filter((c) => this.usable(c, scope, void 0, void 0, true)).slice(0, limit);
   }
   reserveUsage(scope, reservation, dailyLimit, timeout) {
     if (!Number.isSafeInteger(reservation) || reservation <= 0)
@@ -1400,8 +1399,7 @@ var MemoryStore = class {
   semantic(scope, model, vector, limit = 20) {
     if (!vector.length || vector.length > 8192 || !vector.every(Number.isFinite))
       throw new Error("Invalid query vector");
-    this.setScope(scope);
-    const f = this.scopeSQL(scope);
+    const f = this.scopeSQL(scope, "all");
     const norm = Math.hypot(...vector);
     if (!norm) return [];
     const hits = [];
@@ -1412,7 +1410,7 @@ var MemoryStore = class {
       vector.length
     )) {
       const claim = parse(row);
-      if (!this.usable(claim, scope)) continue;
+      if (!this.usable(claim, scope, void 0, void 0, true)) continue;
       const v = JSON.parse(String(row.vector));
       const denominator = norm * Math.hypot(...v);
       if (!denominator) continue;

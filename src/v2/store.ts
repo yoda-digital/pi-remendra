@@ -834,10 +834,10 @@ export class MemoryStore {
     });
   }
 
-  private usable(claim: Claim, scope: Scope, at = nowISO(), visited = new Set<string>()): boolean {
+  private usable(claim: Claim, scope: Scope, at = nowISO(), visited = new Set<string>(), all = false): boolean {
     if (
       visited.has(claim.id) ||
-      !this.inScope(claim, scope) ||
+      !this.inScope(claim, scope, all) ||
       claim.hidden ||
       claim.status !== "active"
     )
@@ -1604,7 +1604,7 @@ export class MemoryStore {
   }
 
   putVector(scope: Scope, id: string, revision: number, model: string, vector: number[]): void {
-    const claim = this.claim(id, scope);
+    const claim = this.claim(id, scope, true);
     if (
       !claim ||
       claim.revision !== revision ||
@@ -1624,15 +1624,15 @@ export class MemoryStore {
   }
 
   embeddingCandidates(scope: Scope, model: string, limit = 32): Claim[] {
-    this.setScope(scope);
-    const f = this.scopeSQL(scope);
+    // Use mode "all" to find embedding candidates across all project sessions
+    const f = this.scopeSQL(scope, "all");
     return this.all(
       `SELECT c.data FROM claims c LEFT JOIN vectors v ON v.claim_id=c.id AND v.revision=c.revision AND v.model=? WHERE ${f.sql} AND c.status='active' AND v.claim_id IS NULL ORDER BY c.rowid DESC LIMIT 200`,
       model,
       ...f.args,
     )
       .map((r) => parse<Claim>(r)!)
-      .filter((c) => this.usable(c, scope))
+      .filter((c) => this.usable(c, scope, undefined, undefined, true))
       .slice(0, limit);
   }
 
@@ -1678,8 +1678,8 @@ export class MemoryStore {
   semantic(scope: Scope, model: string, vector: number[], limit = 20): SearchHit[] {
     if (!vector.length || vector.length > 8192 || !vector.every(Number.isFinite))
       throw new Error("Invalid query vector");
-    this.setScope(scope);
-    const f = this.scopeSQL(scope);
+    // Use mode "all" for semantic search across all project sessions
+    const f = this.scopeSQL(scope, "all");
     const norm = Math.hypot(...vector);
     if (!norm) return [];
     const hits: SearchHit[] = [];
@@ -1691,7 +1691,7 @@ export class MemoryStore {
       vector.length,
     )) {
       const claim = parse<Claim>(row)!;
-      if (!this.usable(claim, scope)) continue;
+      if (!this.usable(claim, scope, undefined, undefined, true)) continue;
       const v = JSON.parse(String(row.vector)) as number[];
       const denominator = norm * Math.hypot(...v);
       if (!denominator) continue;

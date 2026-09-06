@@ -99,7 +99,10 @@ it("indexes and searches through the real service with shared budget accounting"
     expect((await service.embed(scope, "database")).hits[0].claim.text).toBe("PostgreSQL storage");
     expect(service.status(scope).budget.spent).toBe(40);
     expect(service.status(scope).budget.reserved).toBe(0);
-    expect((await service.embed({ ...scope, sessionId: "another" }, "database")).hits).toEqual([]);
+    // Semantic search is project-wide, so cross-session queries find results
+    expect((await service.embed({ ...scope, sessionId: "another" }, "database")).hits[0].claim.text).toBe("PostgreSQL storage");
+    // Different project should return empty
+    expect((await service.embed({ ...scope, projectId: "other-project" }, "database")).hits).toEqual([]);
   } finally {
     service.close();
   }
