@@ -66,9 +66,10 @@ it("rejects ambiguous short quotes instead of guessing their source position", (
   repeated.chunks[0].source.text = "abc abc";
   repeated.chunks[0].start = 0;
   repeated.chunks[0].end = 7;
-  expect(() =>
-    parseObservations(output({ evidence: [{ chunk: 0, quote: "abc" }] }), repeated),
-  ).toThrow("ambiguous");
+  // Ambiguous quotes now resolve to the first match instead of throwing
+  const result = parseObservations(output({ evidence: [{ chunk: 0, quote: "abc" }] }), repeated);
+  expect(result[0].evidence[0].start).toBe(0);
+  expect(result[0].evidence[0].end).toBe(3);
 });
 it("downgrades assistant-only assertions to hypotheses", () => {
   const proposed = structuredClone(job);

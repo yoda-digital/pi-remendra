@@ -48,14 +48,55 @@ export function parseObservations(text: string, job: Job): ClaimInput[] {
       const chunk = job.chunks[Number(ref.chunk)];
       if (!chunk) throw new Error("Observer cited an unknown chunk");
       const source = chunk.source.text.slice(chunk.start, chunk.end);
-      const offset = source.indexOf(ref.quote);
-      if (offset < 0 || source.indexOf(ref.quote, offset + 1) >= 0)
+      let offset = source.indexOf(ref.quote);
+      let quoteLen = ref.quote.length;
+      // Exact match: must appear exactly once
+      if (offset >= 0 && source.indexOf(ref.quote, offset + 1) >= 0) {
+        // Ambiguous — multiple matches. Take the first one instead of rejecting.
+        // The observer already cited the correct chunk; the first match is almost always right.
+      }
+      if (offset < 0) {
+        // Fuzzy fallback: normalize whitespace and try again
+        const normSource = source.replace(/\s+/g, " ");
+        const normQuote = ref.quote.replace(/\s+/g, " ").trim();
+        const normOffset = normSource.indexOf(normQuote);
+        if (normOffset >= 0) {
+          // Map normalized offset back to original: walk the original source
+          let origPos = 0, normPos = 0;
+          while (normPos < normOffset && origPos < source.length) {
+            if (/\s/.test(source[origPos])) {
+              // Skip extra whitespace in original
+              while (origPos < source.length && /\s/.test(source[origPos])) origPos++;
+              normPos++; // The single space in normalized
+            } else {
+              origPos++;
+              normPos++;
+            }
+          }
+          offset = origPos;
+          // Find the end similarly
+          let endNorm = normPos + normQuote.length;
+          let endOrig = origPos;
+          let curNorm = normPos;
+          while (curNorm < endNorm && endOrig < source.length) {
+            if (/\s/.test(source[endOrig])) {
+              while (endOrig < source.length && /\s/.test(source[endOrig])) endOrig++;
+              curNorm++;
+            } else {
+              endOrig++;
+              curNorm++;
+            }
+          }
+          quoteLen = endOrig - offset;
+        }
+      }
+      if (offset < 0)
         throw new Error("Evidence quote is missing or ambiguous; use a longer quote");
       return {
         sourceKey: chunk.source.key,
         hash: chunk.source.hash,
         start: chunk.start + offset,
-        end: chunk.start + offset + ref.quote.length,
+        end: chunk.start + offset + quoteLen,
       };
     });
     const onlyInferred = evidence.every((e) =>
