@@ -3,11 +3,11 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const testDir = join(tmpdir(), `pi-blackhole-append-config-${Date.now()}`);
+const testDir = join(tmpdir(), `pi-remendra-append-config-${Date.now()}`);
 const writeConfig = (data: unknown) => {
-  const dir = join(testDir, "pi-blackhole");
+  const dir = join(testDir, "pi-remendra");
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "pi-blackhole-config.json"), JSON.stringify(data, null, 2));
+  writeFileSync(join(dir, "pi-remendra-config.json"), JSON.stringify(data, null, 2));
 };
 
 beforeEach(() => {
@@ -15,7 +15,7 @@ beforeEach(() => {
   mkdirSync(testDir, { recursive: true });
 });
 afterEach(() => {
-  delete process.env.PI_BLACKHOLE_COMPACTION_SUMMARY_MODE;
+  delete process.env.PI_REMENDRA_COMPACTION_SUMMARY_MODE;
   delete process.env.PI_CODING_AGENT_DIR;
   rmSync(testDir, { recursive: true, force: true });
 });
@@ -41,14 +41,14 @@ describe("compactionSummaryMode configuration", () => {
   it("lets the environment override the file", async () => {
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ compactionSummaryMode: "default" });
-    process.env.PI_BLACKHOLE_COMPACTION_SUMMARY_MODE = "append";
+    process.env.PI_REMENDRA_COMPACTION_SUMMARY_MODE = "append";
     expect(loadUnifiedConfig(testDir).compactionSummaryMode).toBe("append");
   });
 
   it("ignores an invalid environment value", async () => {
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ compactionSummaryMode: "append" });
-    process.env.PI_BLACKHOLE_COMPACTION_SUMMARY_MODE = "unsafe";
+    process.env.PI_REMENDRA_COMPACTION_SUMMARY_MODE = "unsafe";
     expect(loadUnifiedConfig(testDir).compactionSummaryMode).toBe("append");
   });
 });

@@ -3,7 +3,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, parse } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const REGISTRY_KEY = Symbol.for("pi-blackhole:inline-compaction-adapter:v1");
+const REGISTRY_KEY = Symbol.for("pi-remendra:inline-compaction-adapter:v1");
 
 interface TurnContextLike {
   messages: unknown[];
@@ -501,7 +501,7 @@ export async function installHostInlineCompactionAdapter(
   return {
     supported: false,
     reason:
-      "Blackhole inline compaction is unavailable: host AgentSession module could not be resolved" +
+      "Remendra inline compaction is unavailable: host AgentSession module could not be resolved" +
       details,
   };
 }
@@ -596,7 +596,7 @@ function hasTrailingUnpairedToolCall(messages: unknown[]): boolean {
 
 /**
  * Run Pi's native compaction pipeline at an awaited turn_end boundary without
- * aborting the active agent run. This is intentionally private to Blackhole:
+ * aborting the active agent run. This is intentionally private to Remendra:
  * callers must ensure all tools for the turn have completed.
  */
 export async function compactInlineAtTurnBoundary(
@@ -607,7 +607,7 @@ export async function compactInlineAtTurnBoundary(
   const record = registry.sessions.get(sessionManager);
   if (!record) {
     throw new InlineCompactionUnavailableError(
-      "Blackhole inline compaction is unavailable: owning AgentSession was not captured or Pi internals are unsupported" +
+      "Remendra inline compaction is unavailable: owning AgentSession was not captured or Pi internals are unsupported" +
         ` (host candidates: ${registry.hostCandidateCount ?? 0}; captured sessions: ${registry.capturedSessionCount ?? 0})`,
     );
   }
@@ -644,7 +644,7 @@ export async function compactInlineAtTurnBoundary(
         const realDisconnect = session._disconnectFromAgent;
         if (!realDisconnect) {
           throw new InlineCompactionUnavailableError(
-            "Blackhole inline compaction is unavailable: disconnect hook disappeared",
+            "Remendra inline compaction is unavailable: disconnect hook disappeared",
           );
         }
         restores.push(
@@ -684,7 +684,7 @@ export async function compactInlineAtTurnBoundary(
       registry.refreshPending.add(session);
       if (!abortSuppressed || (shape.disconnectsAgent && !disconnectSuppressed)) {
         throw new InlineCompactionUnavailableError(
-          "Blackhole inline compaction invariant failed: Pi quiesce hooks were not invoked as expected",
+          "Remendra inline compaction invariant failed: Pi quiesce hooks were not invoked as expected",
         );
       }
     } catch (error) {
@@ -709,7 +709,7 @@ export async function compactInlineAtTurnBoundary(
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [operationError, ...cleanupErrors],
-        "Blackhole inline compaction failed and could not restore all session properties",
+        "Remendra inline compaction failed and could not restore all session properties",
       );
     }
     throw operationError;
@@ -717,7 +717,7 @@ export async function compactInlineAtTurnBoundary(
   if (cleanupErrors.length > 0) {
     throw new AggregateError(
       cleanupErrors,
-      "Blackhole inline compaction could not restore all session properties",
+      "Remendra inline compaction could not restore all session properties",
     );
   }
   return result;

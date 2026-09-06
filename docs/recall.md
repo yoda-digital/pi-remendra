@@ -1,6 +1,8 @@
+> **This document describes the legacy v1 engine.** For the current v2 engine, see [README.md](../README.md) and [V2.md](V2.md).
+
 # Recall System
 
-The recall system provides searchable session history after compaction. Pi's default compaction discards old messages; blackhole preserves them through a unified `recall` tool and `/blackhole-recall` command.
+The recall system provides searchable session history after compaction. Pi's default compaction discards old messages; remendra preserves them through a unified `recall` tool and `/remendra-recall` command.
 
 ## recall tool
 
@@ -80,18 +82,18 @@ When expanding session entries (`#N`), the tool automatically looks up related o
 
 OM integration is wrapped in try/catch — branch may not be available in all contexts. Dropped observations included with `[dropped]` marker.
 
-## /blackhole-recall command
+## /remendra-recall command
 
 User-facing command for interactive session history search. Defined in [[src/commands/vcc-recall.ts]]. Same engine as the `recall` tool.
 
 ```
-/blackhole-recall auth token                        # active-lineage search, ranked
-/blackhole-recall auth token page:2                 # paginated (5 results/page)
-/blackhole-recall hook|inject                       # regex
-/blackhole-recall fail.*build scope:all             # regex across all lineages
-/blackhole-recall mode:file                         # search only write/edit file content
-/blackhole-recall mode:touched                      # aggregate view of all files touched
-/blackhole-recall                                   # recent 25 entries
+/remendra-recall auth token                        # active-lineage search, ranked
+/remendra-recall auth token page:2                 # paginated (5 results/page)
+/remendra-recall hook|inject                       # regex
+/remendra-recall fail.*build scope:all             # regex across all lineages
+/remendra-recall mode:file                         # search only write/edit file content
+/remendra-recall mode:touched                      # aggregate view of all files touched
+/remendra-recall                                   # recent 25 entries
 ```
 
 Results shown as a collapsible message and auto-fed to the agent as context. Calls `augmentWithObservations()` after rendering to append related OM observations/reflections.

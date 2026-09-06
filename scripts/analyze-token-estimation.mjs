@@ -122,13 +122,7 @@ function loadThresholds(useDefaults) {
     observerChunk: 40_000,
   };
   if (useDefaults) return codeDefaults;
-  const cfgPath = path.join(
-    os.homedir(),
-    ".pi",
-    "agent",
-    "pi-blackhole",
-    "pi-blackhole-config.json",
-  );
+  const cfgPath = path.join(os.homedir(), ".pi", "agent", "pi-remendra", "pi-remendra-config.json");
   try {
     const raw = JSON.parse(readFileSync(cfgPath, "utf8"));
     return {

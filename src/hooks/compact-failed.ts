@@ -3,7 +3,7 @@
  * event (available from pi 0.84.3).
  *
  * Before this hook existed, failure coverage was fragmented:
- * - Manual `/blackhole` and the auto-trigger had their own `onError` callbacks.
+ * - Manual `/remendra` and the auto-trigger had their own `onError` callbacks.
  * - Overflow compaction failures (pi-initiated, mid-turn) were invisible.
  * - `/compact` cancelled by our `session_before_compact` guard was only
  *   notified inside the hook, with no structured log or state cleanup.
@@ -131,7 +131,7 @@ function handleCompactFailed(event: any, ctx: any, runtime: Runtime): void {
   // Overflow-retry visibility: pi aborts the turn's compaction and retries the
   // turn after compaction — previously this was completely invisible.
   if (reason === "overflow" && aborted && willRetry) {
-    notifySafely(hasUI, ui, "blackhole: overflow compaction aborted, retrying turn", "info");
+    notifySafely(hasUI, ui, "remendra: overflow compaction aborted, retrying turn", "info");
   }
 
   // Noise filter: with compactionEngine "pi-default" the failure belongs to
@@ -143,8 +143,8 @@ function handleCompactFailed(event: any, ctx: any, runtime: Runtime): void {
 
   // Non-abort failures attributed to us: surface the error to the user.
   // Gated on attribution — a pi-default/threshold failure we didn't produce
-  // (no extension content, no /blackhole trigger, no hook cancel) isn't ours.
+  // (no extension content, no /remendra trigger, no hook cancel) isn't ours.
   if (!aborted && errorMessage && attributedFromExtension) {
-    notifySafely(hasUI, ui, `blackhole: compaction failed — ${errorMessage}`, "error");
+    notifySafely(hasUI, ui, `remendra: compaction failed — ${errorMessage}`, "error");
   }
 }

@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { effectiveContextWindow } from "../src/om/model-budget.js";
 
-const testDir = join(tmpdir(), `pi-blackhole-model-budget-test-${Date.now()}`);
+const testDir = join(tmpdir(), `pi-remendra-model-budget-test-${Date.now()}`);
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
   getAgentDir: () => testDir,
@@ -21,7 +21,7 @@ afterEach(() => {
   rmSync(testDir, { recursive: true, force: true });
 });
 
-function writeConfig(data: unknown, filename = "pi-blackhole/pi-blackhole-config.json"): string {
+function writeConfig(data: unknown, filename = "pi-remendra/pi-remendra-config.json"): string {
   const dir = join(testDir, filename).replace(/\/[^/]+$/, "");
   mkdirSync(dir, { recursive: true });
   const path = join(testDir, filename);

@@ -44,7 +44,7 @@ Bound uses `resolveWorkerWindow(stageModelConfig, sessionWindow)`: with a 1M ses
 
 ### 2.3 — pi-base settings modal stale vs 0=auto semantics [LOW]
 
-`src/pi-base/blackhole-settings.ts:381` (vendored, untouched): `minVal = 1` for every numeric key except `observerPreambleMaxTokens`. Accidentally harmless now (DEFAULTS are 0 => reset-to-default = reset-to-0), and `target >= max` with 0/0 -> `floor(0/2) = 0` stays consistent. `thresholdScale` is absent from the modal. Phase-4 surface.
+`src/pi-base/remendra-settings.ts:381` (vendored, untouched): `minVal = 1` for every numeric key except `observerPreambleMaxTokens`. Accidentally harmless now (DEFAULTS are 0 => reset-to-default = reset-to-0), and `target >= max` with 0/0 -> `floor(0/2) = 0` stays consistent. `thresholdScale` is absent from the modal. Phase-4 surface.
 
 ### 2.4 — `resolveObservationsPoolTargetTokens` dead code [LOW]
 
@@ -67,7 +67,7 @@ No consumer anywhere; pool target was already a forward-compat no-op pre-change.
 - Trimming correctly never touches user/assistant text (`serialize.ts:96-116` — user via untrimmed `textOnly`, assistant text blocks pushed raw; only thinking + tool results trimmed).
 - Excerpt budget math, min-budget guard, single-oversized handling — sound.
 - `measureFreshSession` correctly compensates for module-level `realTokensSinceAnchor` semantics; `rawTokensAfterIndex(-1)` = whole branch.
-- Env `PI_BLACKHOLE_*_TOKENS=0` semantics change (previously rejected -> now auto) is the documented 0=auto intent; explicit config values kept verbatim per D5.
+- Env `PI_REMENDRA_*_TOKENS=0` semantics change (previously rejected -> now auto) is the documented 0=auto intent; explicit config values kept verbatim per D5.
 - 1M-session + unconfigured worker model: chunk (0.2 x 1M = 200k) is consistent because the worker window also resolves to 1M — no hidden overflow.
 - Initial 30 failures (consolidation 17, memory-command 6, ...) were a mid-edit snapshot; test files were updated + `tests/due.test.ts` added, everything green. No evidence of weakened tests (failure count 30 -> 0 with expectation updates + new tests only).
 

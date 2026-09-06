@@ -2,7 +2,7 @@
  * Cleanup utility — scans pending JSON files and cross-references against
  * session JSONL files to find orphaned entries safe to delete.
  *
- * Per-session pending files under ~/.pi/agent/pi-blackhole/ accumulate when:
+ * Per-session pending files under ~/.pi/agent/pi-remendra/ accumulate when:
  * - compaction is set to "manual" — OM outputs are
  *   buffered rather than appended to the session
  * - sessions are forked, abandoned, or deleted — the pending files remain
@@ -39,7 +39,7 @@ export interface CleanupReport {
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const PENDING_DIR = "pi-blackhole";
+const PENDING_DIR = "pi-remendra";
 const PENDING_SUFFIX = "-pending.json";
 const STALE_SUFFIX = "-pending.stale.json";
 
@@ -58,7 +58,7 @@ function extractSessionId(filename: string): string | null {
 // ── Scan pending files ──────────────────────────────────────────────────────
 
 /**
- * Scan the pi-blackhole directory for all *-pending.json and *-pending.stale.json
+ * Scan the pi-remendra directory for all *-pending.json and *-pending.stale.json
  * files. Returns file metadata sorted by mtime (newest first).
  */
 function scanPendingFiles(agentDir: string = getAgentDir()): PendingFile[] {
@@ -253,7 +253,7 @@ const SAFE_SESSION_ID_RE = /^[a-zA-Z0-9][-a-zA-Z0-9]*$/;
 
 /**
  * Validate that resolving and joining with `sessionId` cannot escape the
- * pi-blackhole directory.  Must be called before any unlink.
+ * pi-remendra directory.  Must be called before any unlink.
  */
 function validateDeletionPaths(
   sessionId: string,
@@ -267,7 +267,7 @@ function validateDeletionPaths(
   const pendingPath = join(resolvedDir, `${sessionId}${PENDING_SUFFIX}`);
   const stalePath = join(resolvedDir, `${sessionId}${STALE_SUFFIX}`);
 
-  // Resolve to absolute and verify containment within pi-blackhole/
+  // Resolve to absolute and verify containment within pi-remendra/
   const resolvedPending = resolve(pendingPath);
   const resolvedStale = resolve(stalePath);
 
@@ -280,7 +280,7 @@ function validateDeletionPaths(
 /**
  * Delete all pending files (pending + stale) for a given sessionId.
  *
- * Safety: validates that both resolved paths live under the pi-blackhole/
+ * Safety: validates that both resolved paths live under the pi-remendra/
  * directory before unlinking.  Returns false if validation fails.
  *
  * Returns true if at least one file was deleted, false if no files existed

@@ -25,7 +25,8 @@ async function dispatch(request: { id: number; method: string; args: unknown[] }
     });
   }
 }
+let queue: Promise<void> = Promise.resolve();
 port.on("message", (request: { id: number; method: string; args: unknown[] }) => {
-  void dispatch(request);
+  queue = queue.then(() => dispatch(request));
 });
 port.postMessage({ ready: true });

@@ -2,7 +2,7 @@
  * Test fixtures — helpers for building test observations, reflections, and session entries.
  *
  * Upstream: https://github.com/elpapi42/pi-observational-memory (tests/fixtures/session.ts)
- * Ported and adapted for pi-blackhole.
+ * Ported and adapted for pi-remendra.
  */
 
 export type TestEntry = {

@@ -1,7 +1,7 @@
 /**
- * Configure Overlay — editable settings overlay for pi-blackhole-config.json.
+ * Configure Overlay — editable settings overlay for pi-remendra-config.json.
  *
- * Used by `/blackhole configure` to edit compaction, memory, and debug settings.
+ * Used by `/remendra configure` to edit compaction, memory, and debug settings.
  * Opens as a floating overlay via ctx.ui.custom({ overlay: true }).
  * Navigation: ↑↓  Edit: Enter  Save: Ctrl+S  Cancel: Esc
  */
@@ -45,15 +45,15 @@ const FIELDS: FieldDef[] = [
     section: "Compaction",
     enumValues: ["auto", "manual", "off"],
     helpText:
-      "auto=trigger on threshold, manual=only /blackhole, off=auto:Pi handles, /blackhole:blackhole pipeline",
+      "auto=trigger on threshold, manual=only /remendra, off=auto:Pi handles, /remendra:remendra pipeline",
   },
   {
     key: "compactionEngine",
     label: "Compaction engine",
     type: "enum",
     section: "Compaction",
-    enumValues: ["blackhole", "pi-default"],
-    helpText: "blackhole=structured summary+OM, pi-default=built-in Pi summarization",
+    enumValues: ["remendra", "pi-default"],
+    helpText: "remendra=structured summary+OM, pi-default=built-in Pi summarization",
   },
   {
     key: "compactionSummaryMode",
@@ -62,7 +62,7 @@ const FIELDS: FieldDef[] = [
     section: "Compaction",
     enumValues: ["default", "append"],
     helpText:
-      "default=replace one complete summary, append=freeze auto segments and rebase on /blackhole",
+      "default=replace one complete summary, append=freeze auto segments and rebase on /remendra",
   },
   {
     key: "tailBehavior",
@@ -191,7 +191,7 @@ const FIELDS: FieldDef[] = [
     label: "Debug snapshots",
     type: "boolean",
     section: "Debug",
-    helpText: "Write detailed debug snapshots to /tmp/pi-blackhole-debug.json",
+    helpText: "Write detailed debug snapshots to /tmp/pi-remendra-debug.json",
   },
   {
     key: "debugLog",
@@ -473,7 +473,7 @@ export function createConfigureOverlay(
     lines.push(
       fg(
         "border",
-        `│ ${fg("accent", "Blackhole Configuration")}${" ".repeat(Math.max(0, innerW + 1 - 24))}│`,
+        `│ ${fg("accent", "Remendra Configuration")}${" ".repeat(Math.max(0, innerW + 1 - 24))}│`,
       ),
     );
     lines.push(fg("border", `├${"─".repeat(w - 2)}┤`));

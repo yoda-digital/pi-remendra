@@ -20,7 +20,7 @@ import {
   OM_REFLECTIONS_RECORDED,
 } from "../om/ledger/index.js";
 import { handleCleanup } from "./cleanup.js";
-import { openBlackholeSettings, config, GLOBAL_CONFIG_DIR } from "../pi-base/blackhole-settings.js";
+import { openRemendraSettings, config, GLOBAL_CONFIG_DIR } from "../pi-base/remendra-settings.js";
 import { openChangelogView } from "../changelog/changelog.js";
 
 export const registerPiVccCommand = (pi: ExtensionAPI, runtime: Runtime) => {
@@ -28,7 +28,7 @@ export const registerPiVccCommand = (pi: ExtensionAPI, runtime: Runtime) => {
     return value.toLowerCase().startsWith(prefix.toLowerCase());
   };
 
-  pi.registerCommand("blackhole", {
+  pi.registerCommand("remendra", {
     description:
       "Manual compact with structural summary. Subcommands: [settings] config overlay, " +
       "[changelog] display changelog, [cleanup] remove orphaned files, [om-off]/[om-on] disable/enable observational memory.",
@@ -65,7 +65,7 @@ export const registerPiVccCommand = (pi: ExtensionAPI, runtime: Runtime) => {
       const trimmed = (typeof args === "string" ? args : "").trim();
       if (trimmed === "configure" || trimmed === "settings") {
         // Open the config overlay ("configure" kept as a hidden alias)
-        await openBlackholeSettings(ctx);
+        await openRemendraSettings(ctx);
         return;
       }
       if (trimmed === "changelog") {
@@ -85,10 +85,7 @@ export const registerPiVccCommand = (pi: ExtensionAPI, runtime: Runtime) => {
             GLOBAL_CONFIG_DIR,
           );
           runtime.config = config.loadWithWarnings(ctx.cwd, GLOBAL_CONFIG_DIR).config;
-          ctx.ui.notify(
-            "Observational memory disabled. Use /blackhole om-on to re-enable.",
-            "info",
-          );
+          ctx.ui.notify("Observational memory disabled. Use /remendra om-on to re-enable.", "info");
         } catch {
           ctx.ui.notify(
             "Failed to save config — the config file may be read-only (e.g., managed by Nix). " +
@@ -117,7 +114,7 @@ export const registerPiVccCommand = (pi: ExtensionAPI, runtime: Runtime) => {
         }
         return;
       } // Warn if input starts with a known subcommand but isn't an exact match.
-      // Prevents "/blackhole configure foo" from silently becoming a follow-up.
+      // Prevents "/remendra configure foo" from silently becoming a follow-up.
       const SUBCOMMAND_NAMES = ["configure", "settings", "changelog", "cleanup", "om-off", "om-on"];
       const nearMiss = SUBCOMMAND_NAMES.find(
         (name) =>
@@ -125,7 +122,7 @@ export const registerPiVccCommand = (pi: ExtensionAPI, runtime: Runtime) => {
       );
       if (nearMiss) {
         ctx.ui.notify(
-          `/blackhole ${nearMiss} accepts no arguments. Did you mean \"/blackhole ${nearMiss}\"?`,
+          `/remendra ${nearMiss} accepts no arguments. Did you mean \"/remendra ${nearMiss}\"?`,
           "warning",
         );
         return;
@@ -180,7 +177,7 @@ export const registerPiVccCommand = (pi: ExtensionAPI, runtime: Runtime) => {
           if (stats) {
             ctx.ui.notify(formatCompactionStats(stats), "info");
           } else {
-            ctx.ui.notify("Compacted with blackhole", "info");
+            ctx.ui.notify("Compacted with remendra", "info");
           }
           notifyMigrationReminder(sessionId, (msg, level) => ctx.ui.notify(msg, level as any));
 

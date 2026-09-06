@@ -41,7 +41,7 @@ const BUNDLED_CHANGELOG_TEXT: string | undefined = undefined;
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-/** Walk up from `import.meta.url` (or cwd fallback) to find pi-blackhole package root. */
+/** Walk up from `import.meta.url` (or cwd fallback) to find pi-remendra package root. */
 export function getOwnPackageRoot(): string {
   // Try import.meta.url first — works in both TS-direct and bundled dist.
   try {
@@ -53,7 +53,7 @@ export function getOwnPackageRoot(): string {
           const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8")) as {
             name?: string;
           };
-          if (pkg.name === "pi-blackhole") return dir;
+          if (pkg.name === "pi-remendra") return dir;
         } catch {
           /* walk up */
         }
@@ -74,7 +74,7 @@ export function getOwnPackageRoot(): string {
         const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8")) as {
           name?: string;
         };
-        if (pkg.name === "pi-blackhole") return dir;
+        if (pkg.name === "pi-remendra") return dir;
       } catch {
         /* walk up */
       }
@@ -96,7 +96,7 @@ export function getOwnPackageRoot(): string {
           const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8")) as {
             name?: string;
           };
-          if (pkg.name === "pi-blackhole") return dir;
+          if (pkg.name === "pi-remendra") return dir;
         } catch {
           /* walk up */
         }
@@ -318,7 +318,7 @@ export function createChangelogViewer(args: ChangelogViewerArgs): Component {
   const { tui, theme, done, packageRoot, maxEntries } = args;
 
   const version = getPackageVersion(packageRoot);
-  const title = version ? `pi-blackhole v${version} — Changelog` : "pi-blackhole — Changelog";
+  const title = version ? `pi-remendra v${version} — Changelog` : "pi-remendra — Changelog";
 
   const raw = readChangelogText(packageRoot);
   let allLines: string[];

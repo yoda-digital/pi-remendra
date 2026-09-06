@@ -1,5 +1,5 @@
 /**
- * Terminal utilities shared by blackhole overlay components.
+ * Terminal utilities shared by remendra overlay components.
  *
  * Re-exports visibleWidth from pi-tui.
  *

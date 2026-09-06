@@ -155,8 +155,8 @@ describe("buildOwnCut", () => {
     expect(r.reason).toBe("too_few_live_messages");
   });
 
-  test("T25: tailBehavior minimal ignores Pi cut — /blackhole override behavior", () => {
-    // /blackhole always uses minimal, ignoring Pi's cut guidance
+  test("T25: tailBehavior minimal ignores Pi cut — /remendra override behavior", () => {
+    // /remendra always uses minimal, ignoring Pi's cut guidance
     const r = buildOwnCut(
       [
         msg("m1", "user", "a"),
@@ -165,7 +165,7 @@ describe("buildOwnCut", () => {
         msg("m4", "assistant", "d"),
       ],
       "m1", // Pi says keep m1+
-      "minimal", // but /blackhole uses minimal
+      "minimal", // but /remendra uses minimal
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;

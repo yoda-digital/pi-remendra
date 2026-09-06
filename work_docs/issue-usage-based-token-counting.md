@@ -12,10 +12,10 @@
 All of our pipeline triggers estimate token counts with a chars/4 heuristic (`estimateTokens` from `@earendil-works/pi-coding-agent` for messages, `chars/4` for strings). Across the **full session archive (698 unique sessions)** this estimate **underreports actual model usage by ~20%–39% on median per stage** — and far worse in individual windows (up to 75×). Consequences:
 
 - **Auto-compaction** (`rawTokensSinceLastCompaction >= compactAfterTokens`): with defaults (81k threshold vs pi's ~84.5k hard limit), the estimate can **never reach the threshold before the hard limit** — auto-compaction effectively never fires proactively, only as an emergency at the context ceiling.
-- **Observer/reflector/dropper coverage counters** (`rawTokensSince*Coverage >= reflect/observeAfterTokens`): fire late — in the live pi-blackhole-dev session the observer counter read ~22k while **actual new content since the last run was ~42k** (1.9× under).
-- The `/blackhole-memory` status panel displays these underreported numbers, so the "triggers at X" readouts are not the real context size.
+- **Observer/reflector/dropper coverage counters** (`rawTokensSince*Coverage >= reflect/observeAfterTokens`): fire late — in the live pi-remendra-dev session the observer counter read ~22k while **actual new content since the last run was ~42k** (1.9× under).
+- The `/remendra-memory` status panel displays these underreported numbers, so the "triggers at X" readouts are not the real context size.
 
-A third-party fork commit ([tavasti@360f24a](https://github.com/tavasti/pi-blackhole/commit/360f24a6d68b612cfc0858cc43e9514e8b5c9c97), "use actual model usage for compaction token estimation") fixes exactly this for the **compaction** counter by reading the last assistant message's `usage` metadata (via pi's public `calculateContextTokens`). Our review confirms the approach is sound and matches pi's own internal `estimateContextTokens()`. **But it cannot be copy-pasted to the coverage counters** — see the key architectural insight below.
+A third-party fork commit ([tavasti@360f24a](https://github.com/tavasti/pi-remendra/commit/360f24a6d68b612cfc0858cc43e9514e8b5c9c97), "use actual model usage for compaction token estimation") fixes exactly this for the **compaction** counter by reading the last assistant message's `usage` metadata (via pi's public `calculateContextTokens`). Our review confirms the approach is sound and matches pi's own internal `estimateContextTokens()`. **But it cannot be copy-pasted to the coverage counters** — see the key architectural insight below.
 
 ---
 
@@ -23,7 +23,7 @@ A third-party fork commit ([tavasti@360f24a](https://github.com/tavasti/pi-black
 
 | Counter | Function (src/om/ledger/progress.ts) | Used by |
 |---|---|---|
-| Since last compaction | `rawTokensSinceLastCompaction` (L151) | `src/om/compaction-trigger.ts`, `/blackhole-memory` |
+| Since last compaction | `rawTokensSinceLastCompaction` (L151) | `src/om/compaction-trigger.ts`, `/remendra-memory` |
 | Since last observation run | `rawTokensSinceObservationCoverage` (L132) | `consolidation.ts` `observerDue`, status |
 | Since last reflection run | `rawTokensSinceReflectionCoverage` (L136) | `consolidation.ts` `reflectorDue`, status |
 | Since last drop | `rawTokensSinceDropCoverage` (L140) | `consolidation.ts` `dropperDue`, `runDropperStage`, status |
@@ -66,7 +66,7 @@ compaction n= 15  est/usage median=0.68 min=0.00 max=1.05 | est>=thr:0 usage>=th
 - The `7.99` outlier is a degenerate edge: observer marker sitting immediately before the last compaction (window = summary + tiny tail, usage-delta includes pre-compaction context). Minor, not representative.
 - The `dropper` row has no marker-present windows — drop markers are essentially never written (only 1 in 20 sessions), which is itself the separate dropper-gating issue (see docs/ or session notes on `dropperPoolFullnessThreshold`).
 
-### Illustrative rows (live pi-blackhole-dev session, 2026-07-31T21-44-51-190Z — snapshot; the session is live and growing)
+### Illustrative rows (live pi-remendra-dev session, 2026-07-31T21-44-51-190Z — snapshot; the session is live and growing)
 
 ```
 observer      31619     53577   0.59  ...   est>=thr: true   usage>=thr: true
@@ -182,7 +182,7 @@ The exact algorithms are already implemented and battle-tested in `scripts/analy
 
 - **Stages fire earlier in real terms**: with unchanged thresholds, algorithmic churn is **1.3–1.7× for coverage stages** (observer 1.3, reflector 1.7, dropper 1.5) and **7.3× for compaction** (from a base of 3 fires at 185k). Default bumps (draft proposal above) are the mitigation so auto-install users see roughly constant frequency. Thresholds become "actual context tokens" as the config literally says. With free-model fallback chains + cooldowns, expect more runs / more cooldown churn; consider raising thresholds after adopting.
 - **Provider dependence**: some providers/models don't populate `usage` — the chars/4 fallback keeps those sessions on old behavior. `hasUsageData` skips zero/absent usage.
-- **Status display** (`/blackhole-memory`) will show usage-accurate numbers — the "triggers at X" readouts become truthful.
+- **Status display** (`/remendra-memory`) will show usage-accurate numbers — the "triggers at X" readouts become truthful.
 - The user's current session is at ~224k actual context with `compactAfterTokens: 185000` — after the fix, auto-compaction (if re-enabled) fires at 185k actual instead of never.
 
 ## Open questions for the next session
@@ -197,17 +197,17 @@ The exact algorithms are already implemented and battle-tested in `scripts/analy
 
 ### A. Presets in the config modal
 
-- The `/blackhole configure` overlay (`src/om/configure-overlay.ts`) manages individual fields grouped in sections (Compaction, Memory, …) and opens via `ctx.ui.custom({ overlay: true })`. The pi-base settings modal already supports **scope actions** — `save-global` / `save-project` / `discard` / `cancel` (`src/pi-base/settings/body.ts` L77–81, `getScopeActionOptions` L713).
+- The `/remendra configure` overlay (`src/om/configure-overlay.ts`) manages individual fields grouped in sections (Compaction, Memory, …) and opens via `ctx.ui.custom({ overlay: true })`. The pi-base settings modal already supports **scope actions** — `save-global` / `save-project` / `discard` / `cancel` (`src/pi-base/settings/body.ts` L77–81, `getScopeActionOptions` L713).
 - **Proposal:** add a **Presets** option/tab to the configure modal — pick one of the three presets (low / medium / high, values per the draft-bump proposal above), which pre-fills the affected keys (`observeAfterTokens`, `reflectAfterTokens`, `compactAfterTokens`, plus the chunk/pool sizes from the README preset blocks), then save to **global or project-local** exactly like every other field (existing scope actions).
 - **Why:** after the threshold bumps, users must match presets to their model's context window (256k min / 1M common / 128k local). Hand-editing N number fields is error-prone; a one-step preset picker + the same save-scope flow makes it a 5-second task.
 
 ### B. One-time breaking-change warning at session start
 
 - **The problem:** the install base is fire-and-forget — users install, never read changelogs (GitHub or otherwise), and would absorb the usage-counting + threshold change as a silent behavior/cost shift. Provenance of the change is required.
-- **Proposal:** once per session, at `agent_start`, show a small yellow line in the status overlay / transient `ctx.ui` note, e.g. *"pi-blackhole: token counting now uses real model usage; thresholds changed — check /blackhole configure"*, with auto-dismiss (a few seconds) or an explicit dismiss.
+- **Proposal:** once per session, at `agent_start`, show a small yellow line in the status overlay / transient `ctx.ui` note, e.g. *"pi-remendra: token counting now uses real model usage; thresholds changed — check /remendra configure"*, with auto-dismiss (a few seconds) or an explicit dismiss.
 - **Hook point:** the existing `pi.on("agent_start", …)` handlers (`src/om/consolidation.ts` L461, `src/om/compaction-trigger.ts` L76) — or a dedicated handler — compare the persisted last-seen version against a `BREAKING_SINCE` constant, show the note once, then persist.
 - **Provenance / deprecation (must not linger forever):**
-  1. Persist a `lastSeenVersion` field in a small state file in `~/.pi/agent/pi-blackhole/` — same pattern as `pi-blackhole-cooldown.json` (`src/om/cooldown.ts` L28/L53/L64).
+  1. Persist a `lastSeenVersion` field in a small state file in `~/.pi/agent/pi-remendra/` — same pattern as `pi-remendra-cooldown.json` (`src/om/cooldown.ts` L28/L53/L64).
   2. The warning renders only when `lastSeenVersion < BREAKING_SINCE`; after first display it is suppressed until the next breaking release bumps the constant.
   3. **Programmatic removal:** when the breaking change is old (e.g. 2+ minor versions later), the warning code + state key are deleted entirely — a release-checklist note so it never stays accidentally.
 - **Why a UI note and not a CHANGELOG link:** users don't open changelogs; a single dismissible yellow line is the only channel with guaranteed reach. It is explicitly scoped to breaking releases so it cannot become nagging.
@@ -217,7 +217,7 @@ The exact algorithms are already implemented and battle-tested in `scripts/analy
 - Adopting usage-delta counting **everywhere** (dropper/observer/reflector included, not just compaction) raises run frequency ~30–70% (their chars/4 counters undercount by 20–40%).
 - **Threshold bumps** (draft proposal above) bring frequency back to ≈ today's for default users.
 - **Tool-result trimming** (head+tail: first **1000 + last 1000 chars**, only for results > 4096 chars — the `TRIM` policy in `scripts/analyze-token-estimation.mjs`, tunable via `--trim-head/--trim-tail/--trim-threshold`) **plus thinking-block trimming** (head+tail **20%/20%** for blocks > 4096 chars; tunable via `--think-head-pct/--think-tail-pct`). Combined effect on the observer's serialized input (which is ~51% tool-result text, ~22% thinking): **median 31% / p90 61% tokens saved** (tool results: median 51% of their tokens; thinking: median 1% but p90 48% / max 60% — a tail phenomenon that only matters in long sessions, but matters there a lot). Going tighter than 1000/1000 (e.g. 500/500) buys only ~3pp more (34% median) — **1000/1000 is the chosen default**, 500/500 is the aggressive option.
-- **Why head/tail is right for thinking blocks (validated on real data):** large thinking blocks are structured — the **head (~20%) restates and recaps the user's task** ("now I have a comprehensive picture… let me review the known bugs"), the **middle** is the messy internal evaluation/planning/code-drafting (least valuable to the observer), and the **tail (~20%)** is the conclusion and the plan for the user-facing reply. Verified on 40 recent sessions (duplicate-checked: 2,621 entries / 2,621 unique IDs in the live session, zero dupes): **620 thinking blocks > 4096 chars** (69 > 16k); the largest is **90,516 chars (~22.6k tokens)**. The live pi-blackhole-dev session alone contributes **163 blocks > 4k / 15 > 16k** of its 640 total thinking blocks (~1.98M chars of thinking in one session — thinking is the dominant content type there). Open implementation-time decision: for extreme blocks a pure 20% can still keep a lot in absolute terms (20% of 90k = 18k chars of head alone), so consider an absolute cap (head = min(20%, ~2–4k chars)) — worth a quality check before finalizing.
+- **Why head/tail is right for thinking blocks (validated on real data):** large thinking blocks are structured — the **head (~20%) restates and recaps the user's task** ("now I have a comprehensive picture… let me review the known bugs"), the **middle** is the messy internal evaluation/planning/code-drafting (least valuable to the observer), and the **tail (~20%)** is the conclusion and the plan for the user-facing reply. Verified on 40 recent sessions (duplicate-checked: 2,621 entries / 2,621 unique IDs in the live session, zero dupes): **620 thinking blocks > 4096 chars** (69 > 16k); the largest is **90,516 chars (~22.6k tokens)**. The live pi-remendra-dev session alone contributes **163 blocks > 4k / 15 > 16k** of its 640 total thinking blocks (~1.98M chars of thinking in one session — thinking is the dominant content type there). Open implementation-time decision: for extreme blocks a pure 20% can still keep a lot in absolute terms (20% of 90k = 18k chars of head alone), so consider an absolute cap (head = min(20%, ~2–4k chars)) — worth a quality check before finalizing.
 - Net for default users: **≈ same run frequency, lower tokens per run, truthful thresholds.** Power users keep custom thresholds (their frequency rises — surfaced via B).
 
 ## Measurement critique (2026-08-23)
@@ -261,7 +261,7 @@ Typical 0.70–0.79. Summary text alone (~1.2–5.4k tokens) cannot close gaps o
 
 ## References
 
-- Fork commit: `tavasti@360f24a6d68b612cfc0858cc43e9514e8b5c9c97` — `https://github.com/tavasti/pi-blackhole/commit/360f24a`
+- Fork commit: `tavasti@360f24a6d68b612cfc0858cc43e9514e8b5c9c97` — `https://github.com/tavasti/pi-remendra/commit/360f24a`
 - pi exports (verified on `@earendil-works/pi-coding-agent@0.83.0`): `calculateContextTokens`, `getLastAssistantUsage`, `estimateTokens`
 - pi's own `estimateContextTokens(messages)` — internal in `dist/core/compaction/compaction.js` (same algorithm; **not** re-exported from package root — only `calculateContextTokens` and `getLastAssistantUsage` are public)
 - Session data: `~/.pi/agent/sessions/*/*.jsonl`

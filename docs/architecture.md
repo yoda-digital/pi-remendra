@@ -1,18 +1,20 @@
+> **This document describes the legacy v1 engine.** For the current v2 engine, see [README.md](../README.md) and [V2.md](V2.md).
+
 # Architecture
 
-pi-blackhole merges deterministic algorithmic compaction with session-surviving observational memory into one Pi extension. VCC handles compaction; OM handles the memory layer.
+pi-remendra merges deterministic algorithmic compaction with session-surviving observational memory into one Pi extension. VCC handles compaction; OM handles the memory layer.
 
 The entry point is `index.ts` (default export factory registered via `pi.extensions`).
 
 ## Design philosophy
 
-The core insight: Pi's native LLM compaction erodes detail after repeated cycles. pi-blackhole replaces it with deterministic extraction plus a surviving memory layer.
+The core insight: Pi's native LLM compaction erodes detail after repeated cycles. pi-remendra replaces it with deterministic extraction plus a surviving memory layer.
 
 Five architectural pillars define the extension:
 
 1. **Deterministic compaction** — The [[vcc-compaction#compile pipeline]] extracts structured sections (goals, files, commits, preferences, brief transcript) using regex heuristics. No LLM, no hallucination, no API cost.
 2. **Observational memory** — Three [[observational-memory#The three workers|background workers]] (Observer, Reflector, Dropper) capture timestamped observations and durable reflections in a session ledger that persists across compactions.
-3. **Unified configuration** — One JSON file (`~/.pi/agent/pi-blackhole/pi-blackhole-config.json`) replaces two upstream configs. See [[config#Unified configuration]].
+3. **Unified configuration** — One JSON file (`~/.pi/agent/pi-remendra/pi-remendra-config.json`) replaces two upstream configs. See [[config#Unified configuration]].
 4. **Per-worker model fallback** — Each OM worker has a primary model and ordered fallback list with persisted cooldowns. See [[observational-memory#Model resolution]].
 5. **Graceful degradation** — Failed stages skip silently; the pipeline retries on the next trigger. A 30-second retry gate prevents hammering failing APIs.
 
@@ -84,9 +86,9 @@ src/
       recall.ts               # Ledger recall/search
       progress.ts             # Token counting / coverage tracking
   commands/
-    pi-vcc.ts                 # /blackhole command
-    memory.ts                 # /blackhole-memory command
-    vcc-recall.ts             # /blackhole-recall command
+    pi-vcc.ts                 # /remendra command
+    memory.ts                 # /remendra-memory command
+    vcc-recall.ts             # /remendra-recall command
   tools/
     recall.ts                 # Unified recall tool
 ```
@@ -196,15 +198,15 @@ The extension's consolidation agents are loaded via `jiti` with `moduleCache: fa
 
 The bridge solves this with two mechanisms:
 
-1. **Wrap `pi.registerProvider`** — Captures `streamSimple` functions at registration time into a `Symbol.for("pi-blackhole:provider-streams")` global Map. Handles providers registered after pi-blackhole's factory runs.
-2. **`agent_start` scan** — On first agent start, scans `modelRegistry.registeredProviders` for providers that registered before pi-blackhole loaded. Uses `hasScannedFallback` flag to run once.
+1. **Wrap `pi.registerProvider`** — Captures `streamSimple` functions at registration time into a `Symbol.for("pi-remendra:provider-streams")` global Map. Handles providers registered after pi-remendra's factory runs.
+2. **`agent_start` scan** — On first agent start, scans `modelRegistry.registeredProviders` for providers that registered before pi-remendra loaded. Uses `hasScannedFallback` flag to run once.
 
 The `createBridgeStreamFn()` in [[src/om/provider-stream.ts]] lets jiti-loaded agents access these custom providers without going through pi-ai's registry.
 
 ## Upstream lineage
 
-pi-blackhole carries DNA from both upstreams but has diverged significantly. A lockstep audit system (`.pi/skills/lockstep/`) classifies each upstream commit for porting decisions.
+pi-remendra carries DNA from both upstreams but has diverged significantly. A lockstep audit system (`.pi/skills/lockstep/`) classifies each upstream commit for porting decisions.
 
 - **From pi-vcc**: The `compile()` pipeline, section extraction, recall core — `src/core/` and `src/extract/` modules are largely unmodified from upstream.
 - **From pi-observational-memory**: Session-ledger-based observation/reflection capture, memory agents, ledger folding — `src/om/ledger/` is unmodified, `src/om/runtime.ts` and `src/om/consolidation.ts` are modified for fallback chains.
-- **pi-blackhole additions**: Unified config, per-worker model fallback with cooldowns, manual flush mode, memory toggle, per-session pending state, provider stream bridge, retryable error detection, improved prompts, OM-recall coupling, thinking level support.
+- **pi-remendra additions**: Unified config, per-worker model fallback with cooldowns, manual flush mode, memory toggle, per-session pending state, provider stream bridge, retryable error detection, improved prompts, OM-recall coupling, thinking level support.

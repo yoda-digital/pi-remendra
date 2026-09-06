@@ -1,8 +1,8 @@
 /**
- * /blackhole-recall command — search session history.
+ * /remendra-recall command — search session history.
  *
  * Upstream: https://github.com/sting8k/pi-vcc (src/commands/vcc-recall.ts)
- * Ported and renamed to /blackhole-recall for blackhole.
+ * Ported and renamed to /remendra-recall for remendra.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadAllMessages } from "../core/load-messages.js";
@@ -41,9 +41,9 @@ async function augmentWithObservations(
 }
 
 export const registerVccRecallCommand = (pi: ExtensionAPI) => {
-  pi.registerCommand("blackhole-recall", {
+  pi.registerCommand("remendra-recall", {
     description:
-      "Search session history. Defaults to active lineage. Usage: /blackhole-recall <query> [page:N] [scope:all] [mode:file|touched]",
+      "Search session history. Defaults to active lineage. Usage: /remendra-recall <query> [page:N] [scope:all] [mode:file|touched]",
     handler: async (args: string, ctx) => {
       const sessionFile = ctx.sessionManager.getSessionFile();
       if (!sessionFile) {
@@ -64,7 +64,7 @@ export const registerVccRecallCommand = (pi: ExtensionAPI) => {
         const touched = getTouchedFiles(rawMessages, rendered);
         const text = formatTouchedOutput(touched, page);
         pi.sendMessage(
-          { customType: "blackhole-recall", content: text, display: true },
+          { customType: "remendra-recall", content: text, display: true },
           { triggerTurn: true },
         );
         return;
@@ -77,7 +77,7 @@ export const registerVccRecallCommand = (pi: ExtensionAPI) => {
         const base = (parsed.scope === "all" ? "Scope: all\n\n" : "") + formatRecallOutput(recent);
         const output = await augmentWithObservations(base, recent, ctx);
         pi.sendMessage(
-          { customType: "blackhole-recall", content: output, display: true },
+          { customType: "remendra-recall", content: output, display: true },
           { triggerTurn: true },
         );
         return;
@@ -94,7 +94,7 @@ export const registerVccRecallCommand = (pi: ExtensionAPI) => {
         const base = (parsed.scope === "all" ? "Scope: all\n\n" : "") + formatRecallOutput(recent);
         const output = await augmentWithObservations(base, recent, ctx);
         pi.sendMessage(
-          { customType: "blackhole-recall", content: output, display: true },
+          { customType: "remendra-recall", content: output, display: true },
           { triggerTurn: true },
         );
         return;
@@ -113,12 +113,12 @@ export const registerVccRecallCommand = (pi: ExtensionAPI) => {
           : `${allResults.length} matches${scopeSuffix}`;
       const footer =
         page < totalPages
-          ? `\n--- /blackhole-recall ${query}${parsed.scope === "all" ? " scope:all" : ""} page:${page + 1} ---`
+          ? `\n--- /remendra-recall ${query}${parsed.scope === "all" ? " scope:all" : ""} page:${page + 1} ---`
           : "";
       const base = formatRecallOutput(pageResults, query, header) + footer;
       const output = await augmentWithObservations(base, pageResults, ctx);
       pi.sendMessage(
-        { customType: "blackhole-recall", content: output, display: true },
+        { customType: "remendra-recall", content: output, display: true },
         { triggerTurn: true },
       );
     },

@@ -1,8 +1,8 @@
-# pi-blackhole
+# pi-remendra
 
 **Deterministic compaction + session-aware observational memory for [Pi](https://github.com/earendil-works/pi) — in one unified extension.**
 
-`/blackhole` replaces Pi's LLM-based `/compact` with an algorithmic structural summary — fast, zero-cost. Three background workers (Observer, Reflector, Dropper) capture durable facts and decisions that survive across compactions. Per-worker model fallback chains with persisted cooldowns. Manual flush mode. One JSON file to configure it all.
+`/remendra` replaces Pi's LLM-based `/compact` with an algorithmic structural summary — fast, zero-cost. Three background workers (Observer, Reflector, Dropper) capture durable facts and decisions that survive across compactions. Per-worker model fallback chains with persisted cooldowns. Manual flush mode. One JSON file to configure it all.
 
 ---
 
@@ -10,20 +10,20 @@
 
 ```bash
 # From npm (recommended)
-pi install npm:pi-blackhole
+pi install npm:pi-remendra
 
 # Or directly from GitHub
-pi install git:github.com/k0valik/pi-blackhole
+pi install git:github.com/k0valik/pi-remendra
 ```
 
-If you have standalone `pi-vcc` or `pi-observational-memory` installed, remove them first — they conflict and will prevent blackhole from loading:
+If you have standalone `pi-vcc` or `pi-observational-memory` installed, remove them first — they conflict and will prevent remendra from loading:
 
 ```bash
 pi uninstall npm / git:https://github.com/sting8k/pi-vcc
 pi uninstall npm / git:https://github.com/elpapi42/pi-observational-memory
 ```
 
-Then `/reload` or restart Pi. The config file at `~/.pi/agent/pi-blackhole/pi-blackhole-config.json` is created with sensible defaults — no setup required for the default behavior. Config merges global → project → env → session (session is ephemeral). See **[`docs/CONFIG.md`](docs/CONFIG.md)** for tuning or run `/blackhole settings` to open the interactive overlay.
+Then `/reload` or restart Pi. The config file at `~/.pi/agent/pi-remendra/pi-remendra-config.json` is created with sensible defaults — no setup required for the default behavior. Config merges global → project → env → session (session is ephemeral). See **[`docs/CONFIG.md`](docs/CONFIG.md)** for tuning or run `/remendra settings` to open the interactive overlay.
 
 > **Want a guided setup?** Pass [`llms.txt`](llms.txt) to your agent — it will walk you through the interview, including picking cheap fallback models for your providers.
 
@@ -34,10 +34,10 @@ Then `/reload` or restart Pi. The config file at `~/.pi/agent/pi-blackhole/pi-bl
 > **Latest release: [0.4.10](docs/CHANGELOG.md#0410---2026-08-29)**
 >
 > - **Recall & export ranking upgrade** — BM25+, SimHash64, c-TF-IDF, technical density scoring, and surface-form-preserving topic labels for sharper dedup and more readable exports; export preamble now carries a best-effort heuristic warning.
-> - **`/blackhole-export` — distilled project-memory export** — Export for long-term agent memory tools - scans all project sessions + pending buffers, fuzzy-dedupes, and writes one import-ready Markdown (`Reflections → Critical → High → Medium → Low`) with topic badges and orphan-gated pending. `out:<path>.md` supported.
-> - **Append compaction mode** (`compactionSummaryMode: "append"`) — better prompt caching - keep every auto-compaction summary as an immutable segment visible to the model (`S1 | S2 | …`) instead of rewriting a single summary. `/blackhole` rebases the chain. Opt-in.
+> - **`/remendra-export` — distilled project-memory export** — Export for long-term agent memory tools - scans all project sessions + pending buffers, fuzzy-dedupes, and writes one import-ready Markdown (`Reflections → Critical → High → Medium → Low`) with topic badges and orphan-gated pending. `out:<path>.md` supported.
+> - **Append compaction mode** (`compactionSummaryMode: "append"`) — better prompt caching - keep every auto-compaction summary as an immutable segment visible to the model (`S1 | S2 | …`) instead of rewriting a single summary. `/remendra` rebases the chain. Opt-in.
 > - **Mid-run auto-compaction** (`midRunCompaction: "resume"` | `"pause"`) — **good for goal/task** opt into transparent compaction during long tool loops without interrupting the agent. Default is `"off"`.
-> - **Robust compaction-failure handling** — unified `session_compact_failed` (pi >=0.84.3) with correct attribution, overflow-retry visibility, and noise filtering; plus bundled-CLI `AgentSession` resolution so inline compaction works from `dist/bundle/cli.js` ([#62](https://github.com/k0valik/pi-blackhole/pull/62)).
+> - **Robust compaction-failure handling** — unified `session_compact_failed` (pi >=0.84.3) with correct attribution, overflow-retry visibility, and noise filtering; plus bundled-CLI `AgentSession` resolution so inline compaction works from `dist/bundle/cli.js` ([#62](https://github.com/k0valik/pi-remendra/pull/62)).
 
 See [`docs/CHANGELOG.md`](docs/CHANGELOG.md) for the full history.
 
@@ -51,7 +51,7 @@ See [`docs/CHANGELOG.md`](docs/CHANGELOG.md) for the full history.
 
 Long engineering sessions degrade. Pi's native `/compact` calls an LLM to write a free-form prose summary — then compacts that summary, then compacts the next. After a few cycles, load-bearing details vanish: why a decision was made, which approaches were rejected, what the user clarified early on. The session is still alive; the agent has stopped carrying the real context.
 
-`pi-blackhole` solves this in two complementary ways:
+`pi-remendra` solves this in two complementary ways:
 
 - **Algorithmic compaction** — a deterministic, zero-cost `compile()` pipeline extracts structured sections (goal, files, commits, preferences, brief transcript) and replaces the old conversation with one compact block. No LLM is called for compaction itself.
 - **Observational memory** — three background workers (Observer → Reflector → Dropper) run during the session, capturing timestamped facts and distilling durable reflections in a session ledger that survives every compaction.
@@ -64,17 +64,17 @@ Both halves share a single hook and a single output. Together they keep the agen
 
 | Command | Description & Options |
 | --- | --- |
-| `/blackhole` | Manual compact — deterministic structural summary |
-| `/blackhole settings` | Open the configuration overlay *(Alias: `/blackhole configure`)* |
-| `/blackhole changelog` | Open the in-app changelog viewer |
-| `/blackhole cleanup` | Remove orphaned pending files |
-| `/blackhole om-off` | Disable observational memory |
-| `/blackhole om-on` | Enable observational memory |
-| `/blackhole-memory` | Memory pipeline status & token counters *(Same as `/blackhole-memory status`)* |
-| `/blackhole-memory view` | Show visible observations and reflections (after compaction trimming), copied to clipboard |
-| `/blackhole-memory full` | Show **all** recorded memory (including dropped observations), copied to clipboard |
-| `/blackhole-recall <query>` | Search session history. Supports `page:N`, `scope:all`, `mode:file|touched`, regex *(Also available to agent as `recall` tool)* |
-| `/blackhole-export` | Export distilled project memory (observations/reflections across past sessions + pending buffers) to import-ready markdown *(Options: `out:<path>.md`)* |
+| `/remendra` | Manual compact — deterministic structural summary |
+| `/remendra settings` | Open the configuration overlay *(Alias: `/remendra configure`)* |
+| `/remendra changelog` | Open the in-app changelog viewer |
+| `/remendra cleanup` | Remove orphaned pending files |
+| `/remendra om-off` | Disable observational memory |
+| `/remendra om-on` | Enable observational memory |
+| `/remendra-memory` | Memory pipeline status & token counters *(Same as `/remendra-memory status`)* |
+| `/remendra-memory view` | Show visible observations and reflections (after compaction trimming), copied to clipboard |
+| `/remendra-memory full` | Show **all** recorded memory (including dropped observations), copied to clipboard |
+| `/remendra-recall <query>` | Search session history. Supports `page:N`, `scope:all`, `mode:file|touched`, regex *(Also available to agent as `recall` tool)* |
+| `/remendra-export` | Export distilled project memory (observations/reflections across past sessions + pending buffers) to import-ready markdown *(Options: `out:<path>.md`)* |
 
 All commands work regardless of `compaction` mode — only *when* auto-compaction fires changes. See [Compaction modes](#compaction-modes) below.
 
@@ -95,7 +95,7 @@ The agent gets one unified `recall` tool that handles every form of historical l
 
 When the agent expands a session entry (`#N`), related observations and reflections from the session ledger are automatically shown alongside the expanded content — so the agent gets the raw transcript *and* the durable fact layer in one call.
 
-The `/blackhole-recall` command exposes the same engine to the user. Results are shown as a collapsible message and auto-fed to the agent as context.
+The `/remendra-recall` command exposes the same engine to the user. Results are shown as a collapsible message and auto-fed to the agent as context.
 
 ---
 
@@ -107,27 +107,27 @@ Two modes, one shared goal: keep your agent's context sharp without manual house
 |---|---|---|---|
 | Workers run? | Yes | Yes | Yes (unless `memory: false`) |
 | Observations go to | Conversation markers (invisible in TUI) | Per-session disk buffers | Conversation markers |
-| Auto-compact on `agent_end` | Yes — blackhole fires at `compactAfterTokens` | No | No (Pi handles it) |
-| `/compact` (Pi built-in) | Replaced by blackhole | Pi handles | Pi handles |
-| `/blackhole` | Optional | **Required** to flush + compact | Optional, but works |
-| Use case | "Install and forget" | "I want to control when context gets compressed" | "Let Pi handle it, but I want `/blackhole` when I need it" |
+| Auto-compact on `agent_end` | Yes — remendra fires at `compactAfterTokens` | No | No (Pi handles it) |
+| `/compact` (Pi built-in) | Replaced by remendra | Pi handles | Pi handles |
+| `/remendra` | Optional | **Required** to flush + compact | Optional, but works |
+| Use case | "Install and forget" | "I want to control when context gets compressed" | "Let Pi handle it, but I want `/remendra` when I need it" |
 
-Manual mode is the maintainer's daily driver: workers still run, but observations accumulate in `<sessionId>-pending.json` files instead of cluttering the conversation. `/blackhole` flushes the buffer, runs algorithmic compaction, and injects durable reflections in one shot.
+Manual mode is the maintainer's daily driver: workers still run, but observations accumulate in `<sessionId>-pending.json` files instead of cluttering the conversation. `/remendra` flushes the buffer, runs algorithmic compaction, and injects durable reflections in one shot.
 
-`compaction: "off"` + `memory: false` (or `PI_BLACKHOLE_PASSIVE=true`) completely disables all background workers and blackhole's auto-compaction — useful for debugging or comparing against Pi's native path. Explicit `/blackhole` still works in this mode.
+`compaction: "off"` + `memory: false` (or `PI_REMENDRA_PASSIVE=true`) completely disables all background workers and remendra's auto-compaction — useful for debugging or comparing against Pi's native path. Explicit `/remendra` still works in this mode.
 
-### How does `/blackhole` compare to `/compact`?
+### How does `/remendra` compare to `/compact`?
 
 - `/compact` calls an LLM to write a free-form summary — costly, lossy, no memory layer.
-- `/blackhole` uses algorithmic section extraction (goals, files, commits, preferences…) **plus** injects observations and reflections from the session ledger. No LLM is involved in the compaction itself. Fast, deterministic, memory-preserving - the observational memory pipeline's arrived results apply instantly on compaction.
+- `/remendra` uses algorithmic section extraction (goals, files, commits, preferences…) **plus** injects observations and reflections from the session ledger. No LLM is involved in the compaction itself. Fast, deterministic, memory-preserving - the observational memory pipeline's arrived results apply instantly on compaction.
 
-`/blackhole` is essentially a single `/compact` that just works — especially in manual mode.
+`/remendra` is essentially a single `/compact` that just works — especially in manual mode.
 
 ---
 
 ## How it works
 
-When `/blackhole` fires (manually or via the auto-trigger), two things happen in one shot:
+When `/remendra` fires (manually or via the auto-trigger), two things happen in one shot:
 
 1. **The vcc pipeline** analyzes the transcript tail and produces a structured summary: session goal, file changes, commits, outstanding blockers, user preferences, and a rolling brief transcript. Deterministic — same input always produces the same output.
 2. **Observational memory injection** renders accumulated observations and reflections from the session ledger and appends them below the summary.
@@ -150,7 +150,7 @@ Defaults target ~128k context models and work out of the box — no tuning requi
 
 Fallbacks (optional): each worker tries `stageModel → stageFallbacks → base model → session model` (skipping cooled-down models). By default the workers **do not** fall back to your session model — this avoids surprise cost and cache busting. Enable it with `sessionFallback: true` (default) or set `model` as a shared fallback. See [`docs/CONFIG.md` → Model Configuration](docs/CONFIG.md#model-configuration).
 
-Config file: **`~/.pi/agent/pi-blackhole/pi-blackhole-config.json`**
+Config file: **`~/.pi/agent/pi-remendra/pi-remendra-config.json`**
 
 Full reference — every key, default, and env override — lives in:
 
@@ -162,7 +162,7 @@ Full reference — every key, default, and env override — lives in:
 
 ## Demo
 
-`/blackhole` collapses ~143k tokens of conversation into a ~6.3k structured summary (YMMV based on your settings). `/blackhole-memory` shows pipeline status. `/blackhole-recall` searches history — the agent can do the same via its `recall` tool.
+`/remendra` collapses ~143k tokens of conversation into a ~6.3k structured summary (YMMV based on your settings). `/remendra-memory` shows pipeline status. `/remendra-recall` searches history — the agent can do the same via its `recall` tool.
 
 https://github.com/user-attachments/assets/a7dd804d-6aca-4bdb-8b6e-0dd779363a43
 
@@ -244,13 +244,13 @@ Use `recall` with an id to retrieve original context.
 ----
 ```
 
-> **Note:** The OM injection format uses `## Reflections` and `## Observations` Markdown headers followed by a brief footer. Each observation and reflection has a 12-char hex identifier the agent (and you, via `/blackhole-recall`) can use to recover source evidence. When no observations or reflections exist, only the short recall-guidance footer is appended.
+> **Note:** The OM injection format uses `## Reflections` and `## Observations` Markdown headers followed by a brief footer. Each observation and reflection has a 12-char hex identifier the agent (and you, via `/remendra-recall`) can use to recover source evidence. When no observations or reflections exist, only the short recall-guidance footer is appended.
 
 ---
 
 ## Feature comparison
 
-| | pi-blackhole | pi-vcc | pi-obs-memory | Pi default |
+| | pi-remendra | pi-vcc | pi-obs-memory | Pi default |
 |---|---|---|---|---|
 | Algorithmic compaction (no LLM cost) | ✓ | ✓ | — | — |
 | Deterministic output | ✓ | ✓ | — | — |
@@ -262,7 +262,7 @@ Use `recall` with an id to retrieve original context.
 | Per-worker model config | ✓ | — | — | — |
 | Fallback model chains + persisted cooldowns | ✓ | — | — | — |
 | Manual flush mode (`compaction: "manual"`) | ✓ | — | — | — |
-| Memory toggle (`/blackhole om-off`) | ✓ | — | — | — |
+| Memory toggle (`/remendra om-off`) | ✓ | — | — | — |
 | Unified single-file config | ✓ | — | — | — |
 | Per-session pending state | ✓ | — | — | — |
 
@@ -271,8 +271,8 @@ Use `recall` with an id to retrieve original context.
 ## Uninstall
 
 ```bash
-pi uninstall git:github.com/k0valik/pi-blackhole
-rm -rf ~/.pi/agent/pi-blackhole
+pi uninstall git:github.com/k0valik/pi-remendra
+rm -rf ~/.pi/agent/pi-remendra
 ```
 
 ---
@@ -296,9 +296,9 @@ rm -rf ~/.pi/agent/pi-blackhole
 
 ## Migration from an older version
 
-If you're upgrading from a pre-0.4.0 config (the old `pi-vcc` / `pi-observational-memory` keys, or an early `pi-blackhole` config with `overrideDefaultCompaction` / `noAutoCompact` / `passive`): see **[`docs/MIGRATION-GUIDE.md`](docs/MIGRATION-GUIDE.md)** for the key mapping, semantic changes, and notes on automatic migration.
+If you're upgrading from a pre-0.4.0 config (the old `pi-vcc` / `pi-observational-memory` keys, or an early `pi-remendra` config with `overrideDefaultCompaction` / `noAutoCompact` / `passive`): see **[`docs/MIGRATION-GUIDE.md`](docs/MIGRATION-GUIDE.md)** for the key mapping, semantic changes, and notes on automatic migration.
 
-The short version: old keys are auto-migrated in memory at load time and the on-disk file is never mutated. Set the new keys explicitly via `/blackhole settings` (alias `/blackhole configure`) to silence the migration notification.
+The short version: old keys are auto-migrated in memory at load time and the on-disk file is never mutated. Set the new keys explicitly via `/remendra settings` (alias `/remendra configure`) to silence the migration notification.
 
 The legacy config surface is documented at **[`docs/OLD_CONFIG.md`](docs/OLD_CONFIG.md)** for reference only — no new keys are added there.
 
@@ -306,18 +306,18 @@ The legacy config surface is documented at **[`docs/OLD_CONFIG.md`](docs/OLD_CON
 
 ## Credits
 
-`pi-blackhole` started as a merge of two upstream projects but has since diverged significantly. The codebase still carries DNA from both:
+`pi-remendra` started as a merge of two upstream projects but has since diverged significantly. The codebase still carries DNA from both:
 
 - **[pi-vcc](https://github.com/sting8k/pi-vcc)** by @sting8k — algorithmic conversation compaction (the `compile()` pipeline, section extraction, recall core).
 - **[pi-observational-memory](https://github.com/elpapi42/pi-observational-memory)** by @elpapi42 — session-ledger-based observation/reflection capture, memory agents, ledger folding.
 
-What blackhole adds and reworks on top:
+What remendra adds and reworks on top:
 
 - **Unified configuration** — one JSON file, not two.
 - **Per-worker model fallback chains** with persisted cooldowns that survive Pi restarts.
 - **Manual flush mode** — `compaction: "manual"` saves observations to per-session disk buffers.
 - **Conflict resolution** — OM hooks into vcc's compaction, not Pi's default.
-- **Memory toggle** (`/blackhole om-off` / `/blackhole om-on`) — disable the memory layer without uninstalling.
+- **Memory toggle** (`/remendra om-off` / `/remendra om-on`) — disable the memory layer without uninstalling.
 - **Per-session pending state** — isolated per-session JSON files, no cross-session contamination.
 - **Custom provider bridge** — consolidation agents loaded via jiti can still use provider stream functions registered by other extensions.
 - **Retryable error detection with per-model cooldowns** — models that fail get cooled down, fallbacks tried automatically, 30-second retry gate prevents spam.

@@ -12,7 +12,7 @@ Make every trigger truthful and every threshold self-sizing:
 
 1. **Compaction** fires at real context ≥ resolved threshold (default `0.65 × session window`) — never-late, never-wasteful, matching what the user sees in pi's footer.
 2. **Observer/reflector/dropper** fire on **usage deltas since their anchor** (cursor → coverage marker → compaction), with the **worker-window upper bound** so a backlog can never outgrow the worker before the trigger trips.
-3. **One due-computation per stage** consumed by `anyStageDue`, the stage runners, and `/blackhole-memory` — killing the check/recheck/display drift class.
+3. **One due-computation per stage** consumed by `anyStageDue`, the stage runners, and `/remendra-memory` — killing the check/recheck/display drift class.
 4. **Config:** every threshold field gains `0 = auto`; defaults become auto; explicit values honored as absolute overrides on the new (usage) basis; one-time breaking-change warning shipped atomically.
 
 ## 2. Non-goals
@@ -77,7 +77,7 @@ due = progress >= Math.min(resolvedThreshold, workerWindowSync − AGENT_LOOP_RE
 - `anyStageDue` → calls the three measure functions (replaces L219–333's inline legs; cursor/pending logic moves into the measure functions).
 - `runObserverStage`/`runReflectorStage`/`runDropperStage` → call the same measure function for their re-check; **delete** the duplicated `rawTokensSince*Coverage >= config.*` lines (L219–241, L327–333, L1051–1057, L1352–1358).
 - **Fallback-safety rule (semantic diff §10.8):** when `basis === "estimate"` because the baseline was *unmeasurable* (not merely "no usage provider"), the `not_due` cursor advance in `runObserverStage` must NOT fire — advance cursors only on a trustworthy measurement. (Simplest: skip the not_due advance whenever `basis === "estimate"`.)
-- `/blackhole-memory` (`memory.ts`) → same functions for the progress lines (Phase 4 styles the output).
+- `/remendra-memory` (`memory.ts`) → same functions for the progress lines (Phase 4 styles the output).
 
 ## 4. Compaction trigger (`src/om/compaction-trigger.ts`)
 
@@ -109,17 +109,17 @@ if (tokens < threshold) { /* pressure-relieved path (midRunCompactionSuspended l
 | `observationsPoolMaxTokens` | same; default `20000 → 0` (auto = 0.15 × session window) |
 | `observationsPoolTargetTokens` | default `10000 → 0` (auto = pool max / 2; existing "half of max" logic absorbs this) |
 | `observerChunkMaxTokens` | (Phase 2) default `40000 → 0` |
-| **`thresholdScale`** | **NEW field — the only one (D14).** Default `1.0`; finite > 0, clamped [0.1, 10]; multiplies auto-derived observe/reflect/compact thresholds; ignored for explicit values. Env: `PI_BLACKHOLE_THRESHOLD_SCALE`. |
+| **`thresholdScale`** | **NEW field — the only one (D14).** Default `1.0`; finite > 0, clamped [0.1, 10]; multiplies auto-derived observe/reflect/compact thresholds; ignored for explicit values. Env: `PI_REMENDRA_THRESHOLD_SCALE`. |
 
 - Budget resolvers live next to `resolveObserverChunkMaxTokens` in `model-budget.ts`: `resolveReflectorInputMaxTokens(config, workerWindow)`, `resolveDropperInputMaxTokens(config, workerWindow)`, `resolveObservationsPoolMaxTokens(config, sessionWindow)`. All clamp to sane minimums (≥ 1000).
-- Env vars (`PI_BLACKHOLE_*`) unchanged — `0` now means auto; documented.
+- Env vars (`PI_REMENDRA_*`) unchanged — `0` now means auto; documented.
 - **Where autos resolve:** trigger thresholds resolve per-measurement (session window can change mid-session on model switch — derivation must follow live, that's the point). Worker budgets resolve per stage run (worker model can change across the fallback chain — recompute per attempt with that attempt's window; the `context_window_exceeded` pre-check already does per-attempt resolution).
 - Pool max: resolving per status/fold call is fine (pure function of session window).
 
 ## 6. Breaking-change warning (D10)
 
-- New tiny module `src/om/breaking-notice.ts`: `BREAKING_SINCE = "<this release version>"`; state file `~/.pi/agent/pi-blackhole/last-seen-version.json` (pattern from `cooldown.ts` L28/53/64).
-- Hook: `pi.on("agent_start")` (register once, e.g. in consolidation or its own registration): if `hasUI && lastSeen < BREAKING_SINCE` → `ctx.ui.notify("pi-blackhole: token counting now uses real model usage; thresholds auto-derive from your model's context window — custom thresholds keep working (now counted in real tokens, ~1.45× your old estimate values). See /blackhole configure.", "warning")`, then persist current version. Once per install, not per session beyond first display.
+- New tiny module `src/om/breaking-notice.ts`: `BREAKING_SINCE = "<this release version>"`; state file `~/.pi/agent/pi-remendra/last-seen-version.json` (pattern from `cooldown.ts` L28/53/64).
+- Hook: `pi.on("agent_start")` (register once, e.g. in consolidation or its own registration): if `hasUI && lastSeen < BREAKING_SINCE` → `ctx.ui.notify("pi-remendra: token counting now uses real model usage; thresholds auto-derive from your model's context window — custom thresholds keep working (now counted in real tokens, ~1.45× your old estimate values). See /remendra configure.", "warning")`, then persist current version. Once per install, not per session beyond first display.
 - Release-checklist note in the file header: delete the module + state key 2 minor versions later (programmatic removal, issue doc appendix B).
 
 ## 7. Constants finalization (script-driven, recorded here at execution)
@@ -148,7 +148,7 @@ Before landing Phase 3, re-run the archive analysis to finalize D6's derivation 
 ## 9. Live soak checklist (real session, `debugLog: true`)
 
 - [ ] `observer.start` shows honest `chunkTokens`; progress uses `basis:"usage"` when usage exists
-- [ ] `/blackhole-memory` observer/reflector/compaction lines match reality (cross-check against pi footer %)
+- [ ] `/remendra-memory` observer/reflector/compaction lines match reality (cross-check against pi footer %)
 - [ ] Auto compaction fires at ~65% of the session model's window (force with a small window override in model config)
 - [ ] A model switch mid-session does not produce runaway firing (negative-delta fallback)
 - [ ] Right after compaction: no immediate re-trigger; coverage deltas resume from the post-compaction baseline

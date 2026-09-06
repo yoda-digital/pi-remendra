@@ -170,7 +170,7 @@ async function refreshNextTurn(session: InstanceType<ReturnType<typeof createSes
   );
 }
 
-describe("Blackhole inline compaction adapter", () => {
+describe("Remendra inline compaction adapter", () => {
   it.each([
     ["Pi 0.81 legacy disconnect shape", true],
     ["Pi 0.84 connected-listener shape", false],
@@ -549,7 +549,7 @@ describe("Blackhole inline compaction adapter", () => {
   });
 
   it("patches the bundled CLI AgentSession identity", async () => {
-    const fixtureRoot = await mkdtemp(join(tmpdir(), "blackhole-bundled-host-"));
+    const fixtureRoot = await mkdtemp(join(tmpdir(), "remendra-bundled-host-"));
     const packageRoot = join(fixtureRoot, "node_modules", "@earendil-works", "pi-coding-agent");
     const dist = join(packageRoot, "dist");
     const chunks = join(dist, "bundle", "chunks");
@@ -611,7 +611,7 @@ describe("Blackhole inline compaction adapter", () => {
   });
 
   it("patches every independently loaded host AgentSession identity", async () => {
-    const fixtureRoot = await mkdtemp(join(tmpdir(), "blackhole-host-identities-"));
+    const fixtureRoot = await mkdtemp(join(tmpdir(), "remendra-host-identities-"));
     const makeHostPackage = async (name: string) => {
       const packageRoot = join(
         fixtureRoot,

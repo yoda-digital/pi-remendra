@@ -11,7 +11,7 @@ const originalDispatcher = (globalThis as any)[dispatcherSymbol];
 
 describe("custom provider stream bridge", () => {
   afterEach(() => {
-    delete (globalThis as any)[Symbol.for("pi-blackhole:provider-streams")];
+    delete (globalThis as any)[Symbol.for("pi-remendra:provider-streams")];
     vi.unstubAllGlobals();
     if (originalDispatcher === undefined) {
       delete (globalThis as any)[dispatcherSymbol];
@@ -39,7 +39,7 @@ describe("custom provider stream bridge", () => {
   it("uses the discovered stream for a custom API", () => {
     const fallbackStream = vi.fn();
     const customStream = vi.fn(() => "custom-result");
-    const key = Symbol.for("pi-blackhole:provider-streams");
+    const key = Symbol.for("pi-remendra:provider-streams");
     (globalThis as any)[key] = new Map([["custom-api", customStream]]);
     const bridge = createBridgeStreamFn(fallbackStream);
 

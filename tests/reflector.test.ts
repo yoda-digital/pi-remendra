@@ -161,7 +161,7 @@ describe("V3 reflector agent", () => {
     expect(userText).toContain("Uncovered durable fact");
     expect(userText).toContain("Partially covered fact");
     expect(userText).toContain("Strongly covered fact");
-    // pi-blackhole reflector uses observationToSummaryLine without coverage display
+    // pi-remendra reflector uses observationToSummaryLine without coverage display
     // Coverage in observation lines is tested in dropper-coverage.test.ts
     expect(userText).not.toContain("drop-priority");
     expect(userText).not.toContain("drop-resistance");

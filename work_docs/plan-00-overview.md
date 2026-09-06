@@ -67,7 +67,7 @@ The codebase already gestures at this philosophy — `llms.txt` (L323–348) pub
    ┌─────────────────────────────────────────────────────────┐
    │  unified due-computation: per stage → { due, progress,  │
    │  threshold, basis }  — used by anyStageDue, all three   │
-   │  stage runners, and /blackhole-memory (one code path)   │
+   │  stage runners, and /remendra-memory (one code path)   │
    └─────────────────────────────────────────────────────────┘
 ```
 

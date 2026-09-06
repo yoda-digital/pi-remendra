@@ -19,11 +19,11 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { __setTestConfigDir } from "../src/core/unified-config.js";
 
-const testDir = join(tmpdir(), `pi-blackhole-config-${randomUUID().slice(0, 8)}`);
+const testDir = join(tmpdir(), `pi-remendra-config-${randomUUID().slice(0, 8)}`);
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function writeConfig(data: unknown, filename = "pi-blackhole/pi-blackhole-config.json"): string {
+function writeConfig(data: unknown, filename = "pi-remendra/pi-remendra-config.json"): string {
   const dir = join(testDir, dirname(filename));
   mkdirSync(dir, { recursive: true });
   const path = join(testDir, filename);
@@ -32,7 +32,7 @@ function writeConfig(data: unknown, filename = "pi-blackhole/pi-blackhole-config
 }
 
 function configPath(): string {
-  return join(testDir, "pi-blackhole", "pi-blackhole-config.json");
+  return join(testDir, "pi-remendra", "pi-remendra-config.json");
 }
 
 // ── Setup ───────────────────────────────────────────────────────────────────
@@ -45,11 +45,11 @@ beforeEach(() => {
 afterEach(() => {
   __setTestConfigDir(undefined);
   // Clean up env vars to prevent cross-test contamination
-  delete process.env.PI_BLACKHOLE_PASSIVE;
+  delete process.env.PI_REMENDRA_PASSIVE;
   delete process.env.PI_VCC_OM_PASSIVE;
   delete process.env.PI_OBSERVATIONAL_MEMORY_PASSIVE;
-  delete process.env.PI_BLACKHOLE_COMPACTION;
-  delete process.env.PI_BLACKHOLE_COMPACTION_ENGINE;
+  delete process.env.PI_REMENDRA_COMPACTION;
+  delete process.env.PI_REMENDRA_COMPACTION_ENGINE;
   try {
     rmSync(testDir, { recursive: true, force: true });
   } catch {
@@ -65,7 +65,7 @@ describe("New config keys — defaults", () => {
     const config = loadUnifiedConfig(testDir);
 
     expect(config.compaction).toBe("auto");
-    expect(config.compactionEngine).toBe("blackhole");
+    expect(config.compactionEngine).toBe("remendra");
     expect(config.tailBehavior).toBe("minimal");
     expect(config.midRunCompaction).toBe("off");
   });
@@ -141,20 +141,20 @@ describe("New key parsing", () => {
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ compactionEngine: "hybrid" });
     const config = loadUnifiedConfig(testDir);
-    expect(config.compactionEngine).toBe("blackhole");
+    expect(config.compactionEngine).toBe("remendra");
   });
 });
 
 // ── Tests: Old → New migration ────────────────────────────────────────────
 
 describe("Old → new key migration", () => {
-  it("T2: overrideDefaultCompaction:true → compactionEngine:blackhole + tailBehavior:minimal", async () => {
+  it("T2: overrideDefaultCompaction:true → compactionEngine:remendra + tailBehavior:minimal", async () => {
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ overrideDefaultCompaction: true });
 
     const config = loadUnifiedConfig(testDir);
 
-    expect(config.compactionEngine).toBe("blackhole");
+    expect(config.compactionEngine).toBe("remendra");
     // Existing users with override=true keep aggressive cut
     expect(config.tailBehavior).toBe("minimal");
     // Old key should be removed by migration
@@ -204,7 +204,7 @@ describe("Old → new key migration", () => {
 
     expect(config.compaction).toBe("manual"); // new wins
     // overrideDefaultCompaction should NOT migrate since new key was present
-    expect(config.compactionEngine).toBe("blackhole"); // default, not migrated
+    expect(config.compactionEngine).toBe("remendra"); // default, not migrated
     expect(config.tailBehavior).toBe("minimal"); // default, not migrated
   });
 
@@ -233,14 +233,14 @@ describe("Old → new key migration", () => {
 
     // First load — migration runs
     const config1 = loadUnifiedConfig(testDir);
-    expect(config1.compactionEngine).toBe("blackhole");
+    expect(config1.compactionEngine).toBe("remendra");
 
     // Second load — old keys are gone from disk? No — migration is in-memory.
     // But the function should not re-migrate already-migrated config.
     // The on-disk file hasn't changed, so second load would re-run migration
     // which is idempotent. Let's verify it's stable.
     const config2 = loadUnifiedConfig(testDir);
-    expect(config2.compactionEngine).toBe("blackhole");
+    expect(config2.compactionEngine).toBe("remendra");
     expect(config2.tailBehavior).toBe("minimal");
   });
 
@@ -270,8 +270,8 @@ describe("Old → new key migration", () => {
 // ── Tests: Env overrides ──────────────────────────────────────────────────
 
 describe("Env overrides", () => {
-  it("T9: PI_BLACKHOLE_PASSIVE=1 forces compaction:off + memory:false", async () => {
-    process.env.PI_BLACKHOLE_PASSIVE = "1";
+  it("T9: PI_REMENDRA_PASSIVE=1 forces compaction:off + memory:false", async () => {
+    process.env.PI_REMENDRA_PASSIVE = "1";
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ compaction: "auto", memory: true });
 
@@ -281,7 +281,7 @@ describe("Env overrides", () => {
     expect(config.memory).toBe(false);
   });
 
-  it("PI_BLACKHOLE_PASSIVE is deprecated but still works with legacy name PI_VCC_OM_PASSIVE", async () => {
+  it("PI_REMENDRA_PASSIVE is deprecated but still works with legacy name PI_VCC_OM_PASSIVE", async () => {
     process.env.PI_VCC_OM_PASSIVE = "true";
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({});
@@ -291,8 +291,8 @@ describe("Env overrides", () => {
     expect(config.memory).toBe(false);
   });
 
-  it("PI_BLACKHOLE_COMPACTION env var overrides compaction", async () => {
-    process.env.PI_BLACKHOLE_COMPACTION = "manual";
+  it("PI_REMENDRA_COMPACTION env var overrides compaction", async () => {
+    process.env.PI_REMENDRA_COMPACTION = "manual";
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ compaction: "auto" });
 
@@ -300,17 +300,17 @@ describe("Env overrides", () => {
     expect(config.compaction).toBe("manual");
   });
 
-  it("PI_BLACKHOLE_COMPACTION_ENGINE env var overrides compactionEngine", async () => {
-    process.env.PI_BLACKHOLE_COMPACTION_ENGINE = "pi-default";
+  it("PI_REMENDRA_COMPACTION_ENGINE env var overrides compactionEngine", async () => {
+    process.env.PI_REMENDRA_COMPACTION_ENGINE = "pi-default";
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
-    writeConfig({ compactionEngine: "blackhole" });
+    writeConfig({ compactionEngine: "remendra" });
 
     const config = loadUnifiedConfig(testDir);
     expect(config.compactionEngine).toBe("pi-default");
   });
 
-  it("PI_BLACKHOLE_MID_RUN_COMPACTION env var overrides midRunCompaction", async () => {
-    process.env.PI_BLACKHOLE_MID_RUN_COMPACTION = "resume";
+  it("PI_REMENDRA_MID_RUN_COMPACTION env var overrides midRunCompaction", async () => {
+    process.env.PI_REMENDRA_MID_RUN_COMPACTION = "resume";
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ midRunCompaction: "off" });
 
@@ -355,7 +355,7 @@ describe("saveUnifiedConfig — atomic write", () => {
   it("does not crash on read-only filesystem (returns false)", async () => {
     const { saveUnifiedConfig } = await import("../src/core/unified-config.js");
     // Make the config dir read-only so write fails
-    const dir = join(testDir, "pi-blackhole");
+    const dir = join(testDir, "pi-remendra");
     mkdirSync(dir, { recursive: true });
     // Set permissions to read+execute only (no write)
     try {
@@ -388,7 +388,7 @@ describe("scaffoldConfig — NixOS safety", () => {
     expect(existsSync(configPath())).toBe(true);
     const config = loadUnifiedConfig(testDir);
     expect(config.compaction).toBe("auto");
-    expect(config.compactionEngine).toBe("blackhole");
+    expect(config.compactionEngine).toBe("remendra");
   });
 
   it("does not overwrite existing config on scaffold", async () => {
@@ -404,9 +404,9 @@ describe("scaffoldConfig — NixOS safety", () => {
   it("does not crash on read-only filesystem during scaffold", async () => {
     const { scaffoldConfig } = await import("../src/core/unified-config.js");
     // Create directory with read-only permissions
-    mkdirSync(join(testDir, "pi-blackhole"), { recursive: true });
+    mkdirSync(join(testDir, "pi-remendra"), { recursive: true });
     try {
-      chmodSync(join(testDir, "pi-blackhole"), 0o555);
+      chmodSync(join(testDir, "pi-remendra"), 0o555);
     } catch {
       /* skip on Windows */
     }
@@ -415,7 +415,7 @@ describe("scaffoldConfig — NixOS safety", () => {
 
     // Restore permissions so afterEach cleanup works
     try {
-      chmodSync(join(testDir, "pi-blackhole"), 0o755);
+      chmodSync(join(testDir, "pi-remendra"), 0o755);
     } catch {
       /* skip on Windows */
     }

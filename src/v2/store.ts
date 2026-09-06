@@ -40,16 +40,26 @@ export class MemoryStore {
   private db: Database;
   private depth = 0;
   private statements = new Map<string, Statement>();
+  private lastScopeKey = "";
   constructor(readonly file: string) {
     if (file !== ":memory:") mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
     this.db = openDatabase(file);
     this.db.exec(
-      "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000; PRAGMA secure_delete=ON;",
+      "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000; PRAGMA secure_delete=ON;",
     );
     const version = Number(this.get("PRAGMA user_version")?.user_version ?? 0);
     if (version !== 0 && version !== SCHEMA_VERSION) {
+      if (version > SCHEMA_VERSION) {
+        this.db.close();
+        throw new Error(
+          `Memory schema ${version} is newer than supported ${SCHEMA_VERSION}; upgrade pi-remendra`,
+        );
+      }
+      // Future: add incremental migrations here (e.g., version 2→3)
       this.db.close();
-      throw new Error(`Unsupported memory schema ${version}; expected ${SCHEMA_VERSION}`);
+      throw new Error(
+        `Memory schema ${version} requires migration to ${SCHEMA_VERSION}; no migration path available yet`,
+      );
     }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -186,8 +196,14 @@ export class MemoryStore {
   }
 
   private scopeSQL(scope: Scope, mode = "current", alias = "c"): { sql: string; args: SqlValue[] } {
+    if (mode === "all") {
+      return {
+        sql: `((${alias}.project_id=? AND (${alias}.visibility IN ('project','lineage')))${scope.includeUser ? ` OR ${alias}.visibility='user'` : ""})`,
+        args: [scope.projectId],
+      };
+    }
     return {
-      sql: `((${alias}.project_id=? AND (${alias}.visibility='project' OR (${alias}.visibility='lineage' AND ${alias}.session_id=? AND (${mode === "all" ? "1" : `${alias}.anchor IN (SELECT id FROM active_entries)`}))))${scope.includeUser ? ` OR ${alias}.visibility='user'` : ""})`,
+      sql: `((${alias}.project_id=? AND (${alias}.visibility='project' OR (${alias}.visibility='lineage' AND ${alias}.session_id=? AND ${alias}.anchor IN (SELECT id FROM active_entries))))${scope.includeUser ? ` OR ${alias}.visibility='user'` : ""})`,
       args: [scope.projectId, scope.sessionId],
     };
   }
@@ -195,10 +211,10 @@ export class MemoryStore {
   private inScope(claim: Claim, scope: Scope, all = false): boolean {
     if (claim.visibility === "user") return scope.includeUser === true;
     if (claim.projectId !== scope.projectId) return false;
-    return (
-      claim.visibility === "project" ||
-      (claim.sessionId === scope.sessionId && (all || scope.entryIds.includes(claim.anchor)))
-    );
+    if (claim.visibility === "project") return true;
+    // lineage: scope:all surfaces all project lineage claims across sessions
+    if (all) return true;
+    return claim.sessionId === scope.sessionId && scope.entryIds.includes(claim.anchor);
   }
 
   source(key: string): Source | undefined {
@@ -269,6 +285,12 @@ export class MemoryStore {
           digest,
         )) {
           this.run("UPDATE sources SET replaced=1 WHERE key=?", String(old.key));
+          // Clear stale FTS entry for replaced source
+          this.run(
+            "INSERT INTO source_fts(source_fts,rowid,text) VALUES('delete',(SELECT rowid FROM sources WHERE key=?),(SELECT text FROM sources WHERE key=?))",
+            String(old.key),
+            String(old.key),
+          );
           this.run(
             "UPDATE chunks SET state='excluded',reason='source replaced' WHERE source_key=?",
             String(old.key),
@@ -555,10 +577,22 @@ export class MemoryStore {
       const conflicts: string[] = [];
       const canDispute = actor !== "import" && claim.status === "active";
       if (claim.subject && claim.predicate && claim.value !== undefined) {
-        for (const row of this.all(
-          "SELECT data FROM claims WHERE (project_id=? OR visibility='user') AND status IN ('active','disputed')",
-          scope.projectId,
-        )) {
+        const conflictRows = [
+          ...this.all(
+            "SELECT data FROM claims WHERE project_id=? AND status IN ('active','disputed')",
+            scope.projectId,
+          ),
+          ...this.all(
+            "SELECT data FROM claims WHERE visibility='user' AND status IN ('active','disputed')",
+          ),
+        ];
+        // Deduplicate by claim ID
+        const seen = new Map<string, Record<string, unknown>>();
+        for (const row of conflictRows) {
+          const c = parse<Claim>(row)!;
+          if (!seen.has(c.id)) seen.set(c.id, row);
+        }
+        for (const row of [...seen.values()]) {
           const other = parse<Claim>(row)!;
           if (
             !this.inScope(other, {
@@ -676,6 +710,8 @@ export class MemoryStore {
       result.claim.revision++;
       result.claim.updatedAt = nowISO();
       this.writeClaim(result.claim, "correction");
+      // Remove the intermediate "recorded" event that record() wrote — only the correction is real
+      this.run("DELETE FROM events WHERE claim_id=? AND action='recorded'", result.claim.id);
       return result;
     });
   }
@@ -725,11 +761,23 @@ export class MemoryStore {
         claim.predicate &&
         claim.value !== undefined
       ) {
-        for (const row of this.all(
-          "SELECT data FROM claims WHERE (project_id=? OR visibility='user') AND id<>? AND status IN ('active','disputed')",
-          scope.projectId,
-          claim.id,
-        )) {
+        const changeConflictRows = [
+          ...this.all(
+            "SELECT data FROM claims WHERE project_id=? AND id<>? AND status IN ('active','disputed')",
+            scope.projectId,
+            claim.id,
+          ),
+          ...this.all(
+            "SELECT data FROM claims WHERE visibility='user' AND id<>? AND status IN ('active','disputed')",
+            claim.id,
+          ),
+        ];
+        const changeSeen = new Map<string, Record<string, unknown>>();
+        for (const row of changeConflictRows) {
+          const c = parse<Claim>(row)!;
+          if (!changeSeen.has(c.id)) changeSeen.set(c.id, row);
+        }
+        for (const row of [...changeSeen.values()]) {
           const other = parse<Claim>(row)!;
           if (
             !this.inScope(other, {
@@ -800,11 +848,7 @@ export class MemoryStore {
         return false;
     for (const d of claim.dependsOn) {
       const parent = this.rawClaim(d.id);
-      if (
-        !parent ||
-        parent.revision !== d.revision ||
-        !this.usable(parent, scope, at, new Set(visited))
-      )
+      if (!parent || parent.revision !== d.revision || !this.usable(parent, scope, at, visited))
         return false;
     }
     return true;
@@ -847,7 +891,7 @@ export class MemoryStore {
       if (
         !parent ||
         parent.revision !== d.revision ||
-        !this.historicalUsable(parent, scope, at, new Set(seen))
+        !this.historicalUsable(parent, scope, at, seen)
       )
         return false;
     }
@@ -1145,7 +1189,6 @@ export class MemoryStore {
         job.id,
       );
       this.settleJob(job, actualTokens, dollars, "complete");
-      this.bump();
       return records;
     });
   }
@@ -1362,6 +1405,19 @@ export class MemoryStore {
           Date.now(),
         )?.n ?? 0,
       ),
+      pendingChunks: Number(
+        this.get("SELECT COUNT(*) AS n FROM chunks WHERE state='pending'")?.n ?? 0,
+      ),
+      failedJobs: Number(this.get("SELECT COUNT(*) AS n FROM jobs WHERE state='failed'")?.n ?? 0),
+      damagedChunks: Number(
+        this.get("SELECT COUNT(*) AS n FROM chunks WHERE state='damaged'")?.n ?? 0,
+      ),
+      chunkBacklog: Object.fromEntries(
+        this.all("SELECT state, COUNT(*) AS n FROM chunks GROUP BY state").map((r) => [
+          String(r.state),
+          Number(r.n),
+        ]),
+      ),
     };
   }
 
@@ -1416,6 +1472,18 @@ export class MemoryStore {
       scope.projectId,
     ))
       records.push({ type: "erased_source", data: row });
+    for (const row of this.all("SELECT * FROM aliases WHERE project_id=?", scope.projectId))
+      records.push({ type: "alias", data: row });
+    for (const row of this.all(
+      "SELECT rs.* FROM retired_spans rs JOIN sources s ON s.key=rs.source_key WHERE s.project_id=?",
+      scope.projectId,
+    ))
+      records.push({ type: "retired_span", data: row });
+    for (const row of this.all(
+      "SELECT t.* FROM trials t JOIN claims c ON c.id=t.procedure_id WHERE c.project_id=?",
+      scope.projectId,
+    ))
+      records.push({ type: "trial", data: row });
     return records.map((r) => JSON.stringify(r)).join("\n") + "\n";
   }
 
@@ -1437,6 +1505,7 @@ export class MemoryStore {
       const erasedRefs = new Set<string>();
       let sources = 0,
         claims = 0;
+      const idMap = new Map<string, string>();
       const importedScope = { ...scope, entryIds: [...scope.entryIds] };
       for (const row of rows) {
         if (!jsonObject(row) || row.type !== "source" || !jsonObject(row.data)) continue;
@@ -1487,12 +1556,14 @@ export class MemoryStore {
           const s = refs.get(e.sourceKey);
           return s ? [{ ...e, sourceKey: s.key, hash: s.hash }] : [];
         });
+        const newId = `import:${hash(`${scope.projectId}:${scope.sessionId}:${c.id}`).slice(0, 40)}`;
         const input: ClaimInput = {
-          id: `import:${hash(`${scope.projectId}:${scope.sessionId}:${c.id}`).slice(0, 40)}`,
+          id: newId,
           text: c.text,
           kind: c.kind,
           evidence,
           anchor: scope.entryIds.at(-1),
+          visibility: c.visibility,
           conditions: c.conditions,
           cues: c.cues,
           rationale: c.rationale,
@@ -1504,8 +1575,21 @@ export class MemoryStore {
           validUntil: c.validUntil,
           environment: c.environment,
         };
+        idMap.set(c.id, newId);
         const result = this.record(importedScope, input, "import");
         if (!result.duplicate) claims++;
+        // Remap supersedes and dependsOn using the old→new ID mapping
+        if (Array.isArray(c.supersedes) && c.supersedes.length) {
+          const mapped = c.supersedes
+            .map((old: string) => idMap.get(old) ?? old)
+            .filter((id: string) => id !== newId);
+          if (mapped.length) {
+            result.claim.supersedes = mapped;
+            result.claim.revision++;
+            result.claim.updatedAt = new Date().toISOString();
+            this.writeClaim(result.claim, "import_supersedes");
+          }
+        }
       }
       return { sources, claims };
     });

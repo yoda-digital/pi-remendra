@@ -6,11 +6,11 @@
  * Each new pipeline run replaces the previous result (latest subsumes earlier
  * since every run processes all entries since the last actual branch append).
  *
- * On manual `/blackhole` trigger, pending entries are flushed to the branch
+ * On manual `/remendra` trigger, pending entries are flushed to the branch
  * and the file is cleared.
  *
  * Per-session files: each session gets its own <sessionId>-pending.json
- * under ~/.pi/agent/pi-blackhole/. This eliminates race conditions from
+ * under ~/.pi/agent/pi-remendra/. This eliminates race conditions from
  * concurrent pi sessions writing to a shared file.
  */
 import {
@@ -51,12 +51,12 @@ export interface PendingOMState {
   /**
    * All observation batches accumulated across manual mode pipeline runs.
    * Each batch preserves per-run coverage (coversUpToId) matching the normal
-   * branch-marker pattern. Used for LLM context and /blackhole flush.
+   * branch-marker pattern. Used for LLM context and /remendra flush.
    */
   observationBatches?: PendingObservation[];
   /**
    * All reflection batches accumulated across manual mode pipeline runs.
-   * Preserves per-run coverage for LLM context and /blackhole flush.
+   * Preserves per-run coverage for LLM context and /remendra flush.
    */
   reflectionBatches?: PendingReflection[];
   /**
@@ -64,7 +64,7 @@ export interface PendingOMState {
    * Each batch preserves which observations were dropped in that run.
    * Without accumulation, earlier drops are lost when the next dropper
    * run overwrites pending.dropped, causing them to be "un-dropped" on
-   * /blackhole flush.
+   * /remendra flush.
    */
   droppedBatches?: PendingDropped[];
   /** Pipeline progress cursors — persist across restarts and fork recovery. */
@@ -77,7 +77,7 @@ export interface PendingOMState {
 
 // ── Persistence ─────────────────────────────────────────────────────────────
 
-const PENDING_DIR = "pi-blackhole";
+const PENDING_DIR = "pi-remendra";
 const PENDING_SUFFIX = "-pending.json";
 const STALE_SUFFIX = "-pending.stale.json";
 
@@ -257,7 +257,7 @@ function sanitizePendingState(raw: PendingOMState): PendingOMState {
 export function savePendingObservation(sessionId: string, entry: PendingObservation): void {
   const state = readSessionState(sessionId);
   state.observation = entry;
-  // Append to accumulated batches for LLM context and /blackhole flush.
+  // Append to accumulated batches for LLM context and /remendra flush.
   // Each batch preserves per-run coverage (coversUpToId) matching the
   // normal branch-marker pattern.
   state.observationBatches = [...(state.observationBatches ?? []), entry];
@@ -270,7 +270,7 @@ export function savePendingObservation(sessionId: string, entry: PendingObservat
 export function savePendingReflection(sessionId: string, entry: PendingReflection): void {
   const state = readSessionState(sessionId);
   state.reflection = entry;
-  // Append to accumulated batches for LLM context and /blackhole flush.
+  // Append to accumulated batches for LLM context and /remendra flush.
   state.reflectionBatches = [...(state.reflectionBatches ?? []), entry];
   writeSessionState(sessionId, state);
 }
@@ -278,7 +278,7 @@ export function savePendingReflection(sessionId: string, entry: PendingReflectio
 /**
  * Save (replace) the latest dropper result for a session and
  * append to droppedBatches so no drops are lost across cycles
- * before /blackhole flush.
+ * before /remendra flush.
  */
 export function savePendingDropped(sessionId: string, entry: PendingDropped): void {
   const state = readSessionState(sessionId);

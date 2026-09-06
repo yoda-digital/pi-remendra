@@ -1,7 +1,7 @@
 /**
  * Status Overlay — shows current compaction config, OM state, and pipeline status.
  *
- * Used by `/blackhole-memory` to display runtime state.
+ * Used by `/remendra-memory` to display runtime state.
  * Opens as a floating overlay via ctx.ui.custom({ overlay: true }).
  * Press Enter/Space on "Open configure overlay" to open config overlay.
  * Esc to close.
@@ -28,7 +28,7 @@ const EMPTY_THEME: ThemeShim = {
 
 export interface StatusInfo {
   compaction: "auto" | "manual" | "off";
-  compactionEngine: "blackhole" | "pi-default";
+  compactionEngine: "remendra" | "pi-default";
   tailBehavior: "pi-default" | "minimal";
   memory: boolean;
   compactAfterTokens: number;
@@ -187,7 +187,7 @@ export function createStatusOverlay(
     // Top border + header
     lines.push(fg("border", `╭${"─".repeat(w - 2)}╮`));
     lines.push(
-      fg("border", `│ ${accent("Blackhole Status")}${" ".repeat(Math.max(0, innerW + 1 - 16))}│`),
+      fg("border", `│ ${accent("Remendra Status")}${" ".repeat(Math.max(0, innerW + 1 - 16))}│`),
     );
     lines.push(fg("border", `├${"─".repeat(w - 2)}┤`));
 
@@ -209,7 +209,7 @@ export function createStatusOverlay(
                 : dim(item.value);
           break;
         case "Engine":
-          value = item.value === "blackhole" ? success(item.value) : dim(item.value);
+          value = item.value === "remendra" ? success(item.value) : dim(item.value);
           break;
         case "Memory":
           value = item.value === "Enabled" ? success("Enabled") : muted("Disabled");

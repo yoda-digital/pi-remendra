@@ -1,6 +1,6 @@
 # Lockstep Reference
 
-Full file topology mapping between upstream repos and pi-blackhole.
+Full file topology mapping between upstream repos and pi-remendra.
 
 ## Fork point (what version we file-copied)
 
@@ -52,7 +52,7 @@ pi-vcc (sting8k/pi-vcc)          pi-observational-memory (elpapi42/pi-obs-mem)
 
         ▼  ▼  ▼  FRANKENMERGE  ▼  ▼  ▼
 
-pi-blackhole
+pi-remendra
 ├── index.ts                          ← MERGED (both entries combined)
 ├── src/core/                         ← DERIVED FROM VCC (mostly unmodified)
 │   ├── brief.ts                      ← UNCHANGED
@@ -82,7 +82,7 @@ pi-blackhole
 ├── src/commands/
 │   ├── pi-vcc.ts                     ← MODIFIED (omRuntime for noAutoCompact flush)
 │   ├── vcc-recall.ts                 ← UNCHANGED
-│   └── memory.ts                     ★ UNIQUE (/blackhole-memory command)
+│   └── memory.ts                     ★ UNIQUE (/remendra-memory command)
 ├── src/tools/
 │   └── recall.ts                     ← MODIFIED (unified: VCC recall + OM recall)
 ├── src/om/                           ← DERIVED FROM OM (renamed + modified)
@@ -142,9 +142,9 @@ pi-blackhole
 | `src/om/ledger/render-summary.ts` | OM | Added `buildExistingObservationsSummary`, `buildExistingReflectionsSummary`. | LOW — additive |
 | `src/core/load-messages.ts` | VCC | Added try/catch logging on JSON parse failures. | LOW — additive |
 | `src/core/search-entries.ts` | VCC | Minor format changes for unified recall. | LOW |
-| `src/commands/pi-vcc.ts` | VCC | Added `omRuntime` parameter and noAutoCompact flush on `/blackhole`. | MEDIUM |
+| `src/commands/pi-vcc.ts` | VCC | Added `omRuntime` parameter and noAutoCompact flush on `/remendra`. | MEDIUM |
 | `src/tools/recall.ts` | VCC | Merged OM recall-observation tool into the same file. | MEDIUM |
-| `src/details.ts` | VCC | `compactor: "blackhole"` instead of `"pi-vcc"`. | TRIVIAL |
+| `src/details.ts` | VCC | `compactor: "remendra"` instead of `"pi-vcc"`. | TRIVIAL |
 
 ### Files we eliminated (upstream still has them)
 
@@ -157,12 +157,12 @@ pi-blackhole
 | `src/commands/view.ts` (OM) | Folded into `src/commands/memory.ts` view/full subcommands |
 | `src/tools/recall-observation.ts` (OM) | Merged into `src/tools/recall.ts` which handles both `#N` transcript expansion and `[12char]` hex ID observation recall |
 
-### Files we added (unique to blackhole)
+### Files we added (unique to remendra)
 
 | File | Purpose |
 |---|---|
-| `src/core/unified-config.ts` | Single config schema that holds both VCC settings (overrideDefaultCompaction, debug) and OM settings (observeAfterTokens, etc.) plus blackhole-specific settings (noAutoCompact, memory, passive, fallback chains, cooldown) |
-| `src/commands/memory.ts` | `/blackhole-memory [status|view|full]` — pipeline status display with token metrics, pending queue inspection |
+| `src/core/unified-config.ts` | Single config schema that holds both VCC settings (overrideDefaultCompaction, debug) and OM settings (observeAfterTokens, etc.) plus remendra-specific settings (noAutoCompact, memory, passive, fallback chains, cooldown) |
+| `src/commands/memory.ts` | `/remendra-memory [status|view|full]` — pipeline status display with token metrics, pending queue inspection |
 | `src/om/cooldown.ts` | Model cooldown persistence — records failed models to disk so they're skipped on retry, survives Pi restarts |
 | `src/om/pending.ts` | Pending observation/reflection/dropper buffer for `noAutoCompact` mode — stores observations to disk instead of writing branch markers |
 | `src/om/reverse-recall.ts` | Bi-directional recall coupling: hex ID → transcript entry, `#N` index → OM observation/reflection |

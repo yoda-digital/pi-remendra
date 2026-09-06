@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
-const testDir = join(tmpdir(), `pi-blackhole-runtime-test-${Date.now()}`);
+const testDir = join(tmpdir(), `pi-remendra-runtime-test-${Date.now()}`);
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
   getAgentDir: () => testDir,
@@ -16,7 +16,7 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function writeConfig(data: unknown, filename = "pi-blackhole/pi-blackhole-config.json"): string {
+function writeConfig(data: unknown, filename = "pi-remendra/pi-remendra-config.json"): string {
   const dir = join(testDir, dirname(filename));
   mkdirSync(dir, { recursive: true });
   const path = join(testDir, filename);
@@ -25,7 +25,7 @@ function writeConfig(data: unknown, filename = "pi-blackhole/pi-blackhole-config
 }
 
 function cooldownFile() {
-  return join(testDir, "pi-blackhole", "pi-blackhole-cooldown.json");
+  return join(testDir, "pi-remendra", "pi-remendra-cooldown.json");
 }
 
 function readCooldownFile(): Record<string, unknown> {
@@ -1187,7 +1187,7 @@ describe("Runtime pipeline cursors", () => {
 it("loads cursors from pending state", async () => {
   const { Runtime } = await import("../src/om/runtime.js");
   // Pre-populate a pending file with cursors
-  const pendingDir = join(testDir, "pi-blackhole");
+  const pendingDir = join(testDir, "pi-remendra");
   mkdirSync(pendingDir, { recursive: true });
   const pending = {
     cursors: {
@@ -1217,7 +1217,7 @@ it("saves cursors to pending state", async () => {
 
   // Read back from file
   const raw = JSON.parse(
-    readFileSync(join(testDir, "pi-blackhole", "test-session-pending.json"), "utf-8"),
+    readFileSync(join(testDir, "pi-remendra", "test-session-pending.json"), "utf-8"),
   );
   expect(raw.cursors.observer.entryId).toBe("obs-save");
   expect(raw.cursors.observer.state).toBe("recorded");
@@ -1251,7 +1251,7 @@ it("cursor deletion is persisted across save/load", async () => {
 
 it("handles corrupt pending file gracefully", async () => {
   const { Runtime } = await import("../src/om/runtime.js");
-  const pendingDir = join(testDir, "pi-blackhole");
+  const pendingDir = join(testDir, "pi-remendra");
   mkdirSync(pendingDir, { recursive: true });
   writeFileSync(join(pendingDir, "test-session-pending.json"), "not valid json");
 

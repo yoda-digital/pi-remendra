@@ -455,7 +455,7 @@ function maybeLaunchConsolidation(pi: ExtensionAPI, runtime: Runtime, ctx: Conso
   if (runtime.config.memory === false) return;
 
   // Provider-aware skip: another engine owns this provider (e.g. Codex native
-  // compaction); blackhole also steps aside from observational-memory
+  // compaction); remendra also steps aside from observational-memory
   // consolidation so it never touches opaque checkpoints.
   // EXPERIMENTAL compat shim — do not extend; see src/core/provider-skip.ts.
   if (matchesSkippedProvider(runtime.config, ctx.model)) return;

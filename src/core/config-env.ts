@@ -1,5 +1,5 @@
 /**
- * Declarative PI_BLACKHOLE_* environment overrides for the unified config.
+ * Declarative PI_REMENDRA_* environment overrides for the unified config.
  *
  * Single source of truth for the env-var surface, shared by:
  *  - ConfigManager (pi-base/config-manager.ts) — modal + om-off/om-on path
@@ -74,30 +74,30 @@ export function applyEnvOverrides<T extends object>(
 }
 
 /**
- * The declarative PI_BLACKHOLE_* env-var map. Keys are UnifiedConfig field
+ * The declarative PI_REMENDRA_* env-var map. Keys are UnifiedConfig field
  * names; values are the env var names (or parsers for special types).
  */
 export const DECLARATIVE_ENV_OVERRIDES: Record<string, EnvOverride> = {
   // Booleans
-  memory: "PI_BLACKHOLE_MEMORY",
-  debug: "PI_BLACKHOLE_DEBUG",
-  debugLog: "PI_BLACKHOLE_DEBUG_LOG",
-  sessionFallback: "PI_BLACKHOLE_SESSION_FALLBACK",
-  fullFoldAlways: "PI_BLACKHOLE_FULL_FOLD_ALWAYS",
+  memory: "PI_REMENDRA_MEMORY",
+  debug: "PI_REMENDRA_DEBUG",
+  debugLog: "PI_REMENDRA_DEBUG_LOG",
+  sessionFallback: "PI_REMENDRA_SESSION_FALLBACK",
+  fullFoldAlways: "PI_REMENDRA_FULL_FOLD_ALWAYS",
   // Positive integers
-  compactAfterTokens: "PI_BLACKHOLE_COMPACT_AFTER_TOKENS",
-  observeAfterTokens: "PI_BLACKHOLE_OBSERVE_AFTER_TOKENS",
-  reflectAfterTokens: "PI_BLACKHOLE_REFLECT_AFTER_TOKENS",
-  observationsPoolMaxTokens: "PI_BLACKHOLE_OBSERVATIONS_POOL_MAX_TOKENS",
-  observationsPoolTargetTokens: "PI_BLACKHOLE_OBSERVATIONS_POOL_TARGET_TOKENS",
-  reflectorInputMaxTokens: "PI_BLACKHOLE_REFLECTOR_INPUT_MAX_TOKENS",
-  dropperInputMaxTokens: "PI_BLACKHOLE_DROPPER_INPUT_MAX_TOKENS",
-  observerChunkMaxTokens: "PI_BLACKHOLE_OBSERVER_CHUNK_MAX_TOKENS",
-  observerPreambleMaxTokens: "PI_BLACKHOLE_OBSERVER_PREAMBLE_MAX_TOKENS",
-  agentMaxTurns: "PI_BLACKHOLE_AGENT_MAX_TURNS",
+  compactAfterTokens: "PI_REMENDRA_COMPACT_AFTER_TOKENS",
+  observeAfterTokens: "PI_REMENDRA_OBSERVE_AFTER_TOKENS",
+  reflectAfterTokens: "PI_REMENDRA_REFLECT_AFTER_TOKENS",
+  observationsPoolMaxTokens: "PI_REMENDRA_OBSERVATIONS_POOL_MAX_TOKENS",
+  observationsPoolTargetTokens: "PI_REMENDRA_OBSERVATIONS_POOL_TARGET_TOKENS",
+  reflectorInputMaxTokens: "PI_REMENDRA_REFLECTOR_INPUT_MAX_TOKENS",
+  dropperInputMaxTokens: "PI_REMENDRA_DROPPER_INPUT_MAX_TOKENS",
+  observerChunkMaxTokens: "PI_REMENDRA_OBSERVER_CHUNK_MAX_TOKENS",
+  observerPreambleMaxTokens: "PI_REMENDRA_OBSERVER_PREAMBLE_MAX_TOKENS",
+  agentMaxTurns: "PI_REMENDRA_AGENT_MAX_TURNS",
   // Non-negative integer (0 = disabled, unset = inherit pi default)
   providerIdleTimeoutMs: {
-    var: "PI_BLACKHOLE_PROVIDER_IDLE_TIMEOUT_MS",
+    var: "PI_REMENDRA_PROVIDER_IDLE_TIMEOUT_MS",
     parse: (raw: string) => {
       const n = Number(raw);
       return Number.isInteger(n) && n >= 0 ? n : undefined;
@@ -105,7 +105,7 @@ export const DECLARATIVE_ENV_OVERRIDES: Record<string, EnvOverride> = {
   },
   // Float in (0, 1]
   dropperPressureThreshold: {
-    var: "PI_BLACKHOLE_DROPPER_PRESSURE_THRESHOLD",
+    var: "PI_REMENDRA_DROPPER_PRESSURE_THRESHOLD",
     parse: (raw: string) => {
       const n = Number.parseFloat(raw);
       return Number.isFinite(n) && n > 0 && n <= 1 ? n : undefined;
@@ -113,7 +113,7 @@ export const DECLARATIVE_ENV_OVERRIDES: Record<string, EnvOverride> = {
   },
   // Float in (0, 1]
   dropperPoolFullnessThreshold: {
-    var: "PI_BLACKHOLE_DROPPER_POOL_FULLNESS_THRESHOLD",
+    var: "PI_REMENDRA_DROPPER_POOL_FULLNESS_THRESHOLD",
     parse: (raw: string) => {
       const n = Number.parseFloat(raw);
       return Number.isFinite(n) && n > 0 && n <= 1 ? n : undefined;
@@ -121,7 +121,7 @@ export const DECLARATIVE_ENV_OVERRIDES: Record<string, EnvOverride> = {
   },
   // Comma-separated provider skip list ("provider" or "provider:api")
   skipForProviders: {
-    var: "PI_BLACKHOLE_SKIP_PROVIDERS",
+    var: "PI_REMENDRA_SKIP_PROVIDERS",
     parse: (raw: string) =>
       raw
         .split(",")
@@ -131,7 +131,7 @@ export const DECLARATIVE_ENV_OVERRIDES: Record<string, EnvOverride> = {
   // Enum overrides — custom parsers because canonical only auto-handles
   // booleans and positive integers.
   compaction: {
-    var: "PI_BLACKHOLE_COMPACTION",
+    var: "PI_REMENDRA_COMPACTION",
     parse: (raw: string) => {
       const trimmed = raw.trim().toLowerCase();
       return ["auto", "manual", "off"].includes(trimmed)
@@ -140,16 +140,16 @@ export const DECLARATIVE_ENV_OVERRIDES: Record<string, EnvOverride> = {
     },
   },
   compactionEngine: {
-    var: "PI_BLACKHOLE_COMPACTION_ENGINE",
+    var: "PI_REMENDRA_COMPACTION_ENGINE",
     parse: (raw: string) => {
       const trimmed = raw.trim().toLowerCase();
-      return ["blackhole", "pi-default"].includes(trimmed)
-        ? (trimmed as "blackhole" | "pi-default")
+      return ["remendra", "pi-default"].includes(trimmed)
+        ? (trimmed as "remendra" | "pi-default")
         : undefined;
     },
   },
   compactionSummaryMode: {
-    var: "PI_BLACKHOLE_COMPACTION_SUMMARY_MODE",
+    var: "PI_REMENDRA_COMPACTION_SUMMARY_MODE",
     parse: (raw: string) => {
       const trimmed = raw.trim().toLowerCase();
       return ["default", "append"].includes(trimmed)
@@ -158,7 +158,7 @@ export const DECLARATIVE_ENV_OVERRIDES: Record<string, EnvOverride> = {
     },
   },
   midRunCompaction: {
-    var: "PI_BLACKHOLE_MID_RUN_COMPACTION",
+    var: "PI_REMENDRA_MID_RUN_COMPACTION",
     parse: (raw: string) => {
       const trimmed = raw.trim().toLowerCase();
       return ["resume", "pause", "off"].includes(trimmed)

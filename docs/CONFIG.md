@@ -1,8 +1,10 @@
 > This reference describes the legacy engine. V2 configuration is documented in [README.md](../README.md), [V2.md](V2.md), and [example-config-v2.json](../example-config-v2.json).
 
+> **Note:** All `PI_BLACKHOLE_*` environment variables have been replaced by `PI_REMENDRA_*` equivalents (e.g. `PI_BLACKHOLE_PASSIVE` → `PI_REMENDRA_PASSIVE`, `PI_BLACKHOLE_HOME` → `PI_REMENDRA_HOME`, `PI_BLACKHOLE_ENVIRONMENT` → `PI_REMENDRA_ENVIRONMENT`). The old names are no longer recognized.
+
 # Configuration Reference — New Config Surface
 
-Pi-blackhole's configuration lives at `~/.pi/agent/pi-blackhole/pi-blackhole-config.json`. This document describes the new unified config keys introduced by the config simplification.
+Pi-remendra's configuration lives at `~/.pi/agent/pi-remendra/pi-remendra-config.json`. This document describes the new unified config keys introduced by the config simplification.
 
 ## Config file safety
 
@@ -10,7 +12,7 @@ The config file must contain **valid JSON**. A trailing comma, partial write, or
 
 **Current behavior:**
 - Invalid JSON is logged as a warning and surfaced as a yellow notification in the TUI
-- The `/blackhole configure` overlay shows a red error banner and **blocks Ctrl+S** until the file is fixed
+- The `/remendra configure` overlay shows a red error banner and **blocks Ctrl+S** until the file is fixed
 - The overlay preserves unknown keys (e.g. `observerModel`, `reflectorModel`) on valid files — only keys in the overlay's field list are managed there
 - Changes made via the overlay take effect **immediately** — no session restart needed (the runtime reloads config from disk after save)
 
@@ -22,7 +24,7 @@ The config file must contain **valid JSON**. A trailing comma, partial write, or
 {
   // ── Compaction ──
   "compaction": "auto",           // "auto" | "manual" | "off"
-  "compactionEngine": "blackhole", // "blackhole" | "pi-default"
+  "compactionEngine": "remendra", // "remendra" | "pi-default"
   "tailBehavior": "minimal",   // "pi-default" | "minimal"
   "midRunCompaction": "off",    // "resume" | "pause" | "off" (default: off)
   "compactionSummaryMode": "default", // "default" | "append" (default: "default")
@@ -66,11 +68,11 @@ The config file must contain **valid JSON**. A trailing comma, partial write, or
 
 Controls when compaction triggers. Replaces the old `noAutoCompact` and partially replaces `passive`.
 
-| Value | Auto-trigger | `/compact` (Pi built-in) | `/blackhole` |
+| Value | Auto-trigger | `/compact` (Pi built-in) | `/remendra` |
 |-------|:---:|:---:|:---:|
-| `"auto"` | blackhole fires at `compactAfterTokens` threshold ✓ | blackhole handles | blackhole handles |
-| `"manual"` | skipped | Pi handles ✓ | blackhole handles |
-| `"off"` | skipped (Pi handles) | Pi handles ✓ | blackhole handles |
+| `"auto"` | remendra fires at `compactAfterTokens` threshold ✓ | remendra handles | remendra handles |
+| `"manual"` | skipped | Pi handles ✓ | remendra handles |
+| `"off"` | skipped (Pi handles) | Pi handles ✓ | remendra handles |
 
 **Examples:**
 
@@ -78,41 +80,41 @@ Controls when compaction triggers. Replaces the old `noAutoCompact` and partiall
 // Auto-compact (default)
 { "compaction": "auto" }
 
-// Manual only — /compact falls through to Pi, /blackhole uses blackhole pipeline
+// Manual only — /compact falls through to Pi, /remendra uses remendra pipeline
 { "compaction": "manual" }
 
-// Blackhole skips auto + /compact (Pi handles both), /blackhole still works
+// Remendra skips auto + /compact (Pi handles both), /remendra still works
 { "compaction": "off" }
 ```
 
 ### `compactionEngine`
 
-Controls which engine generates compaction summaries. Only meaningful when `compaction: "auto"` — for `"manual"`/`"off"` the engine is irrelevant because blackhole's hook lets Pi handle everything except `/blackhole`.
+Controls which engine generates compaction summaries. Only meaningful when `compaction: "auto"` — for `"manual"`/`"off"` the engine is irrelevant because remendra's hook lets Pi handle everything except `/remendra`.
 
 Replaces the old `overrideDefaultCompaction`.
 
 | Value | Behavior |
 |-------|----------|
-| `"blackhole"` | Blackhole's `compile()` generates a structured summary and injects OM content (default). |
-| `"pi-default"` | Pi handles ALL compaction (timing + execution). Blackhole's trigger skips entirely. Blackhole only activates for `/blackhole` command. |
+| `"remendra"` | Remendra's `compile()` generates a structured summary and injects OM content (default). |
+| `"pi-default"` | Pi handles ALL compaction (timing + execution). Remendra's trigger skips entirely. Remendra only activates for `/remendra` command. |
 
 **Interaction matrix:**
 
-| `compaction` | `compactionEngine` | Auto-trigger | `/compact` | `/blackhole` |
+| `compaction` | `compactionEngine` | Auto-trigger | `/compact` | `/remendra` |
 |:---:|:---:|---|---|---|
-| auto | blackhole | blackhole fires at `compactAfterTokens` ✓ | blackhole handles | blackhole handles |
-| auto | pi-default | trigger skips (Pi decides when) | Pi handles | blackhole handles |
-| manual | (any) | skipped | Pi handles ✓ | blackhole handles |
-| off | (any) | skipped | Pi handles ✓ | blackhole handles |
+| auto | remendra | remendra fires at `compactAfterTokens` ✓ | remendra handles | remendra handles |
+| auto | pi-default | trigger skips (Pi decides when) | Pi handles | remendra handles |
+| manual | (any) | skipped | Pi handles ✓ | remendra handles |
+| off | (any) | skipped | Pi handles ✓ | remendra handles |
 
 ### `tailBehavior`
 
-Controls how much of the recent transcript stays *visible* after compaction. Only applies when `compactionEngine: "blackhole"`.
+Controls how much of the recent transcript stays *visible* after compaction. Only applies when `compactionEngine: "remendra"`.
 
 | Value | Behavior |
 |-------|----------|
 | `"pi-default"` | Use Pi's `firstKeptEntryId` — respects Pi's `keepRecentTokens` (~20k tokens kept). Messages before Pi's cut are compiled into the summary and removed from view. |
-| `"minimal"` | Keep only the last user message, unless Pi provides a later safe split-turn boundary for an oversized current turn. Everything before the chosen boundary gets compiled and removed (default for both auto-triggered and manual `/blackhole`). |
+| `"minimal"` | Keep only the last user message, unless Pi provides a later safe split-turn boundary for an oversized current turn. Everything before the chosen boundary gets compiled and removed (default for both auto-triggered and manual `/remendra`). |
 
 **Visual comparison:**
 
@@ -132,8 +134,8 @@ minimal (last user at m5):
 
 | Invocation | `tailBehavior` config | Effective |
 |------------|:--------------------:|:---------:|
-| Manual `/blackhole` | not set | `"minimal"` (aggressive) |
-| Manual `/blackhole` | `"pi-default"` | `"pi-default"` |
+| Manual `/remendra` | not set | `"minimal"` (aggressive) |
+| Manual `/remendra` | `"pi-default"` | `"pi-default"` |
 | Auto-triggered | not set | `"minimal"` (aggressive) |
 | Auto-triggered | `"minimal"` | `"minimal"` |
 
@@ -151,7 +153,7 @@ minimal (last user at m5):
 
 Controls the **mid-run** auto-compaction trigger. Pi's `agent_end` event only fires when a run exits — during long tool loops (agent calling tools turn after turn) the threshold would otherwise never be evaluated, and accumulated tokens could blow far past `compactAfterTokens` before compaction had any chance to run. This trigger evaluates the threshold at every `turn_end` (after each assistant message + tool executions) while the agent is still working.
 
-Only applies when `compaction: "auto"` and `compactionEngine: "blackhole"`.
+Only applies when `compaction: "auto"` and `compactionEngine: "remendra"`.
 
 | Value | Behavior |
 |-------|----------|
@@ -159,9 +161,9 @@ Only applies when `compaction: "auto"` and `compactionEngine: "blackhole"`.
 | `"pause"` | Use Pi's native interrupting `ctx.compact()` at the threshold, then stop. The user continues manually. |
 | `"off"` | No mid-run evaluation; only check the threshold when the agent finishes a run (default). |
 
-`"resume"` reuses Pi's native summary, `session_before_compact`, session-entry, and context-rebuild pipeline. Blackhole's runtime adapter suppresses only the compaction method's initial internal quiesce (`abort`, plus disconnect on older Pi), then refreshes the low-level loop from the compacted `agent.state.messages` before another provider request. Completed tools stay paired, the active run signal is not aborted, background agents do not receive a false interrupt, and nested runners keep awaiting their original prompt promise.
+`"resume"` reuses Pi's native summary, `session_before_compact`, session-entry, and context-rebuild pipeline. Remendra's runtime adapter suppresses only the compaction method's initial internal quiesce (`abort`, plus disconnect on older Pi), then refreshes the low-level loop from the compacted `agent.state.messages` before another provider request. Completed tools stay paired, the active run signal is not aborted, background agents do not receive a false interrupt, and nested runners keep awaiting their original prompt promise.
 
-**Compatibility is fail-closed.** The adapter recognizes the known Pi 0.81 legacy and Pi 0.84 connected-listener compact shapes. If Pi internals drift, `"resume"` refuses the mid-run attempt, leaves the current run alive, reports the incompatibility, and suspends retries at that pressure level. It never falls back to the old abort + `blackhole-resume` path.
+**Compatibility is fail-closed.** The adapter recognizes the known Pi 0.81 legacy and Pi 0.84 connected-listener compact shapes. If Pi internals drift, `"resume"` refuses the mid-run attempt, leaves the current run alive, reports the incompatibility, and suspends retries at that pressure level. It never falls back to the old abort + `remendra-resume` path.
 
 `"pause"` is intentionally different: it calls public `ctx.compact()`, which aborts the active run by design. That abort may propagate to extensions which treat the run signal as user cancellation, so use `"resume"` for transparent/subagent workflows.
 
@@ -180,13 +182,13 @@ Only applies when `compaction: "auto"` and `compactionEngine: "blackhole"`.
 
 ### `compactAfterTokens`
 
-Token threshold for auto-compaction. When `compaction: "auto"` and accumulated tokens since the last compaction exceed this threshold, compaction triggers automatically — both mid-run (see `midRunCompaction`) and when the agent finishes a run. If the engine is `pi-default`, blackhole's trigger returns early before checking tokens.
+Token threshold for auto-compaction. When `compaction: "auto"` and accumulated tokens since the last compaction exceed this threshold, compaction triggers automatically — both mid-run (see `midRunCompaction`) and when the agent finishes a run. If the engine is `pi-default`, remendra's trigger returns early before checking tokens.
 
 | Type | Default |
 |------|---------|
 | number | 81000 |
 
-**The interaction with Pi's threshold:** Pi has its own `keepRecentTokens` default (~20k tokens). Blackhole's threshold is independent — it's the trigger point, not the keep point. When blackhole's trigger fires, `tailBehavior` determines how much is actually kept visible.
+**The interaction with Pi's threshold:** Pi has its own `keepRecentTokens` default (~20k tokens). Remendra's threshold is independent — it's the trigger point, not the keep point. When remendra's trigger fires, `tailBehavior` determines how much is actually kept visible.
 
 ## Observational Memory Section
 
@@ -206,7 +208,7 @@ Controls whether observational memory workers run and whether OM content is inje
 { "memory": true }
 
 // Compaction only, no OM workers
-{ "memory": false, "compaction": "auto", "compactionEngine": "blackhole" }
+{ "memory": false, "compaction": "auto", "compactionEngine": "remendra" }
 ```
 
 ### `sessionFallback`
@@ -319,7 +321,7 @@ Body-idle timeout for background provider streams (observer/reflector/dropper wo
 - **`0`** — explicitly disabled (no wrapper applied).
 - **`> 0`** — wait up to this many milliseconds for a response body after the request is sent.
 
-Accepted via plain config or `PI_BLACKHOLE_PROVIDER_IDLE_TIMEOUT_MS`. Negative values are rejected. WebSocket transports are not affected.
+Accepted via plain config or `PI_REMENDRA_PROVIDER_IDLE_TIMEOUT_MS`. Negative values are rejected. WebSocket transports are not affected.
 
 | Type | Default | Range |
 |------|---------|-------|
@@ -327,7 +329,7 @@ Accepted via plain config or `PI_BLACKHOLE_PROVIDER_IDLE_TIMEOUT_MS`. Negative v
 
 ## Model Configuration
 
-Model overrides are **first-class config keys**, not "unknown keys". They are fully parsed and validated by `loadUnifiedConfig()` and are **only editable via direct file edit** (the `/blackhole configure` overlay preserves them but does not surface them).
+Model overrides are **first-class config keys**, not "unknown keys". They are fully parsed and validated by `loadUnifiedConfig()` and are **only editable via direct file edit** (the `/remendra configure` overlay preserves them but does not surface them).
 
 ### Primary models
 
@@ -381,7 +383,7 @@ Each model config supports the following fields:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `debug` | boolean | false | Writes detailed debug snapshots to `/tmp/pi-blackhole-debug.json` |
+| `debug` | boolean | false | Writes detailed debug snapshots to `/tmp/pi-remendra-debug.json` |
 | `debugLog` | boolean | false | Writes structured JSONL debug logs to the agent directory |
 
 ## Deprecated Keys
@@ -404,10 +406,10 @@ Boolean parsing accepts `1`, `true`, `yes`, `on` (and `0`, `false`, `no`, `off`)
 
 | Variable | Overrides | Example |
 |----------|-----------|---------|
-| `PI_BLACKHOLE_COMPACTION` | `compaction` (`auto` \| `manual` \| `off`) | `PI_BLACKHOLE_COMPACTION=manual` |
-| `PI_BLACKHOLE_COMPACTION_ENGINE` | `compactionEngine` (`blackhole` \| `pi-default`) | `PI_BLACKHOLE_COMPACTION_ENGINE=pi-default` |
-| `PI_BLACKHOLE_MID_RUN_COMPACTION` | `midRunCompaction` (`resume` \| `pause` \| `off`) | `PI_BLACKHOLE_MID_RUN_COMPACTION=resume` |
-| `PI_BLACKHOLE_COMPACTION_SUMMARY_MODE` | `compactionSummaryMode` (`default` \| `append`) | `PI_BLACKHOLE_COMPACTION_SUMMARY_MODE=append` |
+| `PI_REMENDRA_COMPACTION` | `compaction` (`auto` \| `manual` \| `off`) | `PI_REMENDRA_COMPACTION=manual` |
+| `PI_REMENDRA_COMPACTION_ENGINE` | `compactionEngine` (`remendra` \| `pi-default`) | `PI_REMENDRA_COMPACTION_ENGINE=pi-default` |
+| `PI_REMENDRA_MID_RUN_COMPACTION` | `midRunCompaction` (`resume` \| `pause` \| `off`) | `PI_REMENDRA_MID_RUN_COMPACTION=resume` |
+| `PI_REMENDRA_COMPACTION_SUMMARY_MODE` | `compactionSummaryMode` (`default` \| `append`) | `PI_REMENDRA_COMPACTION_SUMMARY_MODE=append` |
 
 ### Passive mode (legacy)
 
@@ -415,7 +417,7 @@ Sets `compaction: "off"` + `memory: false` when truthy. All three names remain s
 
 | Variable | Notes |
 |----------|-------|
-| `PI_BLACKHOLE_PASSIVE` | Current name |
+| `PI_REMENDRA_PASSIVE` | Current name |
 | `PI_VCC_OM_PASSIVE` | Legacy pi-vcc name |
 | `PI_OBSERVATIONAL_MEMORY_PASSIVE` | Legacy pi-observational-memory name |
 
@@ -425,40 +427,40 @@ Boolean fields:
 
 | Variable | Overrides |
 |----------|-----------|
-| `PI_BLACKHOLE_MEMORY` | `memory` |
-| `PI_BLACKHOLE_DEBUG` | `debug` (debug snapshots) |
-| `PI_BLACKHOLE_DEBUG_LOG` | `debugLog` (JSONL logging) |
-| `PI_BLACKHOLE_SESSION_FALLBACK` | `sessionFallback` |
-| `PI_BLACKHOLE_FULL_FOLD_ALWAYS` | `fullFoldAlways` |
+| `PI_REMENDRA_MEMORY` | `memory` |
+| `PI_REMENDRA_DEBUG` | `debug` (debug snapshots) |
+| `PI_REMENDRA_DEBUG_LOG` | `debugLog` (JSONL logging) |
+| `PI_REMENDRA_SESSION_FALLBACK` | `sessionFallback` |
+| `PI_REMENDRA_FULL_FOLD_ALWAYS` | `fullFoldAlways` |
 
 Positive-integer fields (invalid values fall back):
 
 | Variable | Overrides |
 |----------|-----------|
-| `PI_BLACKHOLE_COMPACT_AFTER_TOKENS` | `compactAfterTokens` |
-| `PI_BLACKHOLE_OBSERVE_AFTER_TOKENS` | `observeAfterTokens` |
-| `PI_BLACKHOLE_REFLECT_AFTER_TOKENS` | `reflectAfterTokens` |
-| `PI_BLACKHOLE_OBSERVATIONS_POOL_MAX_TOKENS` | `observationsPoolMaxTokens` |
-| `PI_BLACKHOLE_OBSERVATIONS_POOL_TARGET_TOKENS` | `observationsPoolTargetTokens` |
-| `PI_BLACKHOLE_REFLECTOR_INPUT_MAX_TOKENS` | `reflectorInputMaxTokens` |
-| `PI_BLACKHOLE_DROPPER_INPUT_MAX_TOKENS` | `dropperInputMaxTokens` |
-| `PI_BLACKHOLE_OBSERVER_CHUNK_MAX_TOKENS` | `observerChunkMaxTokens` |
-| `PI_BLACKHOLE_OBSERVER_PREAMBLE_MAX_TOKENS` | `observerPreambleMaxTokens` |
-| `PI_BLACKHOLE_AGENT_MAX_TURNS` | `agentMaxTurns` |
-| `PI_BLACKHOLE_PROVIDER_IDLE_TIMEOUT_MS` | `providerIdleTimeoutMs` |
+| `PI_REMENDRA_COMPACT_AFTER_TOKENS` | `compactAfterTokens` |
+| `PI_REMENDRA_OBSERVE_AFTER_TOKENS` | `observeAfterTokens` |
+| `PI_REMENDRA_REFLECT_AFTER_TOKENS` | `reflectAfterTokens` |
+| `PI_REMENDRA_OBSERVATIONS_POOL_MAX_TOKENS` | `observationsPoolMaxTokens` |
+| `PI_REMENDRA_OBSERVATIONS_POOL_TARGET_TOKENS` | `observationsPoolTargetTokens` |
+| `PI_REMENDRA_REFLECTOR_INPUT_MAX_TOKENS` | `reflectorInputMaxTokens` |
+| `PI_REMENDRA_DROPPER_INPUT_MAX_TOKENS` | `dropperInputMaxTokens` |
+| `PI_REMENDRA_OBSERVER_CHUNK_MAX_TOKENS` | `observerChunkMaxTokens` |
+| `PI_REMENDRA_OBSERVER_PREAMBLE_MAX_TOKENS` | `observerPreambleMaxTokens` |
+| `PI_REMENDRA_AGENT_MAX_TURNS` | `agentMaxTurns` |
+| `PI_REMENDRA_PROVIDER_IDLE_TIMEOUT_MS` | `providerIdleTimeoutMs` |
 
 Float field (must be in `(0, 1]`):
 
 | Variable | Overrides |
 |----------|-----------|
-| `PI_BLACKHOLE_DROPPER_PRESSURE_THRESHOLD` | `dropperPressureThreshold` |
-| `PI_BLACKHOLE_DROPPER_POOL_FULLNESS_THRESHOLD` | `dropperPoolFullnessThreshold` |
+| `PI_REMENDRA_DROPPER_PRESSURE_THRESHOLD` | `dropperPressureThreshold` |
+| `PI_REMENDRA_DROPPER_POOL_FULLNESS_THRESHOLD` | `dropperPoolFullnessThreshold` |
 
 ### Paths and internals
 
 | Variable | Purpose |
 |----------|---------|
-| `PI_CODING_AGENT_DIR` | Overrides the pi agent data directory (config lives at `<dir>/pi-blackhole/pi-blackhole-config.json`) |
+| `PI_CODING_AGENT_DIR` | Overrides the pi agent data directory (config lives at `<dir>/pi-remendra/pi-remendra-config.json`) |
 | `PI_VCC_COMPACT_INSTRUCTION` | Internal sentinel for the pi-default compaction engine — not a user override |
 
 ## Complete Examples
@@ -468,7 +470,7 @@ Float field (must be in `(0, 1]`):
 ```json
 {
   "compaction": "auto",
-  "compactionEngine": "blackhole",
+  "compactionEngine": "remendra",
   "tailBehavior": "minimal",
   "memory": true
 }
@@ -479,13 +481,13 @@ Float field (must be in `(0, 1]`):
 ```json
 {
   "compaction": "manual",
-  "compactionEngine": "blackhole",
+  "compactionEngine": "remendra",
   "tailBehavior": "minimal",
   "memory": false
 }
 ```
 
-### Pi's engine, no blackhole involvement
+### Pi's engine, no remendra involvement
 
 ```json
 {
@@ -531,13 +533,13 @@ Float field (must be in `(0, 1]`):
 
 ## Viewing & Editing
 
-- **Config file**: `~/.pi/agent/pi-blackhole/pi-blackhole-config.json`
-- **TUI overlay**: `/blackhole settings` (alias: `/blackhole configure`) — opens an interactive overlay with ↑↓ navigation, Enter to toggle, Ctrl+S to save
-- **CLI subcommands**: `/blackhole om-off` / `/blackhole om-on` — toggle memory without editing the file
+- **Config file**: `~/.pi/agent/pi-remendra/pi-remendra-config.json`
+- **TUI overlay**: `/remendra settings` (alias: `/remendra configure`) — opens an interactive overlay with ↑↓ navigation, Enter to toggle, Ctrl+S to save
+- **CLI subcommands**: `/remendra om-off` / `/remendra om-on` — toggle memory without editing the file
 
 ### `compactionSummaryMode`
 
-Controls how auto-compaction summaries are stored and presented to the model. Only applies when `compaction: "auto"` and `compactionEngine: "blackhole"`. Explicit `/blackhole` triggers independent of this mode and always folds the chain into a clean segment.
+Controls how auto-compaction summaries are stored and presented to the model. Only applies when `compaction: "auto"` and `compactionEngine: "remendra"`. Explicit `/remendra` triggers independent of this mode and always folds the chain into a clean segment.
 
 | Value | Behavior |
 |-------|----------|
@@ -546,7 +548,7 @@ Controls how auto-compaction summaries are stored and presented to the model. On
 
 **In `append` mode:**
 - Auto-compactions append a new segment to the chain; earlier segments stay visible to the model.
-- Explicit `/blackhole` rebases the active chain into one clean segment and starts a new chain.
+- Explicit `/remendra` rebases the active chain into one clean segment and starts a new chain.
 - Legacy v1 summaries (from before this feature) enter through one marked rebase.
 - When the projected chain passes half of the model's context window, the next auto-compaction folds it back into one segment.
 - A new `context` hook projects segments before each model call and **fails closed to the fallback** on any malformed state.

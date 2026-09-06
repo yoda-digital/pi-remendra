@@ -88,7 +88,7 @@ export class BackgroundLearner {
           inputBudget,
           reservation,
           config.dailyTokenBudget,
-          config.jobTimeoutMs + 2000,
+          config.jobTimeoutMs + 5000,
         ]);
         if (!job)
           return learned
@@ -128,8 +128,10 @@ export class BackgroundLearner {
               usage,
               attempt + 1 < config.maxAttempts && !signal.aborted ? 0 : 30000,
             ]);
-          } catch {
-            /* A lost lease is recovered conservatively on the next reservation. */
+          } catch (failError) {
+            // Log the failJob error — budget reservation will leak until recoverJobs sweeps it
+            const msg = failError instanceof Error ? failError.message : String(failError);
+            console.error("[remendra] failJob failed:", msg, "job:", job.id);
           }
           if (signal.aborted || !stillCurrent())
             return `Learning paused; ${learned} memories committed`;

@@ -14,7 +14,7 @@ import { registerCompactionContextHook } from "./src/hooks/compaction-context.js
 import { registerPiVccCommand } from "./src/commands/pi-vcc";
 import { registerMemoryCommand } from "./src/commands/memory";
 import { registerVccRecallCommand } from "./src/commands/vcc-recall";
-import { registerBlackholeExportCommand } from "./src/commands/blackhole-export";
+import { registerRemendraExportCommand } from "./src/commands/remendra-export";
 import { registerConsolidationTrigger } from "./src/om/consolidation.js";
 import { registerCompactionTrigger } from "./src/om/compaction-trigger.js";
 import { registerRecallTool } from "./src/tools/recall";
@@ -28,7 +28,7 @@ export default async (pi: ExtensionAPI) => {
   // The adapter is reload-idempotent and fails closed on unknown Pi internals.
   await installHostInlineCompactionAdapter();
   // ── Bridge: capture custom provider stream functions for jiti-loaded agents ──
-  // pi-blackhole's consolidation agents are loaded via jiti with moduleCache: false,
+  // pi-remendra's consolidation agents are loaded via jiti with moduleCache: false,
   // which creates a separate pi-ai instance whose apiProviderRegistry lacks custom
   // providers (e.g., claude-bridge registered by other extensions). This bridge stores
   // streamSimple functions in a Symbol.for() global so agents can access them without
@@ -37,7 +37,7 @@ export default async (pi: ExtensionAPI) => {
   // Capture custom provider streams from Pi's model registry before each run.
   // This works regardless of extension load order and includes providers added
   // after startup.
-  const PROVIDER_STREAMS_KEY = Symbol.for("pi-blackhole:provider-streams");
+  const PROVIDER_STREAMS_KEY = Symbol.for("pi-remendra:provider-streams");
   const providerStreams: Map<string, Function> = ((globalThis as any)[PROVIDER_STREAMS_KEY] ??=
     new Map());
   pi.on("agent_start", (_event: unknown, ctx: any) => {
@@ -59,9 +59,9 @@ export default async (pi: ExtensionAPI) => {
 
   // Commands
   registerPiVccCommand(pi, omRuntime); // /pi-vcc (needs runtime for noAutoCompact flush)
-  registerMemoryCommand(pi, omRuntime); // /blackhole-memory [status|view|full]
-  registerVccRecallCommand(pi); // /blackhole-recall <query>
-  registerBlackholeExportCommand(pi); // /blackhole-export [out:<path>]
+  registerMemoryCommand(pi, omRuntime); // /remendra-memory [status|view|full]
+  registerVccRecallCommand(pi); // /remendra-recall <query>
+  registerRemendraExportCommand(pi); // /remendra-export [out:<path>]
 
   // Tools
   registerRecallTool(pi); // unified recall (#N + [12char])

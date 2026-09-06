@@ -1,8 +1,8 @@
 /**
- * /blackhole-memory command — shows memory pipeline status and content.
+ * /remendra-memory command — shows memory pipeline status and content.
  *
  * Created by pi-vcc-om. Replaces OM's standalone /om-status and /om-view.
- * Usage: /blackhole-memory [status|view|full]
+ * Usage: /remendra-memory [status|view|full]
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { copyTextToClipboard } from "../om/clipboard.js";
@@ -75,16 +75,16 @@ function renderContentOnlyProjection(
 }
 
 export function registerMemoryCommand(pi: ExtensionAPI, runtime: Runtime): void {
-  pi.registerCommand("blackhole-memory", {
+  pi.registerCommand("remendra-memory", {
     description:
-      "Show memory pipeline status & token counters. /blackhole-memory [view] visible observations & reflections, [full] complete recorded memory (copies to clipboard).",
+      "Show memory pipeline status & token counters. /remendra-memory [view] visible observations & reflections, [full] complete recorded memory (copies to clipboard).",
     handler: async (args, ctx) => {
       runtime.ensureConfig(ctx.cwd, (msg) => ctx.ui?.notify?.(msg, "warning"));
       const entries = ctx.sessionManager.getBranch() as Entry[];
       const sessionId = ctx.sessionManager.getSessionId();
       const mode = firstArg(args);
 
-      // /blackhole-memory full — show full recorded memory + copy to clipboard
+      // /remendra-memory full — show full recorded memory + copy to clipboard
       if (mode === "full") {
         const projection = fullProjection(entries);
         const output = renderContentOnlyProjection(projection, "recorded");
@@ -98,7 +98,7 @@ export function registerMemoryCommand(pi: ExtensionAPI, runtime: Runtime): void 
         return;
       }
 
-      // /blackhole-memory view — show visible memory + copy to clipboard
+      // /remendra-memory view — show visible memory + copy to clipboard
       if (mode === "view") {
         const projection = visibleProjection(entries);
         const output = renderContentOnlyProjection(projection, "visible");
@@ -112,9 +112,9 @@ export function registerMemoryCommand(pi: ExtensionAPI, runtime: Runtime): void 
         return;
       }
 
-      // /blackhole-memory (no args) — show status
+      // /remendra-memory (no args) — show status
       if (mode && mode !== "status") {
-        ctx.ui.notify("Usage: /blackhole-memory [status|view|full]", "info");
+        ctx.ui.notify("Usage: /remendra-memory [status|view|full]", "info");
         return;
       }
 
@@ -205,7 +205,7 @@ export function registerMemoryCommand(pi: ExtensionAPI, runtime: Runtime): void 
           lines.push(
             `Preamble cap: ${preambleCap.toLocaleString()} tokens for observations${pctNote}`,
           );
-          lines.push("Run /blackhole to flush and compact.");
+          lines.push("Run /remendra to flush and compact.");
         }
       }
 

@@ -1,8 +1,8 @@
 /**
- * Tests for blackhole's debug-log (single-file rotation approach).
+ * Tests for remendra's debug-log (single-file rotation approach).
  *
  * Upstream pi-observational-memory uses per-session debug files; ours is a
- * single ndjson file at ~/.pi/agent/pi-blackhole/debug.ndjson with rotation.
+ * single ndjson file at ~/.pi/agent/pi-remendra/debug.ndjson with rotation.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
@@ -10,7 +10,7 @@ import fs from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const testRoot = join(tmpdir(), `pi-blackhole-debug-test-${process.pid}-${Date.now()}`);
+const testRoot = join(tmpdir(), `pi-remendra-debug-test-${process.pid}-${Date.now()}`);
 const agentDir = join(testRoot, "agent");
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
@@ -99,7 +99,7 @@ describe("debug-log", () => {
       debugLog("check.path");
     });
     flushDebugLog();
-    expect(existsSync(join(agentDir, "pi-blackhole", "debug.ndjson"))).toBe(true);
+    expect(existsSync(join(agentDir, "pi-remendra", "debug.ndjson"))).toBe(true);
   });
 
   it("never throws on write failure", () => {
@@ -119,6 +119,6 @@ describe("debug-log", () => {
 
   it("exports known constants", () => {
     expect(DEBUG_LOG_MAX_BYTES).toBe(10 * 1024 * 1024);
-    expect(DEBUG_LOG_RELATIVE_PATH).toBe(join("pi-blackhole", "debug.ndjson"));
+    expect(DEBUG_LOG_RELATIVE_PATH).toBe(join("pi-remendra", "debug.ndjson"));
   });
 });

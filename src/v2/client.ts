@@ -53,7 +53,7 @@ export class MemoryClient {
     this.pending.clear();
     void worker.terminate();
   }
-  call<M extends Method>(method: M, args: Args<M>, timeoutMs = 5000): Promise<Result<M>> {
+  call<M extends Method>(method: M, args: Args<M>, timeoutMs = 15000): Promise<Result<M>> {
     return new Promise((resolve, reject) => {
       const worker = this.start();
       worker.ref();

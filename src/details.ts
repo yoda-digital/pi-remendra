@@ -1,11 +1,11 @@
 /**
- * Blackhole compaction details persisted in Pi session entries.
+ * Remendra compaction details persisted in Pi session entries.
  *
  * Version 1 is the existing rewrite format. Version 2 stores one immutable
  * append segment plus the current mutable recall/OM suffix.
  */
 export interface PiVccCompactionDetailsV1 {
-  compactor: "blackhole";
+  compactor: "remendra";
   version: 1;
   sections: string[];
   sourceMessageCount: number;
@@ -38,7 +38,7 @@ export interface PiVccSegment {
 }
 
 export interface PiVccCompactionDetailsV2 {
-  compactor: "blackhole";
+  compactor: "remendra";
   version: 2;
   summaryMode: "append";
   /** True when this compaction replaces the active chain with one clean segment. */
@@ -63,7 +63,7 @@ const isStringArray = (value: unknown): value is string[] =>
 export function isPiVccCompactionDetailsV2(value: unknown): value is PiVccCompactionDetailsV2 {
   if (!isRecord(value)) return false;
   if (
-    value.compactor !== "blackhole" ||
+    value.compactor !== "remendra" ||
     value.version !== 2 ||
     value.summaryMode !== "append" ||
     typeof value.chainStart !== "boolean" ||

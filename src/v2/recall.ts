@@ -62,7 +62,7 @@ export function recall(
       asOf: request.asOf,
     });
     return finish(
-      `Memory results ${hits.length}; page ${page}. ${mode === "history" || request.scope === "all" ? "Historical records include inactive claims; check status before use." : "Current usable memories only."}\n` +
+      `Memory results ${hits.length}; page ${page}. ${mode === "history" ? "Historical records include inactive claims; check status before use." : request.scope === "all" ? "All project lineage memories across sessions." : "Current usable memories only."}\n` +
         hits
           .slice((page - 1) * 10, page * 10)
           .map((h) => JSON.stringify(h))

@@ -64,7 +64,7 @@ function getGlobalDispatcher(): Dispatcher {
       return dispatcher as Dispatcher;
     }
   }
-  throw new Error("Blackhole provider idle timeout requires Pi's Undici dispatcher");
+  throw new Error("Remendra provider idle timeout requires Pi's Undici dispatcher");
 }
 
 /**
@@ -108,7 +108,7 @@ export function createProviderFetch(timeoutMs?: number): typeof fetch | undefine
 }
 
 export function createBridgeStreamFn(streamSimple: any) {
-  const PROVIDER_STREAMS_KEY = Symbol.for("pi-blackhole:provider-streams");
+  const PROVIDER_STREAMS_KEY = Symbol.for("pi-remendra:provider-streams");
   return (model: any, ctx: any, opts: any) => {
     const providerStreams: Map<string, Function> | undefined = (globalThis as any)[
       PROVIDER_STREAMS_KEY

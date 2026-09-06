@@ -1,5 +1,5 @@
 /**
- * Tests for /blackhole-export command — distilled project-memory export.
+ * Tests for /remendra-export command — distilled project-memory export.
  * Fixtures are inline JSONL v3 sessions + OM pending buffers under a temp
  * agentDir; no network, no real sessions.
  */
@@ -8,7 +8,7 @@ import { mkdirSync, rmSync, writeFileSync, readFileSync, readdirSync } from "nod
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const testRoot = join(tmpdir(), `pi-blackhole-export-test-${process.pid}-${Date.now()}`);
+const testRoot = join(tmpdir(), `pi-remendra-export-test-${process.pid}-${Date.now()}`);
 const agentDir = join(testRoot, "agent");
 const projectCwd = join(testRoot, "proj");
 
@@ -16,7 +16,7 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
   getAgentDir: () => agentDir,
 }));
 
-import { registerBlackholeExportCommand } from "../src/commands/blackhole-export.js";
+import { registerRemendraExportCommand } from "../src/commands/remendra-export.js";
 import { relativeTime } from "../src/project-recall/format-export.js";
 import { encodeScopeDir } from "../src/project-recall/corpus.js";
 
@@ -199,7 +199,7 @@ function createFixtures(): void {
     ),
   ]);
 
-  const bhDir = join(agentDir, "pi-blackhole");
+  const bhDir = join(agentDir, "pi-remendra");
   mkdirSync(bhDir, { recursive: true });
   writeFileSync(
     join(bhDir, "ses-1-pending.json"),
@@ -294,7 +294,7 @@ function createMockEnv() {
   return { pi, handlerMap, sentMessages, ctx };
 }
 
-describe("/blackhole-export", () => {
+describe("/remendra-export", () => {
   beforeEach(() => {
     rmSync(testRoot, { recursive: true, force: true });
     mkdirSync(testRoot, { recursive: true });
@@ -307,8 +307,8 @@ describe("/blackhole-export", () => {
 
   it("exports tiers, dedup, reflections, dropper notes and orphans to markdown", async () => {
     const env = createMockEnv();
-    registerBlackholeExportCommand(env.pi);
-    const handler = env.handlerMap.get("blackhole-export");
+    registerRemendraExportCommand(env.pi);
+    const handler = env.handlerMap.get("remendra-export");
     expect(handler).toBeDefined();
     await handler!("", env.ctx);
 
@@ -343,15 +343,15 @@ describe("/blackhole-export", () => {
     expect(md).toContain("Orphan memory recovered from lost session");
 
     expect(env.sentMessages).toHaveLength(1);
-    expect(env.sentMessages[0].customType).toBe("blackhole-export");
+    expect(env.sentMessages[0].customType).toBe("remendra-export");
     expect(env.sentMessages[0].content).toContain(outFile!);
     expect(env.sentMessages[0].content).toContain("duplicates collapsed");
   });
 
   it("honors out:<path> argument", async () => {
     const env = createMockEnv();
-    registerBlackholeExportCommand(env.pi);
-    await env.handlerMap.get("blackhole-export")!("out:custom-export.md", env.ctx);
+    registerRemendraExportCommand(env.pi);
+    await env.handlerMap.get("remendra-export")!("out:custom-export.md", env.ctx);
     expect(readFileSync(join(projectCwd, "custom-export.md"), "utf-8")).toContain(
       "# Project memory export",
     );
@@ -359,8 +359,8 @@ describe("/blackhole-export", () => {
 
   it("rejects out:<path> that escapes current directory", async () => {
     const env = createMockEnv();
-    registerBlackholeExportCommand(env.pi);
-    await env.handlerMap.get("blackhole-export")!("out:../escape.md", env.ctx);
+    registerRemendraExportCommand(env.pi);
+    await env.handlerMap.get("remendra-export")!("out:../escape.md", env.ctx);
     expect(readdirSync(projectCwd).filter((f) => f.endsWith(".md"))).toHaveLength(0);
     expect(env.ctx.ui.notify).toHaveBeenCalledWith(
       expect.stringContaining("escapes current directory"),
@@ -370,9 +370,9 @@ describe("/blackhole-export", () => {
 
   it("allows absolute out:<path> on any platform", async () => {
     const env = createMockEnv();
-    registerBlackholeExportCommand(env.pi);
-    const absPath = join(tmpdir(), `blackhole-export-${Date.now()}.md`);
-    await env.handlerMap.get("blackhole-export")!(`out:${absPath}`, env.ctx);
+    registerRemendraExportCommand(env.pi);
+    const absPath = join(tmpdir(), `remendra-export-${Date.now()}.md`);
+    await env.handlerMap.get("remendra-export")!(`out:${absPath}`, env.ctx);
     expect(readFileSync(absPath, "utf-8")).toContain("# Project memory export");
     try {
       rmSync(absPath);
@@ -383,8 +383,8 @@ describe("/blackhole-export", () => {
 
   it("rejects out:<path> without .md extension", async () => {
     const env = createMockEnv();
-    registerBlackholeExportCommand(env.pi);
-    await env.handlerMap.get("blackhole-export")!("out:export.txt", env.ctx);
+    registerRemendraExportCommand(env.pi);
+    await env.handlerMap.get("remendra-export")!("out:export.txt", env.ctx);
     expect(readdirSync(projectCwd).filter((f) => f.endsWith(".txt"))).toHaveLength(0);
     expect(env.ctx.ui.notify).toHaveBeenCalledWith(
       expect.stringContaining("must be a markdown file"),
@@ -402,8 +402,8 @@ describe("/blackhole-export", () => {
     ]);
 
     const env = createMockEnv();
-    registerBlackholeExportCommand(env.pi);
-    await env.handlerMap.get("blackhole-export")!("", env.ctx);
+    registerRemendraExportCommand(env.pi);
+    await env.handlerMap.get("remendra-export")!("", env.ctx);
 
     expect(env.sentMessages).toHaveLength(0);
     expect(env.ctx.ui.notify).toHaveBeenCalledWith(

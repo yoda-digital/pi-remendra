@@ -1,3 +1,5 @@
+> **This document describes the legacy v1 engine.** For the current v2 engine, see [README.md](../README.md) and [V2.md](V2.md).
+
 # Observational Memory
 
 The observational memory (OM) system captures timestamped facts and durable reflections that survive across compactions. Three background workers run during the session, storing results in a session ledger.
@@ -243,7 +245,7 @@ Models that fail with retryable errors are cooled down and skipped in subsequent
 
 ### Persistence
 
-Cooldowns persist to `~/.pi/agent/pi-blackhole/pi-blackhole-cooldown.json` with ISO 8601 timestamps. Each entry records:
+Cooldowns persist to `~/.pi/agent/pi-remendra/pi-remendra-cooldown.json` with ISO 8601 timestamps. Each entry records:
 
 - `modelKey` — `provider/id` identifier
 - `until` — expiry timestamp
@@ -286,26 +288,26 @@ After threshold is reached, the trigger waits for the agent to become truly idle
 
 ### Pi version requirement (#8328)
 
-pi ≥ 0.84.3 is required for overflow auto-compaction to fire after blackhole compactions (upstream fix #8328, commit 4495469a5).
+pi ≥ 0.84.3 is required for overflow auto-compaction to fire after remendra compactions (upstream fix #8328, commit 4495469a5).
 
-Blackhole compactions produce zero provider usage (the LLM compaction is bypassed). Before the fix, `_checkCompaction` early-returned when no assistant message carried usage data, so pi could never recover from context overflow after a blackhole compaction. The fix falls back to pure message-size estimates when usage is absent. Minimum supported version for correct overflow recovery: pi 0.84.3.
+Remendra compactions produce zero provider usage (the LLM compaction is bypassed). Before the fix, `_checkCompaction` early-returned when no assistant message carried usage data, so pi could never recover from context overflow after a remendra compaction. The fix falls back to pure message-size estimates when usage is absent. Minimum supported version for correct overflow recovery: pi 0.84.3.
 
 ### Compact-failure handling
 
 The `session_compact_failed` event (pi ≥ 0.84.3) gets unified handling in [[src/hooks/compact-failed.ts]].
 
-Before this hook, failure coverage was fragmented: `/blackhole` and the auto-trigger had their own `onError` callbacks, but overflow compaction failures (pi-initiated, mid-turn) were invisible, `/compact` cancelled by our guards was only notified inside the hook, and overflow aborts with retry had no visibility at all. The handler does four things:
+Before this hook, failure coverage was fragmented: `/remendra` and the auto-trigger had their own `onError` callbacks, but overflow compaction failures (pi-initiated, mid-turn) were invisible, `/compact` cancelled by our guards was only notified inside the hook, and overflow aborts with retry had no visibility at all. The handler does four things:
 
 1. **Structured trace log** — `compact_failed.received` records reason, aborted, willRetry, fromExtension, errorMessage, and session id.
 2. **Defensive `compactInFlight` guard** — on abort or error, aborts any pending idle-wait controller before clearing its reference, then resets `compactInFlight`. This prevents an orphaned wait from launching a second compaction after a later turn.
-3. **Overflow-retry visibility** — `reason: "overflow"` + `aborted` + `willRetry` notifies `"blackhole: overflow compaction aborted, retrying turn"` (info).
-4. **pi-default noise filter** — failures under `compactionEngine: "pi-default"` that are not ours get only a light `compact_failed.skipped_pi_default` trace; error notifications fire only for failures attributed to blackhole.
+3. **Overflow-retry visibility** — `reason: "overflow"` + `aborted` + `willRetry` notifies `"remendra: overflow compaction aborted, retrying turn"` (info).
+4. **pi-default noise filter** — failures under `compactionEngine: "pi-default"` that are not ours get only a light `compact_failed.skipped_pi_default` trace; error notifications fire only for failures attributed to remendra.
 
 #### Attribution fix
 
 Upstream only sets `fromExtension: true` for content-bearing compactions, so hook `{ cancel: true }` returns are mislabeled false; the handler derives the true origin instead.
 
-The derived field is `attributedFromExtension = fromExtension || compactWasPiVcc || lastCompactCancelled`. Both runtime flags are attempt-scoped: each `session_before_compact` overwrites them, success consumes `compactWasPiVcc`, and failure captures then clears both before side effects. This prevents `/blackhole` attribution from leaking into later pi-default failures.
+The derived field is `attributedFromExtension = fromExtension || compactWasPiVcc || lastCompactCancelled`. Both runtime flags are attempt-scoped: each `session_before_compact` overwrites them, success consumes `compactWasPiVcc`, and failure captures then clears both before side effects. This prevents `/remendra` attribution from leaking into later pi-default failures.
 
 ## Manual mode
 
@@ -313,15 +315,15 @@ When `compaction: "manual"`, observations go to per-session disk buffers instead
 
 ### Pending state
 
-Each session gets its own `<sessionId>-pending.json` under `~/.pi/agent/pi-blackhole/`. Contains:
+Each session gets its own `<sessionId>-pending.json` under `~/.pi/agent/pi-remendra/`. Contains:
 
 - Latest observation/reflection/dropper results (replaced each run)
 - Accumulated batches (observationBatches, reflectionBatches, droppedBatches) for LLM context and flush
 - Pipeline cursors (persisted across restarts)
 
-### Flush on /blackhole
+### Flush on /remendra
 
-When `/blackhole` runs in manual mode, pending entries are flushed to the branch via `pi.appendEntry()` and the file is cleared. This eliminates race conditions from concurrent sessions writing to a shared file.
+When `/remendra` runs in manual mode, pending entries are flushed to the branch via `pi.appendEntry()` and the file is cleared. This eliminates race conditions from concurrent sessions writing to a shared file.
 
 ### Stale backup
 

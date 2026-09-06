@@ -59,6 +59,12 @@ function compileSnapshot(
   const header = `${PREAMBLE}\nScope: project ${scope.projectId}; session ${scope.sessionId}; user memories ${scope.includeUser ? "enabled" : "disabled"}.\nCoverage: ${gaps} unfinished source chunks. Disputes visible in this window: ${conflicts}.\n${warnings ? `Do not reuse obsolete or disputed versions: ${warnings}.\n` : ""}Records (JSON lines):\n`;
   const render = (rows: string[], count: number) =>
     `${header}${rows.join("\n")}\nOmitted ${count} retrieved records. Recall can search source history; absence here is not evidence of absence.`;
+  // Pre-compute the header and footer overhead once
+  const headerTokens = estimateTokens(header);
+  const footerTemplate =
+    "\nOmitted 999999 retrieved records. Recall can search source history; absence here is not evidence of absence.";
+  const footerTokens = estimateTokens(footerTemplate);
+  let runningTokens = headerTokens + footerTokens;
   for (const hit of candidates) {
     const c = hit.claim;
     const line = JSON.stringify({
@@ -78,8 +84,9 @@ function compileSnapshot(
       sources: c.evidence.map((e) => ({ key: e.sourceKey, start: e.start, end: e.end })),
       why: hit.reasons,
     });
-    if (estimateTokens(render([...lines, line], candidates.length - selected.length - 1)) > budget)
-      continue;
+    const lineTokens = estimateTokens(line) + 1; // +1 for newline separator
+    if (runningTokens + lineTokens > budget) continue;
+    runningTokens += lineTokens;
     lines.push(line);
     selected.push(hit);
   }

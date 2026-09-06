@@ -9,7 +9,7 @@
  *
  * Each combination is tested for:
  *   - Does the auto-compact trigger fire (call ctx.compact)?
- *   - If it fires, which pipeline runs (blackhole vs Pi default)?
+ *   - If it fires, which pipeline runs (remendra vs Pi default)?
  *   - Are notifications shown correctly?
  *   - Is compactInFlight properly managed?
  */
@@ -39,7 +39,7 @@ interface PermutationConfig {
   overrideDefaultCompaction: boolean;
   // New config keys (optional — when absent, legacy path runs)
   compaction?: "auto" | "manual" | "off";
-  compactionEngine?: "blackhole" | "pi-default";
+  compactionEngine?: "remendra" | "pi-default";
   tailBehavior?: "pi-default" | "minimal";
 }
 
@@ -199,7 +199,7 @@ function captureFullSystem(config: PermutationConfig) {
 const dueBranch = [rawMessage("m1", "aaaaaaaaaaaa")]; // 12 chars → 3 tokens, threshold is 3
 const shortBranch = [rawMessage("m1", "aa")]; // 2 chars → 1 token, below threshold
 
-// Branch with enough messages (>2 live) to pass buildOwnCut for the blackhole pipeline
+// Branch with enough messages (>2 live) to pass buildOwnCut for the remendra pipeline
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
@@ -326,7 +326,7 @@ describe("Auto-compact trigger: before-compact hook integration", () => {
     noAutoCompact: boolean;
     overrideDefaultCompaction: boolean;
     expectAutoFire: boolean; // does the trigger fire?
-    expectBlackholePipeline: boolean; // does the before-compact hook run blackhole pipeline?
+    expectRemendraPipeline: boolean; // does the before-compact hook run remendra pipeline?
     expectPiDefaultPipeline: boolean; // does Pi default run (hook returns undefined)?
   }
 
@@ -337,7 +337,7 @@ describe("Auto-compact trigger: before-compact hook integration", () => {
       noAutoCompact: false,
       overrideDefaultCompaction: false,
       expectAutoFire: false,
-      expectBlackholePipeline: false,
+      expectRemendraPipeline: false,
       expectPiDefaultPipeline: false,
     },
     {
@@ -345,16 +345,16 @@ describe("Auto-compact trigger: before-compact hook integration", () => {
       noAutoCompact: true,
       overrideDefaultCompaction: false,
       expectAutoFire: false,
-      expectBlackholePipeline: false,
+      expectRemendraPipeline: false,
       expectPiDefaultPipeline: false,
     },
-    // overrideDefaultCompaction=true: hook runs blackhole pipeline
+    // overrideDefaultCompaction=true: hook runs remendra pipeline
     {
       name: "override=true, noAutoCompact=false",
       noAutoCompact: false,
       overrideDefaultCompaction: true,
       expectAutoFire: true,
-      expectBlackholePipeline: true,
+      expectRemendraPipeline: true,
       expectPiDefaultPipeline: false,
     },
     {
@@ -362,7 +362,7 @@ describe("Auto-compact trigger: before-compact hook integration", () => {
       noAutoCompact: true,
       overrideDefaultCompaction: true,
       expectAutoFire: false,
-      expectBlackholePipeline: false,
+      expectRemendraPipeline: false,
       expectPiDefaultPipeline: false,
     },
   ];
@@ -391,8 +391,8 @@ describe("Auto-compact trigger: before-compact hook integration", () => {
           compactCall.customInstructions, // undefined for auto-trigger
         );
 
-        if (tc.expectBlackholePipeline) {
-          // before-compact hook returned a result (not undefined — blackhole handled it)
+        if (tc.expectRemendraPipeline) {
+          // before-compact hook returned a result (not undefined — remendra handled it)
           // Note: compile() requires a real LLM model, so .compaction won't be populated
           // in unit tests. We just verify the hook DID NOT return undefined.
           expect(system.beforeCompactResult).toBeDefined();
@@ -652,7 +652,7 @@ describe("Full 16-permutation matrix", () => {
               system.fireBeforeCompact(dueBranch, compactOpts.customInstructions);
 
               if (overrideDefaultCompaction) {
-                // Blackhole pipeline should run
+                // Remendra pipeline should run
                 expect(system.beforeCompactResult).toBeDefined();
                 // With only 2 messages (too few), it should cancel
                 // (buildOwnCut returns too_few_live_messages)

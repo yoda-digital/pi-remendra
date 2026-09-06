@@ -1,11 +1,11 @@
 /**
- * Debug logging — writes JSONL to ~/.pi/agent/pi-blackhole/debug.ndjson.
+ * Debug logging — writes JSONL to ~/.pi/agent/pi-remendra/debug.ndjson.
  *
  * Uses a memory buffer flushed asynchronously on a timer to avoid blocking
  * the event loop with synchronous disk I/O on every event.
  *
  * Upstream: https://github.com/elpapi42/pi-observational-memory (src/debug-log.ts)
- * Modified: path changed from observational-memory/ to pi-blackhole/; async buffered.
+ * Modified: path changed from observational-memory/ to pi-remendra/; async buffered.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync, mkdirSync, renameSync, statSync, unlinkSync, appendFileSync } from "node:fs";
@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export const DEBUG_LOG_MAX_BYTES = 10 * 1024 * 1024;
-export const DEBUG_LOG_RELATIVE_PATH = join("pi-blackhole", "debug.ndjson");
+export const DEBUG_LOG_RELATIVE_PATH = join("pi-remendra", "debug.ndjson");
 
 interface DebugLogContext {
   enabled: boolean;
@@ -68,7 +68,7 @@ async function flushBuffer(): Promise<void> {
     rotateIfNeeded(path);
     await appendFile(path, batch.join(""), "utf-8");
   } catch (error) {
-    console.error("blackhole: debug log write failed", error);
+    console.error("remendra: debug log write failed", error);
   } finally {
     flushing = false;
   }
@@ -115,7 +115,7 @@ export function flushDebugLog(): void {
     rotateIfNeeded(path);
     appendFileSync(path, batch.join(""), "utf-8");
   } catch (error) {
-    console.error("blackhole: debug log flush failed", error);
+    console.error("remendra: debug log flush failed", error);
   }
 }
 

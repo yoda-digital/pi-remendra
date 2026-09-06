@@ -1,7 +1,7 @@
 /**
  * Rebase string-surgery proofs.
  *
- * /blackhole rebase is not a second summarizer pass — the raw turns are gone.
+ * /remendra rebase is not a second summarizer pass — the raw turns are gone.
  * It folds the accumulated summary strings into one clean segment:
  *   compile(previousSummary) → stripOMContent → stripRecallNotes → R1
  * These tests pin down each cut of that surgery with real pipeline output.
@@ -84,7 +84,7 @@ describe("append rebase surgery", () => {
     expect(countOccurrences(complete, RECALL)).toBe(1);
   });
 
-  it("/blackhole rebase folds S1+S2+S3 into one clean chain-start segment with the mutable suffix stripped", () => {
+  it("/remendra rebase folds S1+S2+S3 into one clean chain-start segment with the mutable suffix stripped", () => {
     const coverage = () => ({
       firstCoveredEntryId: "m1",
       lastCoveredEntryId: "m2",
@@ -171,14 +171,14 @@ describe("append rebase surgery", () => {
     expect(rebase.chainStart).toBe(true);
     expect(rebase.segment.sequence).toBe(1);
     const r1 = rebase.segment.summary;
-    expect(r1.startsWith("[Blackhole Append Segment 1]")).toBe(true);
+    expect(r1.startsWith("[Remendra Append Segment 1]")).toBe(true);
     // Surgery stripped both mutable suffix parts from the frozen segment.
     expect(r1.includes(RECALL)).toBe(false);
     expect(r1.includes("## Observations")).toBe(false);
     // The folded segment carries the merged VCC material from all three cycles.
     expect(r1).toContain("parser timeout");
     // Old segments stay byte-identical in storage; collection just stops at R1.
-    expect(branchEntries[0].details.segment.summary).toContain("[Blackhole Append Segment 1]");
-    expect(s3.segment.summary).toContain("[Blackhole Append Segment 3]");
+    expect(branchEntries[0].details.segment.summary).toContain("[Remendra Append Segment 1]");
+    expect(s3.segment.summary).toContain("[Remendra Append Segment 3]");
   });
 });

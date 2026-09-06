@@ -29,7 +29,7 @@ export async function findGitRoot(cwd: string): Promise<FindGitRootResult> {
       const message = errnoError.message ?? String(error);
       return {
         root: null,
-        warning: `[pi-blackhole] git lookup failed for ${cwd}: ${message}; falling back to cwd-only scoping`,
+        warning: `[pi-remendra] git lookup failed for ${cwd}: ${message}; falling back to cwd-only scoping`,
       };
     }
     return { root: null };

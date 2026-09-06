@@ -14,7 +14,7 @@ pi install git:github.com/yoda-digital/pi-remendra
 
 Run `/reload` in Pi, then `/remendra doctor` and `/remendra help`.
 
-Do not load Remendra and Pi Blackhole together. Use `pi list` to find and remove or disable the old package first. Blackhole's old ledger and Remendra's database are separate; migration is explicit and leaves the old files untouched.
+Do not load Remendra and Remendra together. Use `pi list` to find and remove or disable the old package first. Remendra's old ledger and Remendra's database are separate; migration is explicit and leaves the old files untouched.
 
 For a development checkout containing this v2 branch:
 

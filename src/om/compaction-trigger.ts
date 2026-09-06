@@ -50,7 +50,7 @@ function autoCompactionSkipReason(runtime: Runtime): string | null {
   if (runtime.config.compaction === undefined && runtime.config.compactionEngine === undefined) {
     if (runtime.config.passive === true) return "passive";
     if (runtime.config.noAutoCompact === true) return "manual";
-    // Don't force Pi to compact unless the user explicitly opted into blackhole's pipeline.
+    // Don't force Pi to compact unless the user explicitly opted into remendra's pipeline.
     if (runtime.config.overrideDefaultCompaction === false)
       return "overrideDefaultCompaction_false";
   }
@@ -272,36 +272,43 @@ async function handleTurnEnd(
 
   // pause is explicitly interrupting: native ctx.compact() aborts the current
   // run and leaves continuation to the user.
-  ctx.compact({
-    onComplete: () => {
-      runtime.compactInFlight = false;
-      resetMidRunRetry(runtime);
-      dbg("compaction_trigger.turn_end.pause_complete");
-      runtime.tryEmitInfo(
-        hasUI,
-        ui,
-        "Observational memory: mid-run compaction complete; agent paused",
-      );
-    },
-    onError: (error: { message: string }) => {
-      runtime.compactInFlight = false;
-      const delay = recordMidRunFailure(runtime);
-      const message = error?.message ?? String(error);
-      dbg("compaction_trigger.turn_end.pause_error", {
-        message,
-        failures: runtime.midRunCompactionRetry.failures,
-        retryAfter: runtime.midRunCompactionRetry.retryAfter,
-      });
-      if (message !== "Compaction cancelled") {
-        notifySafely(
+  try {
+    ctx.compact({
+      onComplete: () => {
+        runtime.compactInFlight = false;
+        resetMidRunRetry(runtime);
+        dbg("compaction_trigger.turn_end.pause_complete");
+        runtime.tryEmitInfo(
           hasUI,
           ui,
-          `Observational memory: mid-run compaction failed: ${message}${retryInSeconds(delay)}`,
-          "error",
+          "Observational memory: mid-run compaction complete; agent paused",
         );
-      }
-    },
-  });
+      },
+      onError: (error: { message: string }) => {
+        runtime.compactInFlight = false;
+        const delay = recordMidRunFailure(runtime);
+        const message = error?.message ?? String(error);
+        dbg("compaction_trigger.turn_end.pause_error", {
+          message,
+          failures: runtime.midRunCompactionRetry.failures,
+          retryAfter: runtime.midRunCompactionRetry.retryAfter,
+        });
+        if (message !== "Compaction cancelled") {
+          notifySafely(
+            hasUI,
+            ui,
+            `Observational memory: mid-run compaction failed: ${message}${retryInSeconds(delay)}`,
+            "error",
+          );
+        }
+      },
+    });
+  } catch (error) {
+    runtime.compactInFlight = false;
+    dbg("compaction_trigger.turn_end.pause_sync_throw", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 function handleAgentEnd(event: any, ctx: any, runtime: Runtime): void {

@@ -143,8 +143,8 @@ it("preserves authoritative user and tool messages if storage fails", async () =
   const messages = [
     { role: "user", content: "Keep this request" },
     { role: "custom", customType: PACKET_TYPE, content: "Old memory" },
-    { role: "custom", customType: "blackhole.v2.context", content: "Legacy packet" },
-    { role: "custom", customType: "blackhole.v2.output", content: "Legacy output" },
+    { role: "custom", customType: "remendra.v2.context", content: "Legacy packet" },
+    { role: "custom", customType: "remendra.v2.output", content: "Legacy output" },
   ];
   const result = await hooks.get("context")!({ messages }, ctx);
   expect(result.messages).toEqual([messages[0]]);

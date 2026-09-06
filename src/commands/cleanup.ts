@@ -1,8 +1,8 @@
 /**
  * Cleanup handler — TUI picker for orphaned pending files.
  *
- * Called from /blackhole cleanup subcommand.
- * Scans pi-blackhole pending files, cross-references against session JSONL
+ * Called from /remendra cleanup subcommand.
+ * Scans pi-remendra pending files, cross-references against session JSONL
  * files, and lets the user delete orphaned ones interactively.
  *
  * TUI picker (overlay) provides:
@@ -256,7 +256,7 @@ function createCleanupPicker(
 // ── Public handler ──────────────────────────────────────────────────────────
 
 /**
- * Handle the /blackhole cleanup subcommand.
+ * Handle the /remendra cleanup subcommand.
  *
  * Runs the full analysis pipeline (scan pending → scan sessions → cross-ref),
  * then opens the TUI picker if there are orphaned files.
@@ -268,7 +268,7 @@ export async function handleCleanup(ctx: ExtensionContext): Promise<void> {
   const { orphaned } = analyzeOrphaned();
 
   if (orphaned.length === 0) {
-    ctx.ui.notify("pi-blackhole: No orphaned pending files found.", "info");
+    ctx.ui.notify("pi-remendra: No orphaned pending files found.", "info");
     return;
   }
 
@@ -281,7 +281,7 @@ export async function handleCleanup(ctx: ExtensionContext): Promise<void> {
       "",
       ...orphaned.map((pf) => `  ${describeFile(pf)}`),
       "",
-      "Use /blackhole cleanup in TUI mode to delete these files.",
+      "Use /remendra cleanup in TUI mode to delete these files.",
     ];
     ctx.ui.notify(lines.join("\n"), "warning");
     return;
@@ -301,12 +301,12 @@ export async function handleCleanup(ctx: ExtensionContext): Promise<void> {
     const intended = items.length;
     if (deleted === intended) {
       ctx.ui.notify(
-        `pi-blackhole: Deleted ${intended} orphaned pending file${intended === 1 ? "" : "s"}.`,
+        `pi-remendra: Deleted ${intended} orphaned pending file${intended === 1 ? "" : "s"}.`,
         "info",
       );
     } else {
       ctx.ui.notify(
-        `pi-blackhole: Deleted ${deleted}/${intended} orphaned pending file${intended === 1 ? "" : "s"} (${intended - deleted} failed).`,
+        `pi-remendra: Deleted ${deleted}/${intended} orphaned pending file${intended === 1 ? "" : "s"} (${intended - deleted} failed).`,
         "warning",
       );
     }
@@ -314,13 +314,13 @@ export async function handleCleanup(ctx: ExtensionContext): Promise<void> {
     // Some were deleted inline, some remain
     const remainingSize = items.reduce((s, pf) => s + pf.sizeBytes, 0);
     ctx.ui.notify(
-      `pi-blackhole: ${orphaned.length - items.length} deleted, ${items.length} remain (${(remainingSize / 1024).toFixed(1)} KB).`,
+      `pi-remendra: ${orphaned.length - items.length} deleted, ${items.length} remain (${(remainingSize / 1024).toFixed(1)} KB).`,
       "info",
     );
   } else if (items.length === 0 && orphaned.length > 0) {
     // All were deleted inline
     ctx.ui.notify(
-      `pi-blackhole: All ${orphaned.length} orphaned pending file${orphaned.length === 1 ? "" : "s"} removed.`,
+      `pi-remendra: All ${orphaned.length} orphaned pending file${orphaned.length === 1 ? "" : "s"} removed.`,
       "info",
     );
   }

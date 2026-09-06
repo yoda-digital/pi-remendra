@@ -41,10 +41,10 @@ function fakeTheme(): Theme {
 }
 
 describe("changelog — getOwnPackageRoot", () => {
-  it("finds pi-blackhole package root", () => {
+  it("finds pi-remendra package root", () => {
     const root = getOwnPackageRoot();
     expect(root).toBeTruthy();
-    // should contain package.json with name pi-blackhole
+    // should contain package.json with name pi-remendra
     // reading version should succeed
     const v = getPackageVersion(root);
     expect(typeof v).toBe("string");
@@ -63,7 +63,7 @@ describe("changelog — stripMarkdownInline", () => {
   });
 
   it("handles PR links from changelog", () => {
-    const input = "New feature ([#65](https://github.com/k0valik/pi-blackhole/pull/65))";
+    const input = "New feature ([#65](https://github.com/k0valik/pi-remendra/pull/65))";
     expect(stripMarkdownInline(input)).toBe("New feature (#65)");
   });
 });
@@ -152,7 +152,7 @@ describe("changelog — readChangelogText", () => {
     try {
       writeFileSync(
         join(dir, "package.json"),
-        JSON.stringify({ name: "pi-blackhole", version: "9.9.9" }),
+        JSON.stringify({ name: "pi-remendra", version: "9.9.9" }),
       );
       const docsDir = join(dir, "docs");
       mkdirSync(docsDir, { recursive: true });
@@ -175,7 +175,7 @@ describe("changelog — viewer component", () => {
     try {
       writeFileSync(
         join(dir, "package.json"),
-        JSON.stringify({ name: "pi-blackhole", version: "1.2.3" }),
+        JSON.stringify({ name: "pi-remendra", version: "1.2.3" }),
       );
       const docsDir = join(dir, "docs");
       mkdirSync(docsDir, { recursive: true });
@@ -190,7 +190,7 @@ describe("changelog — viewer component", () => {
         packageRoot: dir,
       });
       const out = comp.render(80).join("\n");
-      expect(out).toContain("pi-blackhole v1.2.3");
+      expect(out).toContain("pi-remendra v1.2.3");
       expect(out).toContain("Changelog");
       expect(out).toContain("viewer test line");
       expect(out).toContain("Esc close");
@@ -204,7 +204,7 @@ describe("changelog — viewer component", () => {
     try {
       writeFileSync(
         join(dir, "package.json"),
-        JSON.stringify({ name: "pi-blackhole", version: "0.0.1" }),
+        JSON.stringify({ name: "pi-remendra", version: "0.0.1" }),
       );
       const docsDir = join(dir, "docs");
       mkdirSync(docsDir, { recursive: true });
@@ -247,7 +247,7 @@ describe("changelog — viewer component", () => {
     try {
       writeFileSync(
         join(dir, "package.json"),
-        JSON.stringify({ name: "pi-blackhole", version: "0.0.2" }),
+        JSON.stringify({ name: "pi-remendra", version: "0.0.2" }),
       );
       const comp = createChangelogViewer({
         tui: fakeTui(),

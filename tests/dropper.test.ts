@@ -2,7 +2,7 @@
  * Dropper agent tests — ported from upstream pi-observational-memory.
  *
  * Upstream: https://github.com/elpapi42/pi-observational-memory (tests/dropper.test.ts)
- * Ported with adaptations for pi-blackhole:
+ * Ported with adaptations for pi-remendra:
  *   - budgetTokens instead of targetTokens
  *   - Import paths adjusted for om/ layout
  *   - Assertion strings adapted to our display format (still has DropUrgency)
@@ -51,7 +51,7 @@ describe("V3 dropper agent", () => {
     expect(observationPoolFullness(25, 100)).toBe(0.25);
   });
 
-  it("computes max drops from pool fullness ratio (blackhole algorithm)", () => {
+  it("computes max drops from pool fullness ratio (remendra algorithm)", () => {
     const observations = Array.from({ length: 10 }, (_, index) =>
       observation(`${index}`.padStart(12, "a"), {
         relevance: "low",
@@ -131,15 +131,15 @@ describe("V3 dropper agent", () => {
 
     await runDropper({ ...baseArgs, agentLoop: loop });
 
-    // pi-blackhole display format: "fullness: ~X%" (no "against target")
+    // pi-remendra display format: "fullness: ~X%" (no "against target")
     expect(userText).toContain("[coverage: partial]");
     expect(userText).toContain("[coverage: none]");
     expect(userText).toContain("Maximum drops allowed this run:");
     expect(userText).toContain("hard upper bound, not a target");
     expect(userText).toContain("Drop fewer or none");
-    // pi-blackhole still uses DropUrgency
+    // pi-remendra still uses DropUrgency
     expect(userText).toContain("Drop urgency");
-    // pi-blackhole doesn't display "over target by ~X tokens" or "sized to move..."
+    // pi-remendra doesn't display "over target by ~X tokens" or "sized to move..."
     expect(userText).not.toContain("drop-priority");
     expect(userText).not.toContain("drop-resistance");
   });

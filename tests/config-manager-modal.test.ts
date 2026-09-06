@@ -22,7 +22,7 @@ vi.mock("../src/pi-base/settings/config-flow.js", () => ({
 
 import { ConfigManager } from "../src/pi-base/config-manager.js";
 
-const testDir = join(tmpdir(), `pi-blackhole-modal-test-${Date.now()}`);
+const testDir = join(tmpdir(), `pi-remendra-modal-test-${Date.now()}`);
 
 const DEFAULTS = {
   compaction: "auto",
@@ -50,12 +50,12 @@ describe("openSettings configDir forwarding (canonical config-flow)", () => {
     const cm = new ConfigManager<Record<string, unknown>>({
       id: "test",
       label: "test",
-      filename: "pi-blackhole-config.json",
+      filename: "pi-remendra-config.json",
       defaults: DEFAULTS,
       fields: () => [],
     });
 
-    const configDir = join(testDir, "pi-blackhole");
+    const configDir = join(testDir, "pi-remendra");
     await cm.openSettings(
       { cwd: testDir, ui: { notify: vi.fn() } } as any,
       testDir,
@@ -76,10 +76,10 @@ describe("openSettings configDir forwarding (canonical config-flow)", () => {
     expect(globalValues).toEqual(expect.objectContaining(DEFAULTS));
   });
 
-  it("openBlackholeSettings resolves GLOBAL_CONFIG_DIR under the agent dir", async () => {
-    const { openBlackholeSettings } = await import("../src/pi-base/blackhole-settings.js");
+  it("openRemendraSettings resolves GLOBAL_CONFIG_DIR under the agent dir", async () => {
+    const { openRemendraSettings } = await import("../src/pi-base/remendra-settings.js");
 
-    await openBlackholeSettings({
+    await openRemendraSettings({
       cwd: testDir,
       ui: { notify: vi.fn() },
     } as any);

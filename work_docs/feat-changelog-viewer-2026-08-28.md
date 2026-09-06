@@ -4,7 +4,7 @@
 `feat/changelog-viewer` branched from `dev` (3c90f9a).
 
 ## Goal
-Add a “Changelog” entry under **Display All** in the `/blackhole settings` pre-selector and a direct `/blackhole changelog` command that shows the shipped `CHANGELOG.md` in a scrollable framed overlay. Title shows package version: `pi-blackhole vX.Y.Z — Changelog`.
+Add a “Changelog” entry under **Display All** in the `/remendra settings` pre-selector and a direct `/remendra changelog` command that shows the shipped `CHANGELOG.md` in a scrollable framed overlay. Title shows package version: `pi-remendra vX.Y.Z — Changelog`.
 
 ## Decisions Made
 
@@ -15,7 +15,7 @@ Add a “Changelog” entry under **Display All** in the `/blackhole settings` p
 - **Vendored diff is minimal + generic**: only `src/pi-base/settings/config-flow.ts` and `src/pi-base/config-manager.ts` were touched, and the change is a generic `ExtraSelectorEntry` extension point, not a hard-coded `changelog` concept.
 
 Small generic hook vs. zero-diff duplication trade-off:
-  - Zero-diff alternative would duplicate ~200 LoC of `openDisplayAll`/`openEditMode` plumbing in `blackhole-settings.ts` and bypass `ConfigManager`.
+  - Zero-diff alternative would duplicate ~200 LoC of `openDisplayAll`/`openEditMode` plumbing in `remendra-settings.ts` and bypass `ConfigManager`.
   - Generic `extraEntries + onExtraSelect` hook is ~20 LoC, trivially re-applied after a future `pi-base` re-vendor (one interface + three threaded params + routing branch).
 
 See `src/pi-base/settings/config-flow.ts:84-142` and `src/pi-base/config-manager.ts:1-60` for the exact patch size. Keep this file in the re-vendor checklist.
@@ -26,7 +26,7 @@ Investigation proposed walking up from `import.meta.url` (mirrors `findPiPackage
 - `pnpm build` uses `tsup` (`splitting: false`). `import.meta.url` is preserved in `dist/index.js` as `import.meta.url` (now visible at `dist/index.js:8316`).
 - Works in TS-direct mode (jiti loads `index.ts`) and in bundled mode (`dist/index.js`).
 - Added fallbacks: walk-up from `process.cwd()` and `process.argv[1]` for tests / edge cases.
-- Helper `getOwnPackageRoot()` + `getPackageVersion()` read `package.json` by name `pi-blackhole`.
+- Helper `getOwnPackageRoot()` + `getPackageVersion()` read `package.json` by name `pi-remendra`.
 
 File: `src/changelog/changelog.ts:38-121`.
 
@@ -51,7 +51,7 @@ User note re-applied: pi internals *do* expose `Markdown` from `pi-tui`; we are 
 - **Future maintenance**: keep `docs/CHANGELOG.md` and root `CHANGELOG.md` in sync (manual `cp` or add `cp docs/CHANGELOG.md CHANGELOG.md` to `scripts/prepare.mjs` before the `tsup` build, so the inlined content is always fresh).
 
 ### 5. Selector & command wiring
-- **Selector path**: `src/pi-base/blackhole-settings.ts:449-462` passes `[{ id: "changelog", label: "Display Changelog", available: true }]` via `ConfigManager.openSettings(..., extraEntries, onExtraSelect)` → `openConfigFlow` routes to `openChangelogView`.
+- **Selector path**: `src/pi-base/remendra-settings.ts:449-462` passes `[{ id: "changelog", label: "Display Changelog", available: true }]` via `ConfigManager.openSettings(..., extraEntries, onExtraSelect)` → `openConfigFlow` routes to `openChangelogView`.
 - Entry appears **after** “Display all settings” (appended via `entries.push(...extraEntries)`). Label per spec: “Display Changelog”.
 - **Command path**: `src/commands/pi-vcc.ts` adds `changelog` to completions, handler `if (trimmed === "changelog") await openChangelogView(ctx)`, and `SUBCOMMAND_NAMES` near-miss handling. ~10 LoC.
 
@@ -68,7 +68,7 @@ File: `src/changelog/changelog.ts:306-506`.
 
 ### 7. Entry count / subtitle
 - Show all entries (570+ lines) — scrolling handles overflow; `fixedInnerRows + scrolling` means no hard limit. `parseChangelogEntries(text, maxEntries?)` accepts optional limit for future callers but viewer calls without limit.
-- Subtitle/title shows package version via `getPackageVersion()` → `pi-blackhole v0.4.9 — Changelog`. Falls back to `pi-blackhole — Changelog` if unreadable.
+- Subtitle/title shows package version via `getPackageVersion()` → `pi-remendra v0.4.9 — Changelog`. Falls back to `pi-remendra — Changelog` if unreadable.
 
 ### 8. Assumption validated
 `pnpm build && grep -n "import.meta.url" dist/index.js` now shows `const metaUrl = import.meta.url` at line 8316 — walk-up works in the bundle. Checked after build: `dist/index.js` is 550 KB, `import.meta.url` preserved.
@@ -81,7 +81,7 @@ File: `src/changelog/changelog.ts:306-506`.
 | `tsup.config.ts` | **Build** | Adds `inlineChangelog()` esbuild `onLoad` plugin (mirrors `pi-session-name` 42333c3b) that inlines `docs/CHANGELOG.md` into `BUNDLED_CHANGELOG_TEXT`. `dist/index.js` now self-contained (620 KB). |
 | `src/pi-base/settings/config-flow.ts` | **Minimal generic patch** | Adds `ExtraSelectorEntry` interface, `extraEntries` param to `buildSelectorEntries`, `openSelector`, `openConfigFlow` + routing `if (extraEntries.some(...)) await onExtraSelect(id)`. ~27 LoC. Generic, not changelog-specific. |
 | `src/pi-base/config-manager.ts` | **Minimal generic patch** | Imports `ExtraSelectorEntry`, adds `extraEntries?` + `onExtraSelect?` to `openSettings`, threads to `openConfigFlow`. ~15 LoC after reformat. |
-| `src/pi-base/blackhole-settings.ts` | **Wiring** | Imports `openChangelogView`, passes `Display Changelog` entry + handler to `config.openSettings`. |
+| `src/pi-base/remendra-settings.ts` | **Wiring** | Imports `openChangelogView`, passes `Display Changelog` entry + handler to `config.openSettings`. |
 | `src/commands/pi-vcc.ts` | **Command** | Adds `changelog` completion, handler `trimmed === "changelog"` → `openChangelogView`, description + near-miss list. |
 | `src/changelog/changelog.test.ts` | **New tests** | 13 tests: root detection, markdown stripping, PR-link handling, parsing, maxEntries, plain-lines, render, read from real docs/CHANGELOG, missing-root undefined, temp docs read, viewer smoke (title + content), scroll/close, missing fallback. |
 | `package.json` | **Shipping** | `files` adds `CHANGELOG.md` + `docs/CHANGELOG.md`. |
@@ -100,7 +100,7 @@ File: `src/changelog/changelog.ts:306-506`.
 - `pnpm build` — success, `dist/index.js` 620 KB (was 550 KB before inline), `import.meta.url` preserved, `BUNDLED_CHANGELOG_TEXT = '## [Unreleased]...'` visible in bundle, changelog helpers bundled.
 - `pnpm typecheck` — `tsc --noEmit` passes (fixed `await import` in tests → static `mkdirSync` import, explicit-root fallback bug).
 - `pnpm test` — 90 files, 1456 tests passing (2 failures fixed: `readChangelogText` explicit-root fallback → now returns `undefined` without cwd fallback; viewer fallback now correctly triggers `Changelog not found` path). Added bundled-fallback semantics (explicit root still returns undefined, implicit walk-up falls back to inlined text).
-- Manual smoke: `createChangelogViewer` renders with versioned title, wrapped bullets, scroll indicators, Esc close; `openChangelogView` reachable via `/blackhole changelog` and via selector last entry. Verified `grep -c BUNDLED_CHANGELOG dist/index.js` = 3 and content starts with `## [Unreleased]`.
+- Manual smoke: `createChangelogViewer` renders with versioned title, wrapped bullets, scroll indicators, Esc close; `openChangelogView` reachable via `/remendra changelog` and via selector last entry. Verified `grep -c BUNDLED_CHANGELOG dist/index.js` = 3 and content starts with `## [Unreleased]`.
 
 ## Risk / Notes
 

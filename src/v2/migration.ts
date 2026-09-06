@@ -43,23 +43,42 @@ export function importLegacy(
       const id = String(value.id),
         content = String(value.content);
       if (!content.trim() || content.length > 12000) {
+        if (content.length > 12000) {
+          console.warn(
+            "[remendra] Migration skipped oversized record (" +
+              content.length +
+              " chars): " +
+              id.slice(0, 20),
+          );
+        }
         skipped++;
         continue;
       }
       const entryId = `legacy:${hash(JSON.stringify([id, content])).slice(0, 32)}`;
       const source = store.ingest(scope, [
-        { entryId, role: "import", text: content, timestamp: "1970-01-01T00:00:00.000Z" },
+        {
+          entryId,
+          role: "import",
+          text: content,
+          timestamp:
+            typeof value.timestamp === "string" && value.timestamp
+              ? value.timestamp
+              : typeof value.createdAt === "string" && value.createdAt
+                ? value.createdAt
+                : new Date().toISOString(),
+        },
       ]);
       const s = source.keys[0] ? store.source(source.keys[0]) : undefined;
       if (!s || s.erased) {
         skipped++;
         continue;
       }
+      const relevance = typeof value.relevance === "string" ? value.relevance : undefined;
       const input: ClaimInput = {
         id: `legacy:${hash(JSON.stringify([scope.projectId, scope.sessionId, id, content])).slice(0, 40)}`,
         alias: id,
         text: content,
-        kind: type === "reflection" ? "hypothesis" : "fact",
+        kind: "fact",
         anchor: scope.entryIds.at(-1),
         evidence: [{ sourceKey: s.key, hash: s.hash, start: 0, end: s.text.length }],
         rationale: `Imported v1 ${type}; original ID ${id}. Legacy source references: ${JSON.stringify(value.sourceEntryIds ?? value.supportingObservationIds ?? [])}`,
@@ -69,6 +88,26 @@ export function importLegacy(
         input,
         "import",
       );
+      if (!result.duplicate && result.claim.status === "candidate") {
+        try {
+          const accepted = store.change(
+            { ...scope, entryIds: [...scope.entryIds, entryId] },
+            result.claim.id,
+            result.claim.revision,
+            "accept",
+          );
+          if (relevance === "critical" || relevance === "high") {
+            store.change(
+              { ...scope, entryIds: [...scope.entryIds, entryId] },
+              accepted.id,
+              accepted.revision,
+              "pin",
+            );
+          }
+        } catch {
+          /* Migration status changes are best-effort */
+        }
+      }
       if (result.duplicate) duplicates++;
       else imported++;
     }

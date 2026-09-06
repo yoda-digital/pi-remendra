@@ -1,10 +1,10 @@
 /**
  * EXPERIMENTAL COMPATIBILITY SHIM — pi-codex-compaction coexistence.
  *
- * Not part of blackhole's supported config surface. The mechanism exists so a
+ * Not part of remendra's supported config surface. The mechanism exists so a
  * user running pi-codex-compaction (OpenAI Codex native remote compaction,
  * preserving opaque checkpoints) can list a provider in `skipForProviders` and
- * have blackhole step aside entirely for it — no compaction, no
+ * have remendra step aside entirely for it — no compaction, no
  * observational-memory consolidation — so exactly one compaction engine acts
  * per turn, regardless of extension registration order.
  *

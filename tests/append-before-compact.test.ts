@@ -18,7 +18,7 @@ const createHarness = (configOverrides: Record<string, unknown> = {}) => {
   let handler: ((event: any, ctx: any) => any) | undefined;
   const config = {
     compaction: "auto",
-    compactionEngine: "blackhole",
+    compactionEngine: "remendra",
     compactionSummaryMode: "append",
     tailBehavior: "minimal",
     midRunCompaction: "off",
@@ -107,7 +107,7 @@ describe("append before-compact integration", () => {
     expect(ui.notify).toHaveBeenCalledTimes(1);
   });
 
-  it("appends automatically and rebases explicit /blackhole", () => {
+  it("appends automatically and rebases explicit /remendra", () => {
     const { invoke } = createHarness();
     const firstBranch = [
       msg("m1", "user", "first goal"),
@@ -318,7 +318,7 @@ describe("append before-compact integration", () => {
       timestamp: 1,
       summary: "fallback 0",
       details: {
-        compactor: "blackhole",
+        compactor: "remendra",
         version: 1,
         sections: [],
         sourceMessageCount: 1,
@@ -368,7 +368,7 @@ describe("append before-compact integration", () => {
       [fallbackMessage(first.compaction.summary), rawTail],
       [c1],
     ) as any[];
-    expect(midCall[0].summary).toContain("[Blackhole Append Segment 1]");
+    expect(midCall[0].summary).toContain("[Remendra Append Segment 1]");
     expect(midCall.at(-1)).toBe(rawTail); // retained raw tail keeps its position
 
     // Mid-run resume path: ctx.compact() without customInstructions — same
@@ -403,8 +403,8 @@ describe("append before-compact integration", () => {
       .filter((m) => m.role === "compactionSummary")
       .map((m) => m.summary);
     expect(segmentSummaries).toHaveLength(2);
-    expect(segmentSummaries[0]).toContain("[Blackhole Append Segment 1]");
-    expect(segmentSummaries[1]).toContain("[Blackhole Append Segment 2]");
+    expect(segmentSummaries[0]).toContain("[Remendra Append Segment 1]");
+    expect(segmentSummaries[1]).toContain("[Remendra Append Segment 2]");
     expect(nextCall.at(-1)).toBe(rawTail);
   });
 

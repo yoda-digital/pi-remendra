@@ -11,7 +11,7 @@ function makeTui() {
 
 const defaultInfo = {
   compaction: "auto" as const,
-  compactionEngine: "blackhole" as const,
+  compactionEngine: "remendra" as const,
   tailBehavior: "pi-default" as const,
   memory: true,
   compactAfterTokens: 81000,
@@ -32,14 +32,14 @@ describe("createStatusOverlay", () => {
     const overlay = createStatusOverlay(defaultInfo, mockTheme, makeTui(), () => {});
     const lines = overlay.render(80);
     expect(lines.length).toBeGreaterThan(0);
-    expect(lines.some((l) => l.includes("Blackhole Status"))).toBe(true);
+    expect(lines.some((l) => l.includes("Remendra Status"))).toBe(true);
   });
 
   test("render shows compaction config values", () => {
     const overlay = createStatusOverlay(defaultInfo, mockTheme, makeTui(), () => {});
     const joined = overlay.render(80).join("\n");
     expect(joined).toContain("auto");
-    expect(joined).toContain("blackhole");
+    expect(joined).toContain("remendra");
     expect(joined).toContain("pi-default");
   });
 

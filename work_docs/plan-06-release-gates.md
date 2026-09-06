@@ -86,9 +86,9 @@ Session discovery (`~/.pi/agent/sessions`, realpath-dedupe), JSONL parsing, **br
 
 ### 5.1 Setup
 
-1. Install the branch build into the daily-driver pi (the author's normal install flow from `pi-blackhole-dev`).
+1. Install the branch build into the daily-driver pi (the author's normal install flow from `pi-remendra-dev`).
 2. Ensure `debugLog: true` (author already runs it).
-3. **Breakpoint marker:** the breaking-notice state file (`~/.pi/agent/pi-blackhole/last-seen-version.json`) records the install version + write time — that timestamp IS the breakpoint. Additionally drop a one-line note into `work_docs/replay-gate2-notes.md`: date, branch SHA, config in use (author's explicit config, or config A/B/C).
+3. **Breakpoint marker:** the breaking-notice state file (`~/.pi/agent/pi-remendra/last-seen-version.json`) records the install version + write time — that timestamp IS the breakpoint. Additionally drop a one-line note into `work_docs/replay-gate2-notes.md`: date, branch SHA, config in use (author's explicit config, or config A/B/C).
 4. Use normally for **a few days** (target: ≥ 3 days, ≥ 2 sessions that would previously have triggered auto-compaction, ≥ 1 session with a large tool result if it happens naturally — do **not** stage artificial workloads; the point is real usage).
 
 ### 5.2 Analysis (after the soak)
@@ -106,7 +106,7 @@ Session discovery (`~/.pi/agent/sessions`, realpath-dedupe), JSONL parsing, **br
 - Every `observer.chunk_capped` shows `truncatedSourceEntryIds` non-empty when an excerpt was sent; every chunk honors the cap.
 - `observer.upper_bound` events present in any long session with auto thresholds (sanity that D7 engages).
 - No `stream_error` loop: same error message > 10× consecutively for one stage.
-- Cross-check `/blackhole-memory` displayed numbers vs harness-recomputed (display honesty): within 5% or explained by timing.
+- Cross-check `/remendra-memory` displayed numbers vs harness-recomputed (display honesty): within 5% or explained by timing.
 
 **Prediction reconciliation:** compare Gate-2's measured fire frequency (author's config) against Gate-1's config-D prediction; log the delta in `work_docs/replay-gate2-notes.md`.
 

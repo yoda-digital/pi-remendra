@@ -145,7 +145,7 @@ export function technicalDensityFactor(content: string): number {
 
   // 4. Config keys, environment variables, CLI commands & flags
   const configMatches = content.match(
-    /\b(?:REACT_APP_|NEXT_PUBLIC_|VITE_|DATABASE_|NODE_|AWS_|DOCKER_|KUBE_|PI_|PI_BLACKHOLE_)[A-Z0-9_]+\b|\b[A-Z][A-Z0-9_]{3,}\b|\b(?:--[a-z0-9_-]+(?:=[^\s]+)?|-[a-zA-Z]{1,3})\b|\b(?:npm|pnpm|yarn|bun|cargo|go|rustc|docker|kubectl|git|make|pytest|pip|uv)\s+[a-z0-9_-]+/g,
+    /\b(?:REACT_APP_|NEXT_PUBLIC_|VITE_|DATABASE_|NODE_|AWS_|DOCKER_|KUBE_|PI_|PI_REMENDRA_)[A-Z0-9_]+\b|\b[A-Z][A-Z0-9_]{3,}\b|\b(?:--[a-z0-9_-]+(?:=[^\s]+)?|-[a-zA-Z]{1,3})\b|\b(?:npm|pnpm|yarn|bun|cargo|go|rustc|docker|kubectl|git|make|pytest|pip|uv)\s+[a-z0-9_-]+/g,
   );
   if (configMatches) entityCount += configMatches.length * 1.5;
 
@@ -922,7 +922,7 @@ export function buildExportMarkdown(
   const introParagraphs = [
     `> **⚠️ Best-effort heuristic export — semantic review required.** Ranking, relevance tiers, and topic grouping are heuristic (tier-weighted recency decay, coverage/consensus signals, and c-TF-IDF / Sørensen-Dice similarity) and not ground truth. This artifact is distilled automatically from observational memory and may contain noise, duplicates, or stale observations. The export pushes the most relevant reflections and observations to the top, but agents and humans should verify, distill, and de-duplicate before ingesting into any long-term memory system.`,
     ``,
-    `_This file is a distilled artifact of pi-blackhole's observational memory for this project._`,
+    `_This file is a distilled artifact of pi-remendra's observational memory for this project._`,
     ``,
     `_Observations carry an LLM-assigned **relevance tier** ([critical] > [high] > [medium] > [low]) and are organized by tier into sections below. The **Reflections** section at the top contains curator-verified insights from a second LLM pass — these are the most authoritative entries._${topicNote} _The **viability gate** filters single-session unsupported low/medium observations as likely transient noise (${pctFiltered})._`,
     "",

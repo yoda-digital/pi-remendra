@@ -1,6 +1,6 @@
 /**
  * Ported from feat/token-rework@f4e915f (plan-01 measurement core).
- * Approach origin: tavasti@360f24a (pi-blackhole fork), pi-vcc upstream PR #40.
+ * Approach origin: tavasti@360f24a (pi-remendra fork), pi-vcc upstream PR #40.
  *
  * Tests the usage-aware token helpers on src/om/tokens.ts.
  */

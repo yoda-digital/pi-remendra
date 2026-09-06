@@ -35,7 +35,7 @@ import {
 } from "../om/ledger/types.js";
 
 const LEGACY_OM_OBSERVATION = "om.observation";
-const PENDING_DIR = "pi-blackhole";
+const PENDING_DIR = "pi-remendra";
 const PENDING_SUFFIX = "-pending.json";
 const STALE_SUFFIX = "-pending.stale.json";
 const HEADER_CHUNK = 4096;

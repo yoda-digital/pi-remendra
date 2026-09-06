@@ -54,7 +54,7 @@ describe("T41: 3 auto-compact cycles with pi-default", () => {
 
     // Simulate what Pi does after compaction: keep from firstKeptEntryId, add summary
     const afterCycle1 = [
-      comp("c1", "m5"), // blackhole's compaction marker (not real pi format, but close enough)
+      comp("c1", "m5"), // remendra's compaction marker (not real pi format, but close enough)
       msg("m5", "user", "e"),
       msg("m6", "assistant", "f"),
       msg("m7", "user", "g"),
@@ -159,11 +159,11 @@ describe("T41: 3 auto-compact cycles with pi-default", () => {
 });
 
 // ---------------------------------------------------------------------------
-// T42: /blackhole (minimal) after pi-default auto-compact
+// T42: /remendra (minimal) after pi-default auto-compact
 // ---------------------------------------------------------------------------
 
-describe("T42: /blackhole after pi-default auto-compact", () => {
-  test("/blackhole compiles everything since last compaction", () => {
+describe("T42: /remendra after pi-default auto-compact", () => {
+  test("/remendra compiles everything since last compaction", () => {
     // First, pi-default auto-compact: Pi cuts at m5
     // Compile m1-m4, keep m5-m8
     const autoCompact = buildOwnCut(
@@ -184,7 +184,7 @@ describe("T42: /blackhole after pi-default auto-compact", () => {
     if (!autoCompact.ok) return;
     expect(autoCompact.messages).toHaveLength(4);
 
-    // Now user runs /blackhole (minimal) on the remaining branch
+    // Now user runs /remendra (minimal) on the remaining branch
     const afterAuto = [
       comp("c1", "m5"),
       msg("m5", "user", "e"),
@@ -193,7 +193,7 @@ describe("T42: /blackhole after pi-default auto-compact", () => {
       msg("m8", "assistant", "h"),
     ];
 
-    // /blackhole uses minimal → finds last user (m7), compiles everything before
+    // /remendra uses minimal → finds last user (m7), compiles everything before
     const manualCompact = buildOwnCut(
       afterAuto,
       "m5", // Pi cut ignored in minimal mode
@@ -207,7 +207,7 @@ describe("T42: /blackhole after pi-default auto-compact", () => {
     expect(manualCompact.compactAll).toBe(false);
   });
 
-  test("/blackhole after pi-default with orphan recovery still works", () => {
+  test("/remendra after pi-default with orphan recovery still works", () => {
     // Auto-compact with compact-all (no user > idx 0)
     const autoCompact = buildOwnCut(
       [msg("m1", "user", "go"), msg("m2", "assistant", "x"), msg("m3", "toolResult", "y")],
@@ -218,7 +218,7 @@ describe("T42: /blackhole after pi-default auto-compact", () => {
     if (!autoCompact.ok) return;
     expect(autoCompact.compactAll).toBe(true);
 
-    // Simulate after compact-all, then more chat, then /blackhole
+    // Simulate after compact-all, then more chat, then /remendra
     const afterCompact = [
       msg("old1", "user", "old"),
       comp("c1", ""), // compact-all sentinel
@@ -228,7 +228,7 @@ describe("T42: /blackhole after pi-default auto-compact", () => {
       msg("m4", "assistant", "d"),
     ];
 
-    // /blackhole (minimal) with orphan recovery
+    // /remendra (minimal) with orphan recovery
     const r = buildOwnCut(
       afterCompact,
       undefined, // no Pi cut
@@ -276,7 +276,7 @@ describe("T43: Switch tailBehavior mid-session", () => {
 
   test("effective tail behavior in hook changes per invocation (isPiVcc flag)", () => {
     // Hook resolves effectiveTailBehavior per call:
-    //   /blackhole → minimal (even if config says pi-default)
+    //   /remendra → minimal (even if config says pi-default)
     //   auto → pi-default (even if no config key set)
     // This is already tested in T25, T36, T37. This test verifies the
     // combination works with real branch data.
@@ -298,9 +298,9 @@ describe("T43: Switch tailBehavior mid-session", () => {
     expect(autoResult.firstKeptEntryId).toBe("m3");
     expect(autoResult.messages).toHaveLength(2);
 
-    // Simulate /blackhole: isPiVcc=true → effective=minimal
+    // Simulate /remendra: isPiVcc=true → effective=minimal
     // Pi cut would be m3 but minimal ignores it → cuts at m3 anyway (same result here)
-    const blackholeResult = buildOwnCut(
+    const remendraResult = buildOwnCut(
       [
         msg("m1", "user", "a"),
         msg("m2", "assistant", "b"),
@@ -308,12 +308,12 @@ describe("T43: Switch tailBehavior mid-session", () => {
         msg("m4", "assistant", "d"),
       ],
       "m3",
-      "minimal", // effective tail behavior for /blackhole
+      "minimal", // effective tail behavior for /remendra
     );
-    expect(blackholeResult.ok).toBe(true);
-    if (!blackholeResult.ok) return;
+    expect(remendraResult.ok).toBe(true);
+    if (!remendraResult.ok) return;
     // Both produce the same result here because m3 is the last user
-    expect(blackholeResult.firstKeptEntryId).toBe("m3");
+    expect(remendraResult.firstKeptEntryId).toBe("m3");
   });
 });
 

@@ -2,7 +2,7 @@
  * Unified configuration loader — merges pi-vcc + OM settings into one file.
  *
  * Created by pi-vcc-om.
- * Reads ~/.pi/agent/pi-blackhole/pi-blackhole-config.json with legacy fallback support.
+ * Reads ~/.pi/agent/pi-remendra/pi-remendra-config.json with legacy fallback support.
  * Model configs support cooldownHours and fallbackModel arrays.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -31,8 +31,8 @@ export function getAgentDir(): string {
 
 // ── Config path ──────────────────────────────────────────────────────────────
 
-const CONFIG_DIR = "pi-blackhole";
-const CONFIG_FILE = "pi-blackhole-config.json";
+const CONFIG_DIR = "pi-remendra";
+const CONFIG_FILE = "pi-remendra-config.json";
 
 /** Test-only: override for config directory. Set via __setTestConfigDir(). */
 let __testConfigDir: string | undefined;
@@ -65,29 +65,29 @@ export interface OmModelConfig {
 export interface UnifiedConfig {
   /** @deprecated Use compactionEngine instead. */
   overrideDefaultCompaction?: boolean;
-  /** Write debug snapshots to /tmp/pi-blackhole-debug.json. */
+  /** Write debug snapshots to /tmp/pi-remendra-debug.json. */
   debug: boolean;
 
   // ── New config surface — compaction, engine, tail behavior ──
 
   /** Unified compaction control: "auto" | "manual" | "off".
    *  "auto"   — auto-trigger on compactAfterTokens threshold
-   *  "manual"  — only via /blackhole command
-   *  "off"    — never compact (disables auto + blocks /blackhole) */
+   *  "manual"  — only via /remendra command
+   *  "off"    — never compact (disables auto + blocks /remendra) */
   compaction: "auto" | "manual" | "off";
 
   /** Which engine handles compaction.
-   *  "blackhole"  — blackhole's compile() + OM injection
+   *  "remendra"  — remendra's compile() + OM injection
    *  "pi-default" — Pi's built-in summarization */
-  compactionEngine: "blackhole" | "pi-default";
+  compactionEngine: "remendra" | "pi-default";
 
-  /** How Blackhole exposes compaction summaries to the provider.
+  /** How Remendra exposes compaction summaries to the provider.
    *  "default"    — current one-summary replacement behavior
-   *  "append"     — immutable VCC segments; explicit /blackhole rebases */
+   *  "append"     — immutable VCC segments; explicit /remendra rebases */
   compactionSummaryMode: "default" | "append";
 
   /**
-   * Providers for which blackhole steps aside entirely (no compaction, no
+   * Providers for which remendra steps aside entirely (no compaction, no
    * observational-memory consolidation) — used for multi-engine coordination
    * (e.g. OpenAI Codex sessions must use native Codex remote compaction).
    * Entries are provider ids, optionally "provider:api" for precision.
@@ -104,7 +104,7 @@ export interface UnifiedConfig {
   /** How much recent transcript to keep visible after compaction.
    *  "pi-default" — use Pi's firstKeptEntryId (respects Pi's keepRecentTokens)
    *  "minimal"    — keep only last user message (current agressive pi-vcc behavior)
-   *  ONLY applies when compactionEngine: "blackhole" */
+   *  ONLY applies when compactionEngine: "remendra" */
   tailBehavior: "pi-default" | "minimal";
 
   /** Token threshold for observer runs. */
@@ -192,7 +192,7 @@ export const DEFAULTS: UnifiedConfig = {
 
   // New config surface
   compaction: "auto",
-  compactionEngine: "blackhole",
+  compactionEngine: "remendra",
   compactionSummaryMode: "default",
 
   skipForProviders: [],
@@ -223,7 +223,7 @@ const THINKING_LEVELS: readonly string[] = ["off", "minimal", "low", "medium", "
 
 // String enums for new config surface
 const COMPACTION_VALUES = ["auto", "manual", "off"] as const;
-const COMPACTION_ENGINE_VALUES = ["blackhole", "pi-default"] as const;
+const COMPACTION_ENGINE_VALUES = ["remendra", "pi-default"] as const;
 const COMPACTION_SUMMARY_MODE_VALUES = ["default", "append"] as const;
 
 const TAIL_BEHAVIOR_VALUES = ["pi-default", "minimal"] as const;
@@ -232,7 +232,7 @@ const MID_RUN_COMPACTION_VALUES = ["resume", "pause", "off"] as const;
 function isCompaction(v: unknown): v is "auto" | "manual" | "off" {
   return typeof v === "string" && (COMPACTION_VALUES as readonly string[]).includes(v);
 }
-function isCompactionEngine(v: unknown): v is "blackhole" | "pi-default" {
+function isCompactionEngine(v: unknown): v is "remendra" | "pi-default" {
   return typeof v === "string" && (COMPACTION_ENGINE_VALUES as readonly string[]).includes(v);
 }
 function isCompactionSummaryMode(v: unknown): v is "default" | "append" {
@@ -409,7 +409,7 @@ function migrateOldKnobs(parsed: Record<string, unknown>): void {
   }
   // overrideDefaultCompaction → compactionEngine + tailBehavior
   if (parsed.overrideDefaultCompaction === true) {
-    parsed.compactionEngine = "blackhole";
+    parsed.compactionEngine = "remendra";
     // Preserve aggressive cut for existing users
     if (parsed.tailBehavior === undefined) {
       parsed.tailBehavior = "minimal";
@@ -434,7 +434,7 @@ function readJson(path: string): {
   try {
     return { data: JSON.parse(readFileSync(path, "utf-8")), error: null };
   } catch (e) {
-    const msg = `blackhole: config file at ${path} has invalid JSON: ${(e as Error).message}. Using defaults.`;
+    const msg = `remendra: config file at ${path} has invalid JSON: ${(e as Error).message}. Using defaults.`;
     console.warn(msg);
     return { data: null, error: msg };
   }
@@ -447,7 +447,7 @@ function readJson(path: string): {
 type WarnFn = (message: string) => void;
 
 /**
- * Load unified configuration from ~/.pi/agent/pi-blackhole/pi-blackhole-config.json.
+ * Load unified configuration from ~/.pi/agent/pi-remendra/pi-remendra-config.json.
  * Falls back to legacy sources if the unified file doesn't exist.
  */
 export function loadUnifiedConfig(cwd: string, onWarn?: WarnFn): UnifiedConfig {
@@ -472,12 +472,12 @@ export function loadUnifiedConfig(cwd: string, onWarn?: WarnFn): UnifiedConfig {
     const settingsResult = readJson(settingsPath);
     const settingsRaw = settingsResult.data;
     if (settingsResult.error && onWarn) onWarn(settingsResult.error);
-    const omRaw = settingsRaw?.["pi-blackhole"] ?? settingsRaw?.["observational-memory"];
+    const omRaw = settingsRaw?.["pi-remendra"] ?? settingsRaw?.["observational-memory"];
     const projectSettingsPath = join(cwd, ".pi", "settings.json");
     const projectResult = readJson(projectSettingsPath);
     const projectRaw = projectResult.data;
     if (projectResult.error && onWarn) onWarn(projectResult.error);
-    const projectOmRaw = projectRaw?.["pi-blackhole"] ?? projectRaw?.["observational-memory"];
+    const projectOmRaw = projectRaw?.["pi-remendra"] ?? projectRaw?.["observational-memory"];
 
     // Merge legacy sources
     const merged: Record<string, unknown> = {};
@@ -487,7 +487,7 @@ export function loadUnifiedConfig(cwd: string, onWarn?: WarnFn): UnifiedConfig {
     raw = merged;
   }
 
-  // Project-local override: <cwd>/.pi/pi-blackhole-config.json
+  // Project-local override: <cwd>/.pi/pi-remendra-config.json
   const projectConfigPath = join(cwd, ".pi", CONFIG_FILE);
   const projectResult = readJson(projectConfigPath);
   const projectRaw = projectResult.data;
@@ -503,7 +503,7 @@ export function loadUnifiedConfig(cwd: string, onWarn?: WarnFn): UnifiedConfig {
 
   // Env override — legacy passive env vars
   const envPassive =
-    process.env.PI_BLACKHOLE_PASSIVE ??
+    process.env.PI_REMENDRA_PASSIVE ??
     process.env.PI_VCC_OM_PASSIVE ??
     process.env.PI_OBSERVATIONAL_MEMORY_PASSIVE;
   if (envPassive !== undefined) {
@@ -524,43 +524,43 @@ export function loadUnifiedConfig(cwd: string, onWarn?: WarnFn): UnifiedConfig {
   const merged = { ...DEFAULTS, ...parsed };
 
   // ── Env override — compaction ──
-  const envCompaction = process.env.PI_BLACKHOLE_COMPACTION;
+  const envCompaction = process.env.PI_REMENDRA_COMPACTION;
   if (envCompaction !== undefined) {
     const trimmed = envCompaction.trim().toLowerCase();
     if (isCompaction(trimmed)) {
       merged.compaction = trimmed as "auto" | "manual" | "off";
     } else {
-      console.warn(`blackhole: invalid PI_BLACKHOLE_COMPACTION value "${envCompaction}"; ignoring`);
+      console.warn(`remendra: invalid PI_REMENDRA_COMPACTION value "${envCompaction}"; ignoring`);
     }
   }
 
   // ── Env override — compaction engine ──
-  const envCompactionEngine = process.env.PI_BLACKHOLE_COMPACTION_ENGINE;
+  const envCompactionEngine = process.env.PI_REMENDRA_COMPACTION_ENGINE;
   if (envCompactionEngine !== undefined) {
     const trimmed = envCompactionEngine.trim().toLowerCase();
     if (isCompactionEngine(trimmed)) {
-      merged.compactionEngine = trimmed as "blackhole" | "pi-default";
+      merged.compactionEngine = trimmed as "remendra" | "pi-default";
     } else {
       console.warn(
-        `blackhole: invalid PI_BLACKHOLE_COMPACTION_ENGINE value "${envCompactionEngine}"; ignoring`,
+        `remendra: invalid PI_REMENDRA_COMPACTION_ENGINE value "${envCompactionEngine}"; ignoring`,
       );
     }
   }
 
   // ── Env override — mid-run compaction ──
-  const envMidRunCompaction = process.env.PI_BLACKHOLE_MID_RUN_COMPACTION;
+  const envMidRunCompaction = process.env.PI_REMENDRA_MID_RUN_COMPACTION;
   if (envMidRunCompaction !== undefined) {
     const trimmed = envMidRunCompaction.trim().toLowerCase();
     if (isMidRunCompaction(trimmed)) {
       merged.midRunCompaction = trimmed as "resume" | "pause" | "off";
     } else {
       console.warn(
-        `blackhole: invalid PI_BLACKHOLE_MID_RUN_COMPACTION value "${envMidRunCompaction}"; ignoring`,
+        `remendra: invalid PI_REMENDRA_MID_RUN_COMPACTION value "${envMidRunCompaction}"; ignoring`,
       );
     }
   }
 
-  // ── Declarative PI_BLACKHOLE_* overrides ──
+  // ── Declarative PI_REMENDRA_* overrides ──
   // Same env map as the ConfigManager modal path, so env overrides apply
   // to the RUNTIME config, not just the modal. Overrides any file value.
   const withEnv = applyEnvOverrides(
@@ -583,7 +583,7 @@ export function saveUnifiedConfig(settings: Partial<UnifiedConfig>): boolean {
     const existingResult = readJson(path);
     const existing = existingResult.data ?? {};
     if (existingResult.error) {
-      console.warn("blackhole: overwriting corrupt config file at " + path);
+      console.warn("remendra: overwriting corrupt config file at " + path);
     }
     const next = { ...existing, ...settings };
     writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`);
@@ -596,8 +596,8 @@ export function saveUnifiedConfig(settings: Partial<UnifiedConfig>): boolean {
 /**
  * Write settings back to disk for a specific scope.
  *
- * - global: writes to `<agentDir>/pi-blackhole/pi-blackhole-config.json`
- * - project: writes to `<cwd>/.pi/pi-blackhole-config.json`
+ * - global: writes to `<agentDir>/pi-remendra/pi-remendra-config.json`
+ * - project: writes to `<cwd>/.pi/pi-remendra-config.json`
  *
  * Preserves unknown keys in the target file.
  */
@@ -607,13 +607,13 @@ export function saveUnifiedConfigScoped(
   cwd: string,
 ): boolean {
   try {
-    const dir = scope === "project" ? join(cwd, ".pi") : join(getAgentDir(), "pi-blackhole");
+    const dir = scope === "project" ? join(cwd, ".pi") : join(getAgentDir(), "pi-remendra");
     const path = join(dir, CONFIG_FILE);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const existingResult = readJson(path);
     const existing = existingResult.data ?? {};
     if (existingResult.error) {
-      console.warn("blackhole: overwriting corrupt config file at " + path);
+      console.warn("remendra: overwriting corrupt config file at " + path);
     }
     const next = { ...existing, ...settings };
     writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`);
@@ -624,7 +624,7 @@ export function saveUnifiedConfigScoped(
 }
 
 /**
- * Ensure ~/.pi/agent/pi-blackhole/pi-blackhole-config.json exists with defaults.
+ * Ensure ~/.pi/agent/pi-remendra/pi-remendra-config.json exists with defaults.
  *
  * Only creates the file if it doesn't exist. Missing keys are filled at read
  * time by loadUnifiedConfig() via { ...DEFAULTS, ...parsed } merge, so there
@@ -641,7 +641,7 @@ export function scaffoldConfig(): void {
       writeFileSync(path, `${JSON.stringify(DEFAULTS, null, 2)}\n`);
     }
   } catch (e) {
-    console.error("blackhole: config scaffold failed", e);
+    console.error("remendra: config scaffold failed", e);
   }
 }
 
@@ -679,7 +679,7 @@ export function configFileNeedsMigration(): boolean {
  *
  * In manual mode, observations/reflections/dropped are saved to the
  * per-session pending file instead of being appended to the branch.
- * On `/blackhole`, pending entries are flushed to the branch and
+ * On `/remendra`, pending entries are flushed to the branch and
  * the pending file is cleared.
  *
  * Handles both the new `compaction: "manual"` key and the legacy

@@ -1,12 +1,12 @@
 /**
- * Tests for /blackhole-recall command — search session history.
+ * Tests for /remendra-recall command — search session history.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const testRoot = join(tmpdir(), `pi-blackhole-recall-test-${process.pid}-${Date.now()}`);
+const testRoot = join(tmpdir(), `pi-remendra-recall-test-${process.pid}-${Date.now()}`);
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
   getAgentDir: () => join(testRoot, "agent"),
@@ -54,7 +54,7 @@ function createMockEnvironment() {
   return { pi, handlerMap, sentMessages, createSessionFile };
 }
 
-describe("/blackhole-recall command", () => {
+describe("/remendra-recall command", () => {
   beforeEach(() => {
     mkdirSync(testRoot, { recursive: true });
   });
@@ -63,12 +63,12 @@ describe("/blackhole-recall command", () => {
     rmSync(testRoot, { recursive: true, force: true });
   });
 
-  it("registers the blackhole-recall command", () => {
+  it("registers the remendra-recall command", () => {
     const { pi } = createMockEnvironment();
     registerVccRecallCommand(pi as any);
-    expect(pi.registerCommand).toHaveBeenCalledWith("blackhole-recall", expect.any(Object));
+    expect(pi.registerCommand).toHaveBeenCalledWith("remendra-recall", expect.any(Object));
     const callArgs = pi.registerCommand.mock.calls[0];
-    expect(callArgs[0]).toBe("blackhole-recall");
+    expect(callArgs[0]).toBe("remendra-recall");
     expect(callArgs[1].description.toLowerCase()).toContain("search");
   });
 
@@ -89,10 +89,10 @@ describe("/blackhole-recall command", () => {
       },
     };
 
-    await handlerMap.get("blackhole-recall")!("", ctx);
+    await handlerMap.get("remendra-recall")!("", ctx);
 
     expect(sentMessages).toHaveLength(1);
-    expect(sentMessages[0].customType).toBe("blackhole-recall");
+    expect(sentMessages[0].customType).toBe("remendra-recall");
     expect(sentMessages[0].content).toContain("#0");
     expect(sentMessages[0].content).toContain("#1");
   });
@@ -114,7 +114,7 @@ describe("/blackhole-recall command", () => {
       },
     };
 
-    await handlerMap.get("blackhole-recall")!("login", ctx);
+    await handlerMap.get("remendra-recall")!("login", ctx);
 
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0].content).toContain("1 matches");
@@ -135,7 +135,7 @@ describe("/blackhole-recall command", () => {
       },
     };
 
-    await handlerMap.get("blackhole-recall")!("nonexistent", ctx);
+    await handlerMap.get("remendra-recall")!("nonexistent", ctx);
 
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0].content).toContain('No matches for "nonexistent"');
@@ -157,7 +157,7 @@ describe("/blackhole-recall command", () => {
       },
     };
 
-    await handlerMap.get("blackhole-recall")!("test", ctx);
+    await handlerMap.get("remendra-recall")!("test", ctx);
 
     expect(notifyCalls).toHaveLength(1);
     expect(notifyCalls[0].msg).toContain("No session file available");
@@ -181,7 +181,7 @@ describe("/blackhole-recall command", () => {
       },
     };
 
-    await handlerMap.get("blackhole-recall")!("Secret scope:all", ctx);
+    await handlerMap.get("remendra-recall")!("Secret scope:all", ctx);
 
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0].content).toContain("1 matches");
@@ -207,7 +207,7 @@ describe("/blackhole-recall command", () => {
       },
     };
 
-    await handlerMap.get("blackhole-recall")!("test page:2", ctx);
+    await handlerMap.get("remendra-recall")!("test page:2", ctx);
 
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0].content).toContain("Page 2/2");

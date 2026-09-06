@@ -45,7 +45,7 @@ export function notifyMigrationReminder(
   if (count >= 2) return;
   if (!configFileNeedsMigration()) return;
   migrationNotifyCount.set(sessionId, count + 1);
-  notify("blackhole: Use `/blackhole configure` to save your updated configuration.", "info");
+  notify("remendra: Use `/remendra configure` to save your updated configuration.", "info");
 }
 
 const formatTokens = (n: number): string => {
@@ -70,7 +70,7 @@ export interface CompactionStats {
 /**
  * Format compaction stats for user-visible notification.
  * Example output:
- *   blackhole: 6 source entries processed; tail kept 1/4 user turns (~0.5k tok).
+ *   remendra: 6 source entries processed; tail kept 1/4 user turns (~0.5k tok).
  */
 export const formatCompactionStats = (stats: CompactionStats): string => {
   const parts: string[] = [`${stats.summarized} source entries processed`];
@@ -81,13 +81,13 @@ export const formatCompactionStats = (stats: CompactionStats): string => {
   if (stats.keepFallbackToCompactAll) {
     parts.push(`compact-all`);
   }
-  return `blackhole: ${parts.join("; ")} (~${formatTokens(stats.keptTokensEst)} tok).`;
+  return `remendra: ${parts.join("; ")} (~${formatTokens(stats.keptTokensEst)} tok).`;
 };
 
 const dbg = (debug: boolean, data: Record<string, unknown>) => {
   if (!debug) return;
   try {
-    writeFileSync("/tmp/pi-blackhole-debug.json", JSON.stringify(data, null, 2));
+    writeFileSync("/tmp/pi-remendra-debug.json", JSON.stringify(data, null, 2));
   } catch {}
 };
 
@@ -289,9 +289,9 @@ export function buildOwnCut(
 }
 
 const REASON_MESSAGES: Record<OwnCutCancelReason, string> = {
-  no_live_messages: "blackhole: Nothing to compact (no live messages)",
+  no_live_messages: "remendra: Nothing to compact (no live messages)",
   too_few_live_messages:
-    'blackhole: Too few live messages — Pi\'s default logic preserves visible context. Set tailBehavior to "minimal" in config to force compaction with fewer messages.',
+    'remendra: Too few live messages — Pi\'s default logic preserves visible context. Set tailBehavior to "minimal" in config to force compaction with fewer messages.',
 };
 
 export const registerBeforeCompactHook = (pi: ExtensionAPI, omRuntime: Runtime) => {
@@ -310,7 +310,7 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, omRuntime: Runtime) 
     // Provider-aware skip: another engine owns compaction for this provider
     // (e.g. pi-codex-compaction for OpenAI Codex). Step aside entirely so
     // exactly one compaction engine acts per turn, regardless of extension
-    // registration order. Applies to auto and explicit (/blackhole) paths.
+    // registration order. Applies to auto and explicit (/remendra) paths.
     // EXPERIMENTAL compat shim — do not extend; see src/core/provider-skip.ts.
     if (matchesSkippedProvider(omRuntime.config, ctx.model)) {
       trace("before_compact.provider_skipped", {
@@ -330,11 +330,11 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, omRuntime: Runtime) 
       hasPreviousSummary: !!preparation.previousSummary,
     });
 
-    // Always handle explicit /blackhole marker.
+    // Always handle explicit /remendra marker.
     // Otherwise, only handle when user opted in via settings.
 
     // NEW: Unified compaction guards
-    // compaction "off": blackhole skips auto-triggered, but /blackhole still uses blackhole pipeline
+    // compaction "off": remendra skips auto-triggered, but /remendra still uses remendra pipeline
     if (omRuntime.config.compaction === "off" && !isPiVcc) {
       trace("before_compact.return_early", { reason: "compaction_off" });
       return;
@@ -348,7 +348,7 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, omRuntime: Runtime) 
       return;
     }
 
-    // compaction "manual": /compact falls through to Pi, /blackhole still works
+    // compaction "manual": /compact falls through to Pi, /remendra still works
     if (omRuntime.config.compaction === "manual" && !isPiVcc) {
       trace("before_compact.return_early", { reason: "compaction_manual" });
       return;
@@ -361,7 +361,7 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, omRuntime: Runtime) 
     ) {
       if (!isPiVcc && !omRuntime.config.overrideDefaultCompaction) {
         trace("before_compact.return_early", {
-          reason: "overrideDefaultCompaction=false and not /blackhole",
+          reason: "overrideDefaultCompaction=false and not /remendra",
         });
         return;
       }
@@ -371,7 +371,7 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, omRuntime: Runtime) 
         !isPiVcc
       ) {
         trace("before_compact.cancel", {
-          reason: "manual mode and not /blackhole",
+          reason: "manual mode and not /remendra",
         });
         omRuntime.lastCompactCancelled = true;
         return { cancel: true };
@@ -379,7 +379,7 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, omRuntime: Runtime) 
     }
 
     // Determine effective tail behavior for buildOwnCut
-    // Both /blackhole and auto-triggered default to "minimal" (aggressive cut);
+    // Both /remendra and auto-triggered default to "minimal" (aggressive cut);
     // users can opt into "pi-default" (gentler) by setting tailBehavior in config.
     const effectiveTailBehavior = omRuntime.config.tailBehavior ?? "minimal";
 
@@ -594,7 +594,7 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, omRuntime: Runtime) 
     });
 
     const legacyDetails: PiVccCompactionDetails = {
-      compactor: "blackhole",
+      compactor: "remendra",
       version: 1,
       sections: [...summary.matchAll(/^\[(.+?)\]/gm)].map((m) => m[1]),
       sourceMessageCount: agentMessages.length,
@@ -624,7 +624,7 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, omRuntime: Runtime) 
       if (omRuntime.appendFallbackNotified) return;
       omRuntime.appendFallbackNotified = true;
       ctx?.ui?.notify?.(
-        `pi-blackhole: append summary mode fell back to a complete replacement summary (${reason}); run /blackhole to rebase back into append segments`,
+        `pi-remendra: append summary mode fell back to a complete replacement summary (${reason}); run /remendra to rebase back into append segments`,
         "warning",
       );
     };
@@ -688,12 +688,12 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, omRuntime: Runtime) 
   });
 
   // Fire success toast for /compact path only (delayed to let UI settle).
-  // /blackhole path uses its own onComplete callback in the command handler.
+  // /remendra path uses its own onComplete callback in the command handler.
   pi.on("session_compact", (event, ctx) => {
     const compactWasPiVcc = omRuntime.compactWasPiVcc;
     omRuntime.compactWasPiVcc = false;
     if (!event.fromExtension) return;
-    if (compactWasPiVcc) return; // /blackhole handles its own toast via onComplete
+    if (compactWasPiVcc) return; // /remendra handles its own toast via onComplete
     const stats = omRuntime.compactionStats;
     if (!stats) return;
     const sessionId = ctx.sessionManager.getSessionId();

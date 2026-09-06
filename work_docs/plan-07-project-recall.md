@@ -8,7 +8,7 @@
 
 ## 1. Problem statement
 
-The `recall` tool and `/blackhole recall` command search **only the active session** (plus its lineage). When the agent needs to answer "how did we solve X before?" or "what was decided about Y?", the answer is scattered across the current project's history — dozens of old session `.jsonl` files that the tool cannot see. The user's request, verbatim intent: add a new boolean/object param to the existing `recall` tool and `/blackhole recall` command so searches span the **current project's session history**, not just the active session.
+The `recall` tool and `/remendra recall` command search **only the active session** (plus its lineage). When the agent needs to answer "how did we solve X before?" or "what was decided about Y?", the answer is scattered across the current project's history — dozens of old session `.jsonl` files that the tool cannot see. The user's request, verbatim intent: add a new boolean/object param to the existing `recall` tool and `/remendra recall` command so searches span the **current project's session history**, not just the active session.
 
 The user describes the desired design as **layered**: recall tool layer → project recall layer → chrollo primitives (clone of https://github.com/k3-2o/pi-chrollo, v0.4.0, MIT, npm `@k3_2o/pi-chrollo`).
 
@@ -44,7 +44,7 @@ The user describes the desired design as **layered**: recall tool layer → proj
 | **D8** | **Basename/fuzzy fallback:** if the query contains a path-like token (`src/foo.ts`), additionally emit an rg pattern on the basename (`foo.ts`); matches annotate `(basename match)`. | Req 6 — survives renames/moves inside the project. |
 | **D9** | **New params on the `recall` tool:** `project: boolean` (default `false`) + `projectScope: StringEnum ["conversation","tool_outputs","all"]` (default `conversation`); `query` required when `project: true`. Command adds `project:true` and `pscope:(...)` parsing (new regex alongside `SCOPE_RE`/`MODE_RE` — `pscope` avoids colliding with the existing `scope:(lineage|all)`). | Matches "boolean/object param" intent; explicit separate scope keeps the existing `scope`/`mode` semantics untouched. |
 | **D10** | **Staleness header:** the project formatter emits, once per results block (every page), exactly `<--old context-->` plus a one-liner: `entries from older sessions may be stale — decisions may have changed since; tread lightly`. Shared by tool and command (single constant string). | Req 10. The `<--old context-->` marker mirrors pi's compaction labeling, so it reads naturally to the agent. |
-| **D11** | **rg is a hard requirement** for project recall (chrollo is rg-native); graceful error if `rg` is not on PATH. | Blackhole currently has zero binary deps — this is the accepted tradeoff (decision point, see §13 Q1). ripgrep 15.1.0 present on the dev machine; ~102MB corpus per project dir makes pure-Node scanning too slow. Need to figure out where pi ships the rg binary to point at it |
+| **D11** | **rg is a hard requirement** for project recall (chrollo is rg-native); graceful error if `rg` is not on PATH. | Remendra currently has zero binary deps — this is the accepted tradeoff (decision point, see §13 Q1). ripgrep 15.1.0 present on the dev machine; ~102MB corpus per project dir makes pure-Node scanning too slow. Need to figure out where pi ships the rg binary to point at it |
 | **D12** | **New config fields:** `projectRecallSessionCount` (default **60**, in the 50–75 range) and `projectRecallEnabled` (default `true`). | Bounds the corpus; doc-consistency rule applies (README.md / CONFIG.md / llms.txt must mirror `src/core/unified-config.ts` defaults). |
 
 ## 5. Target architecture (the layered approach)
@@ -89,9 +89,9 @@ The user describes the desired design as **layered**: recall tool layer → proj
   - `all` — everything, weighted per D5.
 - Dispatch in `execute()`: `params.project === true` → `projectRecall(params, ctx)` (before the drill-down/om paths). `query` is required in this branch; no `DEFAULT_RECENT` fallback. `page` reused for pagination (PAGE_SIZE=5, existing header/footer pattern).
 
-**`/blackhole recall` command** (src/commands/vcc-recall.ts):
+**`/remendra recall` command** (src/commands/vcc-recall.ts):
 - Parse `project:true` and `pscope:(conversation|tool_outputs|all)` (new `PROJECT_SCOPE_RE` in src/core/recall-scope.ts, mirroring `SCOPE_RE`/`MODE_RE` style).
-- Same pipeline and output, delivered via `pi.sendMessage({customType: "blackhole-recall", content, display: true}, {triggerTurn: true})`.
+- Same pipeline and output, delivered via `pi.sendMessage({customType: "remendra-recall", content, display: true}, {triggerTurn: true})`.
 
 ## 7. Algorithm (per call)
 
@@ -121,7 +121,7 @@ entries from older sessions may be stale — decisions may have changed since; t
 - `conversation` scope shows bare `role:` lines; `tool_outputs`/`all` entries get a `[toolName]` prefix.
 - Basename matches annotate `(basename match)` and the path shown is the old path.
 - First-seen note on entry footer when it differs from the entry date (e.g. `first seen 2 months ago`).
-- Pagination: `-- page 1/3 (15 results), use page:N or /blackhole recall page:2 --` (existing pattern).
+- Pagination: `-- page 1/3 (15 results), use page:N or /remendra recall page:2 --` (existing pattern).
 - Drill-down (`#N:path` on a project result) is a **v2 option** via the vendored `read()` window (see §14 non-goals).
 
 ## 9. Vendoring chrollo primitives
@@ -140,7 +140,7 @@ entries from older sessions may be stale — decisions may have changed since; t
 | `projectRecallEnabled` | `true` | master switch for project recall |
 | `projectRecallSessionCount` | `60` | newest N sessions scanned (author range: 50–75) |
 
-Both mirrored in `src/core/unified-config.ts`, README.md, CONFIG.md, llms.txt (docs-consistency rule). Env overrides: `PI_BLACKHOLE_*` pattern.
+Both mirrored in `src/core/unified-config.ts`, README.md, CONFIG.md, llms.txt (docs-consistency rule). Env overrides: `PI_REMENDRA_*` pattern.
 
 ## 11. New file layout
 
@@ -165,7 +165,7 @@ tests/project-recall.test.ts   fixture dir + stubbed RgRunner + JSONL v3 fixture
 
 - Fixture project session dir under a temp agentDir (existing pattern: `vi.mock("@earendil-works/pi-coding-agent")` → `getAgentDir`), inline JSONL v3 fixtures, stubbed `RgRunner` (chrollo's injectable runner type).
 - Coverage: candidate selection (mtime order, active-session exclusion, N cap), scope filtering (conversation vs tool_outputs vs all), role weights, tf-idf/RRF ordering, first-seen, recency, staleness header present iff `project: true`, basename fallback, relative timestamps, page pagination, command `project:true`/`pscope:` parsing.
-- Extend `tests/blackhole-recall.test.ts` for the new dispatch + command parsing.
+- Extend `tests/remendra-recall.test.ts` for the new dispatch + command parsing.
 - `pnpm typecheck && pnpm lint && pnpm test` must stay green; no test may shell out to rg.
 
 ## 13. Risks
@@ -197,7 +197,7 @@ tests/project-recall.test.ts   fixture dir + stubbed RgRunner + JSONL v3 fixture
 ### User notes and initial statements before plan:
 
 **Problem**
-Currently, the `recall` tool (and `/blackhole recall` command) only searches within the active session. In larger projects with hundreds of `.jsonl` session files, historical context is lost. For instance:
+Currently, the `recall` tool (and `/remendra recall` command) only searches within the active session. In larger projects with hundreds of `.jsonl` session files, historical context is lost. For instance:
 
 * A user refers to a decision made a week ago in a different session.
 * A code comment references a specific error (e.g., `bugfix 1 - undefined variable threw`), and the agent needs to track down when and where that code section was previously read or modified across past sessions.
@@ -378,7 +378,7 @@ Chrollo's `parseLine` keeps only user/assistant message lines — `om.*` custom 
    - **code corroboration**: content-bearing tool calls (write/edit) touching matching paths/topics,
    - **status**: active observations boost; `dropped` ones do not (droppedIds set).
    - Ranked: observation + cluster + code > bare observation > bare mention (no observation recorded).
-4. **Same unified corpus feeds the `/blackhole export` command** (Appendix A) — ranking/dedup machinery is shared.
+4. **Same unified corpus feeds the `/remendra export` command** (Appendix A) — ranking/dedup machinery is shared.
 
 ### 17.4 Wiring notes
 
@@ -392,17 +392,17 @@ Chrollo's `parseLine` keeps only user/assistant message lines — `om.*` custom 
 **Verified facts (0.84.0):**
 - `tools-manager.js` exports `getToolPath(tool)` / `ensureTool(tool, silent?)` but they are **not re-exported** from the package index (`dist/index.d.ts`) — deep import only, not public API, 0.81.1-compat risk → **do not import them**; mirror the logic locally instead (~15 lines).
 - `getToolPath` logic (tools-manager.js:78-91): check `join(getBinDir(), "rg" + (win32 ? ".exe" : ""))` first, then system PATH via `commandExists`.
-- `getBinDir() = join(getAgentDir(), "bin")` (config.js:440-441) → `~/.pi/agent/bin/` (matches CHANGELOG #470). Blackhole already resolves agentDir via the same `getAgentDir()` for session paths, so the bin dir is consistent.
+- `getBinDir() = join(getAgentDir(), "bin")` (config.js:440-441) → `~/.pi/agent/bin/` (matches CHANGELOG #470). Remendra already resolves agentDir via the same `getAgentDir()` for session paths, so the bin dir is consistent.
 - On Android/Termux pi skips download (`pkg install rg` → PATH only).
 
 **Design (D19 — replace/extend D11):**
 - New module `src/core/resolve-rg.ts`: `resolveRgPath(): string | null` with candidate resolution in order:
-  1. NO explicit override `PI_BLACKHOLE_RG_PATH` env (consistent with existing `PI_BLACKHOLE_*` convention), no new config knob, overkill for simple ripgrep finding! 
+  1. NO explicit override `PI_REMENDRA_RG_PATH` env (consistent with existing `PI_REMENDRA_*` convention), no new config knob, overkill for simple ripgrep finding! 
   2. Pi managed dir: `join(getAgentDir(), "bin", "rg" | "rg.exe")` — `existsSync`.
   3. PATH walk: split `process.env.PATH` by `path.delimiter`, `existsSync(join(dir, rg|rg.exe))`, `fs.accessSync(X_OK)` on non-win32.
 - Verify the chosen candidate with `execFile(rgPath, ["--version"])` (5s timeout); on failure fall through to next candidate.
 - Memoize result per process (re-stat cached path cheaply per call).
-- None found → actionable error in the tool result ("run pi once so it downloads rg to ~/.pi/agent/bin, or install ripgrep, or set PI_BLACKHOLE_RG_PATH") — rg stays a soft requirement, graceful degradation. Pure-Node fallback scanner remains an open question (cold-disk latency, see §13/§14).
+- None found → actionable error in the tool result ("run pi once so it downloads rg to ~/.pi/agent/bin, or install ripgrep, or set PI_REMENDRA_RG_PATH") — rg stays a soft requirement, graceful degradation. Pure-Node fallback scanner remains an open question (cold-disk latency, see §13/§14).
 - Vendored `runRipgrep` gets an `rgPath` parameter (thread through the injectable `RgRunner` type — same seam chrollo already uses for tests), so tests stub the runner and never touch a real binary.
 
 - Graceful degradation and fail with an error if rg is not available after all the discovery, so model doesn't try to use the project recall over and over again if not available.
@@ -411,7 +411,7 @@ Chrollo's `parseLine` keeps only user/assistant message lines — `om.*` custom 
 
 ## §19 — Machine recon receipts (2026-08-25, branch `feat/project-recall`)
 
-Empirical validation of §17/Appendix A assumptions against the real corpus (`~/.pi/agent/sessions`, 1202 files / 1100MB / 1 corrupt line; `~/.pi/agent/pi-blackhole`, 420 pending/stale files). Throwaway scripts under `/tmp/opencode/recon/`; findings below are measured, not estimated.
+Empirical validation of §17/Appendix A assumptions against the real corpus (`~/.pi/agent/sessions`, 1202 files / 1100MB / 1 corrupt line; `~/.pi/agent/pi-remendra`, 420 pending/stale files). Throwaway scripts under `/tmp/opencode/recon/`; findings below are measured, not estimated.
 
 ### 19.1 Corpus inventory
 
@@ -451,7 +451,7 @@ Author guidance: relevance tiers feed RRF criticality, timestamps feed recency/s
 
 Design consequences:
 1. **Exact-normalized dedup FIRST** (cheap content hash) — halves the corpus, kills fork/move inflation and record bursts. Levenshtein clustering is a refinement (paraphrase merge + display cap ≤3 per A.1), not the main lever.
-2. **Session-id dedup**: same header `session.id` in multiple scope dirs = one logical session (keep newest mtime). This also mitigates the project-identity fragmentation (this repo's history spans `projects/pi-blackhole-dev`, `~/pi-blackhole-dev`, `.pi/agent/extensions/pi-blackhole`).
+2. **Session-id dedup**: same header `session.id` in multiple scope dirs = one logical session (keep newest mtime). This also mitigates the project-identity fragmentation (this repo's history spans `projects/pi-remendra-dev`, `~/pi-remendra-dev`, `.pi/agent/extensions/pi-remendra`).
 3. **Cluster-size boost must be damped** (`log(1+distinctLogicalSessions)`): raw repetition counts pipeline artifacts and single-episode bursts, not long-horizon recurrence. Linear boosting would be badly wrong.
 4. Relevance tiers survive as rank inputs even among duplicates; low-value boilerplate repeats exist but rarely exceed 2–3×.
 5. Export sizing: global rep-only ≈ 371k est tokens (~1.5MB raw) → A.1's "50–100kb distilled" needs relevance+recency filtering and/or per-project scoping on top of dedup.
@@ -462,13 +462,13 @@ Pure-Node whole-corpus scan (parse every line of all 1202 files): 9.4s. rg over 
 
 ### 19.6 Project scoping + reflection elevation (author notes, 2026-08-25)
 
-- **One scope folder = one project.** Corpus walks only the cwd-encoded scope dir (`--home-kovalik-projects-pi-blackhole-dev--`), plus the git-root-encoded dir as secondary candidate when it differs. Other projects' session files are never opened — speed + true "current project" scoping.
-- **Reflections outrank all raw observations.** Pipeline semantics: the reflector is a second LLM pass that reviewed, dropped, and promoted observations before distilling them, so a reflection carries verified value from the project's perspective. `/blackhole-export` renders the Reflections section above every observation tier and scores reflections with high-tier weight × an evidence-mass multiplier `1+log2(1+supportingObservationIds.length)` (damped, per §19.4).
+- **One scope folder = one project.** Corpus walks only the cwd-encoded scope dir (`--home-kovalik-projects-pi-remendra-dev--`), plus the git-root-encoded dir as secondary candidate when it differs. Other projects' session files are never opened — speed + true "current project" scoping.
+- **Reflections outrank all raw observations.** Pipeline semantics: the reflector is a second LLM pass that reviewed, dropped, and promoted observations before distilling them, so a reflection carries verified value from the project's perspective. `/remendra-export` renders the Reflections section above every observation tier and scores reflections with high-tier weight × an evidence-mass multiplier `1+log2(1+supportingObservationIds.length)` (damped, per §19.4).
 - Cheap prefilter discipline: attributed session files are skipped before JSON parsing when a buffered read shows no `om.` substring at all.
 
 ---
 
-## Appendix A — `/blackhole export` — distilled project memory dump (author concept, 2026-08-20)
+## Appendix A — `/remendra export` — distilled project memory dump (author concept, 2026-08-20)
 
 Closely tied to the project-recall plan: same treatment, reuses the same primitives (chrollo search/normalize, tf-idf/RRF/recency ranking, levenshtein dedup, unified observation corpus from §17) and builds on it.
 Instead, the export command turns the observation pipeline's accumulated output into a portable, distilled artifact.
@@ -486,7 +486,7 @@ Instead, the export command turns the observation pipeline's accumulated output 
 
 - Addresses the "wasted tokens" concern: observations persist in session files (or pending buffers) even if a session never compacts — export recovers that latent memory.
 - Shares the unified corpus + ranking/dedup machinery from §17 (observations as first-class corpus).
-- Passive mode (`PI_BLACKHOLE_PASSIVE`) remains the opt-out for users who don't want the pipeline cost at all.
+- Passive mode (`PI_REMENDRA_PASSIVE`) remains the opt-out for users who don't want the pipeline cost at all.
 
 ### A.3 Tests
 
@@ -498,7 +498,7 @@ The first export commit (a123e12) was a deterministic, deduplicated dump: 83 ses
 
 | # | Decision | Rationale |
 |---|---|---|
-| **A4-D1** | Command output is delivered via `pi.sendMessage({customType:"blackhole-export", content, display:true})` with **no `triggerTurn`**; a `ctx.ui.notify("Exporting project memory…", "info")` shows the working indicator | `triggerTurn:true` made the agent start reading the export as a new turn — the export is a **user artifact**, not agent context. `display:true` (the pi-context/pi-cache pattern) renders the notification in the TUI; the agent stays on task. The file on disk is the artifact. |
+| **A4-D1** | Command output is delivered via `pi.sendMessage({customType:"remendra-export", content, display:true})` with **no `triggerTurn`**; a `ctx.ui.notify("Exporting project memory…", "info")` shows the working indicator | `triggerTurn:true` made the agent start reading the export as a new turn — the export is a **user artifact**, not agent context. `display:true` (the pi-context/pi-cache pattern) renders the notification in the TUI; the agent stays on task. The file on disk is the artifact. |
 | **A4-D2** | `CorpusReflection` preserves `supportingObservationIds: string[]` instead of collapsing to `supportingCount: number` | Coverage-weighted ranking needs the actual id set: an observation's export score must reflect **how many reflections validated it**. Damping (log-scale) happens at scoring time, not parse time. |
 | **A4-D3** | Three-pass dedup: exact normalized → Levenshtein@0.92 (bigram-Jaccard prefilters) → **Sørensen-Dice token-set similarity** over remaining reps | Levenshtein edits catch near-identical wording but miss paraphrases that reorder/swap vocabulary. Sørensen-Dice is order-independent: `2·|A∩B|/(|A|+|B|)` over stop-word-stripped token sets. Merges require **Sørensen-Dice ≥ 0.75 AND Levenshtein ≥ 0.60** — the Levenshtein floor prevents pure keyword overlap from merging distinct facts. |
 | **A4-D4** | Stop-word stripping before tokenization, explicitly including `user`/`agent` | Those two words appear in a vast majority of observations (observer prompt patterns); they would dominate token-set overlap and inflate similarity for unrelated items. The stop list covers English function words + discourse markers (exported as `STOP_WORDS`). |
@@ -512,4 +512,4 @@ The first export commit (a123e12) was a deterministic, deduplicated dump: 83 ses
 | **A4-D12** | Stats extended: `observationsClustered`, `observationsRendered`, `observationsFiltered`, `topicGroups`; header shows rendered count after the viability gate | The old "1421 unique" overstated what the reader actually receives; the new header says how many survive dedup **and** the gate, plus how many clusters the gate removed. |
 | **A4-D13** | Multi-pass clustering runs statelessly on every export (no caching layer) | Deterministic output is the author requirement (same corpus → same file); the corpus walk is already bounded to the project scope folders + pending dir (§19.5). |
 
-**Tests** — `tests/blackhole-export.test.ts` gained an `orphan456-pending.json` fixture (a cross-session orphan survivor, needed because A4-D8 requires ≥2 orphaned sessions to render) and asserts the new `across 2 sessions` meta. All 1421 tests green; typecheck, lint, and format all clean.
+**Tests** — `tests/remendra-export.test.ts` gained an `orphan456-pending.json` fixture (a cross-session orphan survivor, needed because A4-D8 requires ≥2 orphaned sessions to render) and asserts the new `across 2 sessions` meta. All 1421 tests green; typecheck, lint, and format all clean.

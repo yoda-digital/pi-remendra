@@ -1,5 +1,5 @@
 {
-  "_description": "Bijection table mapping upstream files to blackhole's versions. Each entry describes how the file relates.",
+  "_description": "Bijection table mapping upstream files to remendra's versions. Each entry describes how the file relates.",
   "_note": "Keys use upstream path relative to repo root. Values describe the relationship.",
   "upstreams": {
     "pi-vcc": {
@@ -36,14 +36,14 @@
       "path": "src/commands/pi-vcc.ts",
       "ours": "src/commands/pi-vcc.ts",
       "status": "MODIFIED",
-      "_note": "Added omRuntime parameter for noAutoCompact flush. Extended to write pending observations on /blackhole."
+      "_note": "Added omRuntime parameter for noAutoCompact flush. Extended to write pending observations on /remendra."
     },
     {
       "upstream": "pi-vcc",
       "path": "src/commands/vcc-recall.ts",
       "ours": "src/commands/vcc-recall.ts",
       "status": "MODIFIED",
-      "_note": "Added .js import extensions, OM reverse-recall augmentation (findObservationsForEntryIds, findReflectionsForEntryIds), command renamed to /blackhole-recall."
+      "_note": "Added .js import extensions, OM reverse-recall augmentation (findObservationsForEntryIds, findReflectionsForEntryIds), command renamed to /remendra-recall."
     },
     {
       "upstream": "pi-vcc",
@@ -198,14 +198,14 @@
       "path": "src/details.ts",
       "ours": "src/details.ts",
       "status": "MODIFIED",
-      "_note": "Renamed compactor field from 'pi-vcc' to 'blackhole'."
+      "_note": "Renamed compactor field from 'pi-vcc' to 'remendra'."
     },
     {
       "upstream": "pi-vcc",
       "path": "src/core/report.ts",
       "ours": null,
       "status": "ELIMINATED",
-      "_note": "Dead code removed in blackhole v0.2.1. Upstream still has it."
+      "_note": "Dead code removed in remendra v0.2.1. Upstream still has it."
     },
     {
       "upstream": "pi-vcc",
@@ -353,14 +353,14 @@
       "path": "src/commands/status.ts",
       "ours": null,
       "status": "ELIMINATED",
-      "_note": "Replaced by our /blackhole-memory command (src/commands/memory.ts) with richer display."
+      "_note": "Replaced by our /remendra-memory command (src/commands/memory.ts) with richer display."
     },
     {
       "upstream": "pi-observational-memory",
       "path": "src/commands/view.ts",
       "ours": null,
       "status": "ELIMINATED",
-      "_note": "Functionality folded into /blackhole-memory view|full."
+      "_note": "Functionality folded into /remendra-memory view|full."
     },
     {
       "upstream": "pi-observational-memory",
@@ -380,7 +380,7 @@
       "path": "src/debug-log.ts",
       "ours": "src/om/debug-log.ts",
       "status": "MODIFIED",
-      "_note": "Changed log path from observational-memory/ to pi-blackhole/. Removed sessionId/sessionFile from interface, removed safeDebugLogSessionId and debugLogRelativePath functions."
+      "_note": "Changed log path from observational-memory/ to pi-remendra/. Removed sessionId/sessionFile from interface, removed safeDebugLogSessionId and debugLogRelativePath functions."
     },
     {
       "upstream": "pi-observational-memory",

@@ -41,7 +41,11 @@ export async function fetchEmbeddings(
       chunks.push(value);
     }
   } finally {
-    await reader.cancel();
+    try {
+      await reader.cancel();
+    } catch {
+      /* Do not mask the original error */
+    }
     reader.releaseLock();
   }
   const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));

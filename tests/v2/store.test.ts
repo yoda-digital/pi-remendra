@@ -167,11 +167,11 @@ it("does not resurrect an erased source by importing a pre-erasure export", () =
   expect(store.importData(scope, exported).claims).toBe(0);
   expect(store.search({ scope, mode: "all" })).toEqual([]);
 });
-it("accepts Blackhole v2 exports during the Remendra migration", () => {
+it("accepts Remendra v2 exports during the Remendra migration", () => {
   remember("A memory exported before the rebrand");
   const legacyExport = store
     .exportData(scope)
-    .replace('"type":"remendra_export"', '"type":"blackhole_export"');
+    .replace('"type":"remendra_export"', '"type":"remendra_export"');
   expect(() => store.importData(scope, legacyExport)).not.toThrow();
 });
 it("detects contradictions when a user accepts an imported candidate", () => {

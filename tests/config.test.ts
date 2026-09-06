@@ -10,7 +10,7 @@ import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
-const testDir = join(tmpdir(), `pi-blackhole-config-test-${Date.now()}`);
+const testDir = join(tmpdir(), `pi-remendra-config-test-${Date.now()}`);
 
 // Mock getAgentDir to point to our test directory
 vi.mock("@earendil-works/pi-coding-agent", () => ({
@@ -19,7 +19,7 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function writeConfig(data: unknown, filename = "pi-blackhole/pi-blackhole-config.json"): string {
+function writeConfig(data: unknown, filename = "pi-remendra/pi-remendra-config.json"): string {
   const dir = join(testDir, dirname(filename));
   mkdirSync(dir, { recursive: true });
   const path = join(testDir, filename);
@@ -46,7 +46,7 @@ describe("Config defaults", () => {
     const config = loadUnifiedConfig(testDir);
     // New config surface defaults
     expect(config.compaction).toBe("auto");
-    expect(config.compactionEngine).toBe("blackhole");
+    expect(config.compactionEngine).toBe("remendra");
     expect(config.tailBehavior).toBe("minimal");
     expect(config.debug).toBe(false);
     expect(config.observeAfterTokens).toBe(15_000);
@@ -301,8 +301,8 @@ describe("Legacy config fallback", () => {
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ overrideDefaultCompaction: true, debug: true }, "pi-vcc-config.json");
     const config = loadUnifiedConfig(testDir);
-    // Legacy overrideDefaultCompaction:true → compactionEngine:blackhole + tailBehavior:minimal
-    expect(config.compactionEngine).toBe("blackhole");
+    // Legacy overrideDefaultCompaction:true → compactionEngine:remendra + tailBehavior:minimal
+    expect(config.compactionEngine).toBe("remendra");
     expect(config.tailBehavior).toBe("minimal");
     expect(config.debug).toBe(true);
     expect((config as any).overrideDefaultCompaction).toBeUndefined();
@@ -315,7 +315,7 @@ describe("Legacy config fallback", () => {
     // Write unified file — new keys present so no migration runs
     writeConfig(
       { compaction: "off", compactionEngine: "pi-default", debug: false },
-      "pi-blackhole/pi-blackhole-config.json",
+      "pi-remendra/pi-remendra-config.json",
     );
     const config = loadUnifiedConfig(testDir);
     expect(config.compaction).toBe("off");
@@ -323,11 +323,11 @@ describe("Legacy config fallback", () => {
     expect(config.debug).toBe(false);
   });
 
-  it("loads legacy om config from settings.json under pi-blackhole key and migrates", async () => {
+  it("loads legacy om config from settings.json under pi-remendra key and migrates", async () => {
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig(
       {
-        "pi-blackhole": {
+        "pi-remendra": {
           passive: true,
           debugLog: true,
           observeAfterTokens: 5_000,
@@ -398,14 +398,14 @@ describe("Env overrides", () => {
 describe("Declarative env overrides apply at runtime", () => {
   afterEach(() => {
     // Clean up every env var this block may set.
-    delete process.env.PI_BLACKHOLE_COMPACT_AFTER_TOKENS;
-    delete process.env.PI_BLACKHOLE_DEBUG;
-    delete process.env.PI_BLACKHOLE_DROPPER_PRESSURE_THRESHOLD;
-    delete process.env.PI_BLACKHOLE_OBSERVE_AFTER_TOKENS;
+    delete process.env.PI_REMENDRA_COMPACT_AFTER_TOKENS;
+    delete process.env.PI_REMENDRA_DEBUG;
+    delete process.env.PI_REMENDRA_DROPPER_PRESSURE_THRESHOLD;
+    delete process.env.PI_REMENDRA_OBSERVE_AFTER_TOKENS;
   });
 
   it("int override wins over the file value (runtime path)", async () => {
-    process.env.PI_BLACKHOLE_COMPACT_AFTER_TOKENS = "200000";
+    process.env.PI_REMENDRA_COMPACT_AFTER_TOKENS = "200000";
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ compactAfterTokens: 185_000 });
     const config = loadUnifiedConfig(testDir);
@@ -413,7 +413,7 @@ describe("Declarative env overrides apply at runtime", () => {
   });
 
   it("boolean override applies", async () => {
-    process.env.PI_BLACKHOLE_DEBUG = "true";
+    process.env.PI_REMENDRA_DEBUG = "true";
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ debug: false });
     const config = loadUnifiedConfig(testDir);
@@ -421,7 +421,7 @@ describe("Declarative env overrides apply at runtime", () => {
   });
 
   it("invalid int falls back to the configured value", async () => {
-    process.env.PI_BLACKHOLE_COMPACT_AFTER_TOKENS = "not-a-number";
+    process.env.PI_REMENDRA_COMPACT_AFTER_TOKENS = "not-a-number";
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ compactAfterTokens: 185_000 });
     const config = loadUnifiedConfig(testDir);
@@ -429,7 +429,7 @@ describe("Declarative env overrides apply at runtime", () => {
   });
 
   it("float override (dropperPressureThreshold) applies", async () => {
-    process.env.PI_BLACKHOLE_DROPPER_PRESSURE_THRESHOLD = "0.5";
+    process.env.PI_REMENDRA_DROPPER_PRESSURE_THRESHOLD = "0.5";
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ dropperPressureThreshold: 0.7 });
     const config = loadUnifiedConfig(testDir);
@@ -437,7 +437,7 @@ describe("Declarative env overrides apply at runtime", () => {
   });
 
   it("out-of-range float is rejected (keeps configured value)", async () => {
-    process.env.PI_BLACKHOLE_DROPPER_PRESSURE_THRESHOLD = "2.0";
+    process.env.PI_REMENDRA_DROPPER_PRESSURE_THRESHOLD = "2.0";
     const { loadUnifiedConfig } = await import("../src/core/unified-config.js");
     writeConfig({ dropperPressureThreshold: 0.7 });
     const config = loadUnifiedConfig(testDir);
@@ -454,8 +454,8 @@ describe("Integer fields are validated as positive integers", () => {
       compactAfterTokens: 81_000,
     });
     const config = loadUnifiedConfig(testDir);
-    expect(config.observeAfterTokens).toBe(15_000); // blackhole default (upstream is 10_000)
-    expect(config.reflectAfterTokens).toBe(25_000); // blackhole default (upstream is 20_000)
+    expect(config.observeAfterTokens).toBe(15_000); // remendra default (upstream is 10_000)
+    expect(config.reflectAfterTokens).toBe(25_000); // remendra default (upstream is 20_000)
     expect(config.compactAfterTokens).toBe(81_000); // from config
   });
 });

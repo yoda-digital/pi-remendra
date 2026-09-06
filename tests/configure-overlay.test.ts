@@ -6,8 +6,8 @@ import { createConfigureOverlay } from "../src/om/configure-overlay.js";
 import { loadUnifiedConfig } from "../src/core/unified-config.js";
 import { setKittyProtocolActive } from "@earendil-works/pi-tui";
 
-const testDir = join(tmpdir(), "pi-blackhole-overlay-test");
-const configPath = join(testDir, "pi-blackhole-config.json");
+const testDir = join(tmpdir(), "pi-remendra-overlay-test");
+const configPath = join(testDir, "pi-remendra-config.json");
 
 const mockTheme = {
   fg: (_style: string, text: string) => text,
@@ -32,7 +32,7 @@ beforeAll(() => {
     JSON.stringify(
       {
         compaction: "auto",
-        compactionEngine: "blackhole",
+        compactionEngine: "remendra",
         tailBehavior: "pi-default",
         memory: true,
         compactAfterTokens: 81000,
@@ -50,7 +50,7 @@ afterAll(() => {
     unlinkSync(configPath);
   } catch {}
   try {
-    unlinkSync(join(testDir, "pi-blackhole-config.json.99999.tmp"));
+    unlinkSync(join(testDir, "pi-remendra-config.json.99999.tmp"));
   } catch {}
   setKittyProtocolActive(false);
 });
@@ -68,7 +68,7 @@ describe("createConfigureOverlay", () => {
     const overlay = createConfigureOverlay(configPath, mockTheme, makeTui(), () => {});
     const lines = overlay.render(80);
     expect(lines.length).toBeGreaterThan(0);
-    expect(lines.some((l) => l.includes("Blackhole Configuration"))).toBe(true);
+    expect(lines.some((l) => l.includes("Remendra Configuration"))).toBe(true);
   });
 
   test("render shows field values from config", () => {
@@ -76,7 +76,7 @@ describe("createConfigureOverlay", () => {
     const lines = overlay.render(80);
     const joined = lines.join("\n");
     expect(joined).toContain("auto");
-    expect(joined).toContain("blackhole");
+    expect(joined).toContain("remendra");
     expect(joined).toContain("pi-default");
   });
 
@@ -277,21 +277,21 @@ describe("createConfigureOverlay", () => {
     const lines = overlay.render(80);
     // Should still render (uses empty config)
     expect(lines.length).toBeGreaterThan(0);
-    expect(lines.some((l) => l.includes("Blackhole Configuration"))).toBe(true);
+    expect(lines.some((l) => l.includes("Remendra Configuration"))).toBe(true);
   });
 
   test("compactionSummaryMode round-trips through the overlay: load append, flip to default, save, reload", () =>
     new Promise<void>((done) => {
       // Isolated config dir so this test drives the real loader path.
-      const roundTripDir = join(tmpdir(), `pi-blackhole-overlay-rt-${Date.now()}`);
-      const roundTripPath = join(roundTripDir, "pi-blackhole", "pi-blackhole-config.json");
-      mkdirSync(join(roundTripDir, "pi-blackhole"), { recursive: true });
+      const roundTripDir = join(tmpdir(), `pi-remendra-overlay-rt-${Date.now()}`);
+      const roundTripPath = join(roundTripDir, "pi-remendra", "pi-remendra-config.json");
+      mkdirSync(join(roundTripDir, "pi-remendra"), { recursive: true });
       writeFileSync(
         roundTripPath,
         JSON.stringify(
           {
             compaction: "auto",
-            compactionEngine: "blackhole",
+            compactionEngine: "remendra",
             compactionSummaryMode: "append",
             tailBehavior: "pi-default",
             memory: true,

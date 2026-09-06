@@ -28,9 +28,9 @@ describe("normalize", () => {
     expect(normalize([msg])).toEqual([{ kind: "assistant", text: "plain text", sourceIndex: 0 }]);
   });
 
-  it("includes thinking blocks (blackhole keeps them, unlike upstream)", () => {
+  it("includes thinking blocks (remendra keeps them, unlike upstream)", () => {
     const blocks = normalize([assistantWithThinking("result", "hmm")]);
-    // blackhole keeps thinking blocks (upstream commit a156870 deferred).
+    // remendra keeps thinking blocks (upstream commit a156870 deferred).
     expect(blocks).toHaveLength(2);
     expect(blocks[0]).toEqual({
       kind: "thinking",
@@ -59,7 +59,7 @@ describe("normalize", () => {
 
   it("normalizes tool result with isError flag", () => {
     const blocks = normalize([toolResult("Read", "file contents")]);
-    // blackhole keeps isError (upstream commit a156870 deferred)
+    // remendra keeps isError (upstream commit a156870 deferred)
     expect(blocks).toEqual([
       {
         kind: "tool_result",

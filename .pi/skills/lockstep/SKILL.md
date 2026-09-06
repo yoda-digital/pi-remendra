@@ -3,9 +3,9 @@ name: lockstep
 description: Audit upstream changes from pi-vcc (sting8k/pi-vcc) and pi-observational-memory (elpapi42/pi-observational-memory) against our heavily diverged frankenmerge. Use when user says "check upstream", "lockstep", "what changed upstream", "sync upstream", or when making any change that touches files derived from those repos. Never use for design discussions or new features unrelated to upstream tracking.
 ---
 
-# Lockstep — upstream change audit for pi-blackhole
+# Lockstep — upstream change audit for pi-remendra
 
-Blackhole is a **file-copied** (not git-forked) merge of two upstream repos. No shared git ancestry. All tracking is via stored SHA markers in `.pi/skills/lockstep/`.
+Remendra is a **file-copied** (not git-forked) merge of two upstream repos. No shared git ancestry. All tracking is via stored SHA markers in `.pi/skills/lockstep/`.
 
 ## Branch strategy
 
@@ -19,11 +19,11 @@ This keeps lockstep work isolated from feature branches (`feat/*`) and ensures t
 
 ## Setup prerequisites
 
-The lockstep scripts must be run from the **pi-blackhole repo root** (the extension directory).
+The lockstep scripts must be run from the **pi-remendra repo root** (the extension directory).
 The agent's CWD is set automatically — for manual runs:
 
 ```bash
-cd <pi-blackhole-repo-root>
+cd <pi-remendra-repo-root>
 git fetch upstream-pi-vcc                     # one-time setup
 git fetch upstream-pi-observational-memory    # one-time setup
 ```
@@ -264,7 +264,7 @@ node .pi/skills/lockstep/scripts/lockstep.js --vcc
 
 To reset a marker (start over from upstream HEAD):
 ```bash
-cd <pi-blackhole-repo-root>
+cd <pi-remendra-repo-root>
 git rev-parse refs/remotes/upstream-pi-vcc/master > .pi/skills/lockstep/.upstream-vcc-head
 ```
 

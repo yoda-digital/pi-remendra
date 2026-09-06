@@ -1,5 +1,5 @@
 /**
- * Blackhole settings — modal-based configuration via ConfigManager.
+ * Remendra settings — modal-based configuration via ConfigManager.
  *
  * Replaces the hand-rolled configure overlay (src/om/configure-overlay.ts)
  * with pi-base's ConfigManager + openConfigFlow (scope-selector →
@@ -9,7 +9,7 @@
  * so they take effect for both the runtime path (loadUnifiedConfig) and
  * the modal path (config.load / config.openSettings).
  *
- * Session-scoped config is enabled: blackhole-specific overrides are
+ * Session-scoped config is enabled: remendra-specific overrides are
  * persisted to the session JSONL and recovered on session_start.
  */
 
@@ -21,20 +21,20 @@ import { DECLARATIVE_ENV_OVERRIDES } from "../core/config-env.js";
 import { DEFAULTS, type UnifiedConfig } from "../core/unified-config.js";
 import { openChangelogView } from "../changelog/changelog.js";
 
-const CONFIG_FILENAME = "pi-blackhole-config.json";
+const CONFIG_FILENAME = "pi-remendra-config.json";
 
-export const GLOBAL_CONFIG_DIR = join(getPiAgentDir(), "pi-blackhole");
+export const GLOBAL_CONFIG_DIR = join(getPiAgentDir(), "pi-remendra");
 
 // ── ConfigManager instance ───────────────────────────────────────────────────
 
 export const config = new ConfigManager<UnifiedConfig>({
-  id: "pi-blackhole",
-  label: "pi-blackhole",
+  id: "pi-remendra",
+  label: "pi-remendra",
   filename: CONFIG_FILENAME,
   configDir: GLOBAL_CONFIG_DIR,
   defaults: DEFAULTS,
   scopes: { global: true, project: true, session: true },
-  sessionConfig: { entryType: "session-config-pi-blackhole" },
+  sessionConfig: { entryType: "session-config-pi-remendra" },
 
   fields: (cfg) => [
     // ── Compaction ──
@@ -43,24 +43,24 @@ export const config = new ConfigManager<UnifiedConfig>({
       type: "enum",
       label: "Compaction mode",
       description:
-        "auto=trigger on threshold, manual=only /blackhole, off=auto:Pi handles, /blackhole:blackhole pipeline",
+        "auto=trigger on threshold, manual=only /remendra, off=auto:Pi handles, /remendra:remendra pipeline",
       value: cfg.compaction,
       options: ["auto", "manual", "off"],
       optionLabels: {
         auto: "auto — trigger on threshold",
-        manual: "manual — only /blackhole",
-        off: "off — auto:Pi handles, /blackhole:blackhole pipeline",
+        manual: "manual — only /remendra",
+        off: "off — auto:Pi handles, /remendra:remendra pipeline",
       },
     },
     {
       key: "compactionEngine",
       type: "enum",
       label: "Compaction engine",
-      description: "blackhole=structured summary+OM, pi-default=built-in Pi summarization",
+      description: "remendra=structured summary+OM, pi-default=built-in Pi summarization",
       value: cfg.compactionEngine,
-      options: ["blackhole", "pi-default"],
+      options: ["remendra", "pi-default"],
       optionLabels: {
-        blackhole: "blackhole — structured summary + OM",
+        remendra: "remendra — structured summary + OM",
         "pi-default": "pi-default — built-in Pi summarization",
       },
     },
@@ -69,12 +69,12 @@ export const config = new ConfigManager<UnifiedConfig>({
       type: "enum",
       label: "Summary history",
       description:
-        "default=replace one complete summary, append=freeze automatic segments and rebase on /blackhole",
+        "default=replace one complete summary, append=freeze automatic segments and rebase on /remendra",
       value: cfg.compactionSummaryMode,
       options: ["default", "append"],
       optionLabels: {
         default: "default — one complete replacement summary",
-        append: "append — immutable auto segments; /blackhole rebases",
+        append: "append — immutable auto segments; /remendra rebases",
       },
     },
     {
@@ -272,7 +272,7 @@ export const config = new ConfigManager<UnifiedConfig>({
       key: "debug",
       type: "boolean",
       label: "Debug snapshots",
-      description: "Write detailed debug snapshots to /tmp/pi-blackhole-debug.json",
+      description: "Write detailed debug snapshots to /tmp/pi-remendra-debug.json",
       value: cfg.debug,
     },
     {
@@ -301,7 +301,7 @@ export const config = new ConfigManager<UnifiedConfig>({
         parsed.compaction = "manual";
       }
       if (parsed.overrideDefaultCompaction === true) {
-        parsed.compactionEngine = "blackhole";
+        parsed.compactionEngine = "remendra";
         if (parsed.tailBehavior === undefined) {
           parsed.tailBehavior = "minimal";
         }
@@ -315,7 +315,7 @@ export const config = new ConfigManager<UnifiedConfig>({
 
     // ── Legacy passive env vars (Layer 4, highest priority) ──
     const envPassive =
-      process.env.PI_BLACKHOLE_PASSIVE ??
+      process.env.PI_REMENDRA_PASSIVE ??
       process.env.PI_VCC_OM_PASSIVE ??
       process.env.PI_OBSERVATIONAL_MEMORY_PASSIVE;
     if (envPassive !== undefined) {
@@ -332,41 +332,39 @@ export const config = new ConfigManager<UnifiedConfig>({
     }
 
     // ── Warn on invalid enum env vars (application handled by applyEnvOverrides) ──
-    const envCompaction = process.env.PI_BLACKHOLE_COMPACTION;
+    const envCompaction = process.env.PI_REMENDRA_COMPACTION;
     if (envCompaction !== undefined) {
       const trimmed = envCompaction.trim().toLowerCase();
       if (!["auto", "manual", "off"].includes(trimmed)) {
-        console.warn(
-          `blackhole: invalid PI_BLACKHOLE_COMPACTION value "${envCompaction}"; ignoring`,
-        );
+        console.warn(`remendra: invalid PI_REMENDRA_COMPACTION value "${envCompaction}"; ignoring`);
       }
     }
 
-    const envCompactionEngine = process.env.PI_BLACKHOLE_COMPACTION_ENGINE;
+    const envCompactionEngine = process.env.PI_REMENDRA_COMPACTION_ENGINE;
     if (envCompactionEngine !== undefined) {
       const trimmed = envCompactionEngine.trim().toLowerCase();
-      if (!["blackhole", "pi-default"].includes(trimmed)) {
+      if (!["remendra", "pi-default"].includes(trimmed)) {
         console.warn(
-          `blackhole: invalid PI_BLACKHOLE_COMPACTION_ENGINE value "${envCompactionEngine}"; ignoring`,
+          `remendra: invalid PI_REMENDRA_COMPACTION_ENGINE value "${envCompactionEngine}"; ignoring`,
         );
       }
     }
 
-    const envCompactionSummaryMode = process.env.PI_BLACKHOLE_COMPACTION_SUMMARY_MODE;
+    const envCompactionSummaryMode = process.env.PI_REMENDRA_COMPACTION_SUMMARY_MODE;
     if (envCompactionSummaryMode !== undefined) {
       const trimmed = envCompactionSummaryMode.trim().toLowerCase();
       if (!["default", "append"].includes(trimmed)) {
         console.warn(
-          `blackhole: invalid PI_BLACKHOLE_COMPACTION_SUMMARY_MODE value "${envCompactionSummaryMode}"; ignoring`,
+          `remendra: invalid PI_REMENDRA_COMPACTION_SUMMARY_MODE value "${envCompactionSummaryMode}"; ignoring`,
         );
       }
     }
-    const envMidRunCompaction = process.env.PI_BLACKHOLE_MID_RUN_COMPACTION;
+    const envMidRunCompaction = process.env.PI_REMENDRA_MID_RUN_COMPACTION;
     if (envMidRunCompaction !== undefined) {
       const trimmed = envMidRunCompaction.trim().toLowerCase();
       if (!["resume", "pause", "off"].includes(trimmed)) {
         console.warn(
-          `blackhole: invalid PI_BLACKHOLE_MID_RUN_COMPACTION value "${envMidRunCompaction}"; ignoring`,
+          `remendra: invalid PI_REMENDRA_MID_RUN_COMPACTION value "${envMidRunCompaction}"; ignoring`,
         );
       }
     }
@@ -423,7 +421,7 @@ export const config = new ConfigManager<UnifiedConfig>({
 
 // ── Public entry point ───────────────────────────────────────────────────────
 
-export async function openBlackholeSettings(ctx: ExtensionContext): Promise<void> {
+export async function openRemendraSettings(ctx: ExtensionContext): Promise<void> {
   await config.openSettings(
     ctx,
     ctx.cwd,

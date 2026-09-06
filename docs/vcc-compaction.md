@@ -1,3 +1,5 @@
+> **This document describes the legacy v1 engine.** For the current v2 engine, see [README.md](../README.md) and [V2.md](V2.md).
+
 # VCC Compaction Pipeline
 
 The VCC pipeline replaces Pi's LLM-based compaction with a deterministic, zero-cost algorithmic summary. It extracts structured sections from session messages using regex heuristics. Entry point: `compile()` in [[src/core/summarize.ts]].
@@ -157,9 +159,9 @@ The `session_before_compact` hook is the integration point between VCC and OM. D
 
 The hook checks several conditions before proceeding:
 
-- `compaction: "off"` → Skip auto-triggered compaction (`/blackhole` still works)
+- `compaction: "off"` → Skip auto-triggered compaction (`/remendra` still works)
 - `compactionEngine: "pi-default"` → Let Pi handle auto-compaction
-- `compaction: "manual"` → `/compact` falls through to Pi, only `/blackhole` uses VCC
+- `compaction: "manual"` → `/compact` falls through to Pi, only `/remendra` uses VCC
 
 ### buildOwnCut
 
@@ -177,7 +179,7 @@ The `buildOwnCut()` function determines which messages to compile:
 
 Every `{ cancel: true }` return (own-cut guards, legacy `noAutoCompact`) sets `runtime.lastCompactCancelled = true` so the failure handler can attribute the aborted compaction.
 
-At the start of each attempt, `lastCompactCancelled` resets and `compactWasPiVcc` is overwritten from the `/blackhole` marker. Success consumes the origin marker; failure captures and clears both flags. This attributes hook cancellations correctly without leaking `/blackhole` state into later pi-default attempts — see [[observational-memory#Compaction trigger#Compact-failure handling]].
+At the start of each attempt, `lastCompactCancelled` resets and `compactWasPiVcc` is overwritten from the `/remendra` marker. Success consumes the origin marker; failure captures and clears both flags. This attributes hook cancellations correctly without leaking `/remendra` state into later pi-default attempts — see [[observational-memory#Compaction trigger#Compact-failure handling]].
 
 ### OM injection
 
@@ -195,7 +197,7 @@ The hook attaches `PiVccCompactionDetails` to the compaction entry for debugging
 
 ```typescript
 interface PiVccCompactionDetails {
-  compactor: "blackhole";
+  compactor: "remendra";
   version: number;
   sections: string[];
   sourceMessageCount: number;
@@ -205,18 +207,18 @@ interface PiVccCompactionDetails {
 
 ### Zero-usage entries and overflow recovery (#8328)
 
-Blackhole compaction entries carry zero provider usage (LLM compaction bypassed); pi ≥ 0.84.3 handles this correctly in overflow checks (upstream fix #8328).
+Remendra compaction entries carry zero provider usage (LLM compaction bypassed); pi ≥ 0.84.3 handles this correctly in overflow checks (upstream fix #8328).
 
-Before pi 0.84.3, `_checkCompaction` early-returned when no assistant message had usage data, so overflow auto-compaction could never fire after a blackhole compaction — a latent stuck state. Upstream fix #8328 (commit 4495469a5) falls back to pure message-size estimates when usage is absent. Minimum pi version for correct overflow recovery: 0.84.3. See also [[observational-memory#Compaction trigger#Pi version requirement (#8328)]].
+Before pi 0.84.3, `_checkCompaction` early-returned when no assistant message had usage data, so overflow auto-compaction could never fire after a remendra compaction — a latent stuck state. Upstream fix #8328 (commit 4495469a5) falls back to pure message-size estimates when usage is absent. Minimum pi version for correct overflow recovery: 0.84.3. See also [[observational-memory#Compaction trigger#Pi version requirement (#8328)]].
 
 ## Tail behavior
 
-Controls how much of the recent transcript stays visible after compaction. Only applies when `compactionEngine: "blackhole"`.
+Controls how much of the recent transcript stays visible after compaction. Only applies when `compactionEngine: "remendra"`.
 
 | Invocation | Config | Effective |
 |------------|--------|-----------|
-| Manual `/blackhole` | not set | `minimal` (aggressive) |
-| Manual `/blackhole` | `pi-default` | `pi-default` |
+| Manual `/remendra` | not set | `minimal` (aggressive) |
+| Manual `/remendra` | `pi-default` | `pi-default` |
 | Auto-triggered | not set | `minimal` |
 | Auto-triggered | `minimal` | `minimal` |
 

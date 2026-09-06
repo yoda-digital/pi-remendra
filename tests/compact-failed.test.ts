@@ -42,7 +42,7 @@ interface FailedEvent {
 
 function captureHandler(
   args: {
-    compactionEngine?: "blackhole" | "pi-default";
+    compactionEngine?: "remendra" | "pi-default";
     compactInFlight?: boolean;
     compactWasPiVcc?: boolean;
     lastCompactCancelled?: boolean;
@@ -58,7 +58,7 @@ function captureHandler(
   const runtime = {
     ensureConfig: vi.fn(),
     config: {
-      compactionEngine: args.compactionEngine ?? "blackhole",
+      compactionEngine: args.compactionEngine ?? "remendra",
       debugLog: false,
     },
     compactInFlight: args.compactInFlight ?? false,
@@ -144,7 +144,7 @@ describe("compact-failed hook", () => {
     handler(failedEvent({ reason: "overflow", aborted: true, willRetry: true }), ctx);
 
     expect(ctx.ui.notify).toHaveBeenCalledWith(
-      "blackhole: overflow compaction aborted, retrying turn",
+      "remendra: overflow compaction aborted, retrying turn",
       "info",
     );
   });
@@ -191,12 +191,12 @@ describe("compact-failed hook", () => {
     );
 
     expect(ctx.ui.notify).toHaveBeenCalledWith(
-      "blackhole: compaction failed — summary too long",
+      "remendra: compaction failed — summary too long",
       "error",
     );
   });
 
-  it("does not notify errors when not attributed to blackhole", () => {
+  it("does not notify errors when not attributed to remendra", () => {
     const { handler } = captureHandler();
     const ctx = fakeCtx();
 
@@ -212,7 +212,7 @@ describe("compact-failed hook", () => {
     expect(ctx.ui.notify).not.toHaveBeenCalled();
   });
 
-  it("attributes the current /blackhole failure and consumes compactWasPiVcc", () => {
+  it("attributes the current /remendra failure and consumes compactWasPiVcc", () => {
     const { handler, runtime } = captureHandler({
       compactionEngine: "pi-default",
       compactWasPiVcc: true,
@@ -231,7 +231,7 @@ describe("compact-failed hook", () => {
     // compactWasPiVcc means the current failure is ours: not skipped, error
     // surfaced, and the attempt marker consumed before a later failure arrives.
     expect(traceEvents()).not.toContain("compact_failed.skipped_pi_default");
-    expect(ctx.ui.notify).toHaveBeenCalledWith("blackhole: compaction failed — boom", "error");
+    expect(ctx.ui.notify).toHaveBeenCalledWith("remendra: compaction failed — boom", "error");
     expect(traceData("compact_failed.received")).toMatchObject({
       fromExtension: false,
       compactWasPiVcc: true,
@@ -298,7 +298,7 @@ describe("compact-failed attribution × before-compact hook", () => {
       ensureConfig: vi.fn(),
       config: {
         compaction: "auto",
-        compactionEngine: "blackhole",
+        compactionEngine: "remendra",
         overrideDefaultCompaction: true,
         noAutoCompact: false,
         memory: true,
@@ -393,7 +393,7 @@ describe("compact-failed attribution × before-compact hook", () => {
     expect(runtime.lastCompactCancelled).toBe(false);
   });
 
-  it("overwrites stale /blackhole attribution before a pi-default attempt", () => {
+  it("overwrites stale /remendra attribution before a pi-default attempt", () => {
     const { handler, failedHandler, runtime } = captureBeforeCompact();
     const ctx = fakeCtx2();
     runtime.compactWasPiVcc = true;
@@ -425,7 +425,7 @@ describe("compact-failed attribution × before-compact hook", () => {
     expect(ctx.ui.notify).not.toHaveBeenCalled();
   });
 
-  it("consumes /blackhole attribution after a successful compaction", () => {
+  it("consumes /remendra attribution after a successful compaction", () => {
     const { handler, compactHandler, runtime } = captureBeforeCompact();
     const branch = [
       {
@@ -478,7 +478,7 @@ describe("compact-failed × pending auto-compaction", () => {
       ensureConfig: vi.fn(),
       config: {
         compaction: "auto",
-        compactionEngine: "blackhole",
+        compactionEngine: "remendra",
         compactAfterTokens: 3,
         debugLog: false,
       },

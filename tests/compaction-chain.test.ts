@@ -285,7 +285,7 @@ describe("append compaction chain", () => {
       "legacy",
       "legacy fallback",
       {
-        compactor: "blackhole",
+        compactor: "remendra",
         version: 1,
         sections: ["Goal"],
         sourceMessageCount: 2,
@@ -429,7 +429,7 @@ describe("append compaction chain", () => {
   });
 
   const legacyDetails = () => ({
-    compactor: "blackhole" as const,
+    compactor: "remendra" as const,
     version: 1 as const,
     sections: ["Goal"],
     sourceMessageCount: 2,

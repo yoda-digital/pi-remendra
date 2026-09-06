@@ -43,7 +43,7 @@ const HELP = `Remendra v2 — durable memory with source evidence
 Modes in settings: active, shadow (compile without injecting), recall (no background learning).
 User memory is opt-in. All source text remains untrusted data.`;
 
-const LEGACY_PACKET_TYPES = new Set(["blackhole.v2.context", "blackhole.v2.output"]);
+const LEGACY_PACKET_TYPES = new Set(["remendra.v2.context", "remendra.v2.output"]);
 
 function workerLocation(): URL {
   const local = new URL("./v2/worker.js", import.meta.url);
@@ -125,10 +125,13 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     environment: process.env.PI_REMENDRA_ENVIRONMENT,
   });
   const ensure = async (ctx: ExtensionContext): Promise<void> => {
-    if (initializing) await initializing;
+    if (initializing) {
+      await initializing;
+      return;
+    }
     if (client && projectId && cwd === ctx.cwd && sessionId === ctx.sessionManager.getSessionId())
       return;
-    initializing = (async () => {
+    const init = (async () => {
       invalidate();
       cwd = ctx.cwd;
       sessionId = ctx.sessionManager.getSessionId();
@@ -139,10 +142,11 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       projectId = await client.call("project", [await realpath(ctx.cwd)]);
       scope = makeScope(ctx);
     })();
+    initializing = init;
     try {
-      await initializing;
+      await init;
     } finally {
-      initializing = undefined;
+      if (initializing === init) initializing = undefined;
     }
   };
   const refresh = async (ctx: ExtensionContext): Promise<Scope> => {

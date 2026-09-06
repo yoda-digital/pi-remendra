@@ -110,7 +110,7 @@ describe("dedup algorithms", () => {
   describe("technicalDensityFactor", () => {
     it("boosts content with file paths, symbols, CLI flags, and SHAs", () => {
       const technical =
-        "ConfigManager.save() in src/om/runtime.ts must check writeConfig() with PI_BLACKHOLE_PASSIVE=true (commit 837530d7)";
+        "ConfigManager.save() in src/om/runtime.ts must check writeConfig() with PI_REMENDRA_PASSIVE=true (commit 837530d7)";
       const conversational =
         "User discussed doing some changes later when we get to that part of the plan";
 

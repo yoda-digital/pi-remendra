@@ -1,6 +1,6 @@
 # Configuration Guide
 
-All settings live in a single JSON file: **`~/.pi/agent/pi-blackhole/pi-blackhole-config.json`**
+All settings live in a single JSON file: **`~/.pi/agent/pi-remendra/pi-remendra-config.json`**
 
 The file is auto-created with defaults on first startup. See [`example-config.json`](example-config.json) for an annotated example with inline explanations. This guide explains every setting in detail so you know exactly what to change and why.
 
@@ -12,7 +12,7 @@ If you just want to get started, here's the minimum you need to know:
 
 1. The defaults work out of the box — you don't need to change anything.
 2. If you want to use specific models for the background workers, set `observerModel`, `reflectorModel`, and `dropperModel`.
-3. If you don't want observations appended to your conversation at all, set `noAutoCompact: true` and run `/blackhole` manually when you want to compact.
+3. If you don't want observations appended to your conversation at all, set `noAutoCompact: true` and run `/remendra` manually when you want to compact.
 
 ---
 
@@ -82,7 +82,7 @@ Each model entry supports:
 
 How long (in hours) to skip a model after a retryable error. This prevents hammering a failing API. Each model entry in your config can have its own cooldown, or the default of 1 hour applies.
 
-Cooldowns are persisted to `~/.pi/agent/pi-blackhole/pi-blackhole-cooldown.json` and survive pi restarts.
+Cooldowns are persisted to `~/.pi/agent/pi-remendra/pi-remendra-cooldown.json` and survive pi restarts.
 
 ---
 
@@ -108,7 +108,7 @@ Accumulated tokens required before the reflector (and then the dropper) run. Sin
 
 **Default:** `81000`
 
-Proactive auto-compaction threshold. When accumulated tokens hit this value, the conversation is automatically compacted (if `noAutoCompact` is `false` and `passive` is `false`). This is to prevent the conversation from growing unbounded between explicit `/blackhole` commands.
+Proactive auto-compaction threshold. When accumulated tokens hit this value, the conversation is automatically compacted (if `noAutoCompact` is `false` and `passive` is `false`). This is to prevent the conversation from growing unbounded between explicit `/remendra` commands.
 
 ---
 
@@ -174,19 +174,19 @@ Override only if you want a tighter or looser target than the default half ratio
 
 **Default:** `false`
 
-When `false`, `/blackhole`'s compaction logic only applies when you explicitly run the `/blackhole` command. Pi's built-in compaction (from `agent_end` or other triggers) uses its default behavior.
+When `false`, `/remendra`'s compaction logic only applies when you explicitly run the `/remendra` command. Pi's built-in compaction (from `agent_end` or other triggers) uses its default behavior.
 
-When `true`, the blackhole compaction pipeline (algorithmic summary + observational memory injection) replaces ALL compactions, including auto-compaction. This is useful if you want the enhanced summary format everywhere, not just on explicit `/blackhole`.
+When `true`, the remendra compaction pipeline (algorithmic summary + observational memory injection) replaces ALL compactions, including auto-compaction. This is useful if you want the enhanced summary format everywhere, not just on explicit `/remendra`.
 
 ### `noAutoCompact`
 
 **Default:** `false`
 
-When `true`, observations and reflections are saved to disk (`~/.pi/agent/pi-blackhole/<sessionId>-pending.json`) instead of being appended to the conversation as markers. Auto-compaction on `agent_end` is disabled.
+When `true`, observations and reflections are saved to disk (`~/.pi/agent/pi-remendra/<sessionId>-pending.json`) instead of being appended to the conversation as markers. Auto-compaction on `agent_end` is disabled.
 
 Each pipeline run appends its output to `pending.json`'s accumulated batch arrays (`observationBatches`/`reflectionBatches`), so the observer, reflector, and dropper always see the full historical context — matching autoCompact behavior without writing markers to the visible branch. The observer's preamble (`CURRENT OBSERVATIONS`) is automatically capped via `observerPreambleMaxTokens` to prevent unbounded prompt growth; high-relevance observations are always kept.
 
-Run `/blackhole` manually to flush pending entries to the branch and compact. The `/memory` command shows pending counts when data is waiting.
+Run `/remendra` manually to flush pending entries to the branch and compact. The `/memory` command shows pending counts when data is waiting.
 
 Use this if you don't want OM markers cluttering your conversation and prefer to compact on your own schedule.
 
@@ -194,7 +194,7 @@ Use this if you don't want OM markers cluttering your conversation and prefer to
 
 **Default:** `true`
 
-When `false`, disables the observational memory layer entirely — no background workers (observer, reflector, dropper), no memory injection into compactions. The extension becomes a pure compaction engine (pi-vcc only). Re-enable at runtime with `/blackhole om-on`.
+When `false`, disables the observational memory layer entirely — no background workers (observer, reflector, dropper), no memory injection into compactions. The extension becomes a pure compaction engine (pi-vcc only). Re-enable at runtime with `/remendra om-on`.
 
 This is a lighter alternative to `passive`: workers are off but auto-compaction still runs. Set `passive: true` if you want both workers and auto-compaction disabled.
 
@@ -202,21 +202,21 @@ This is a lighter alternative to `passive`: workers are off but auto-compaction 
 
 **Default:** `false`
 
-When `true`, completely disables all background workers (observer, reflector, dropper) and auto-compaction. The extension is effectively inactive. Only explicit `/blackhole` compaction works.
+When `true`, completely disables all background workers (observer, reflector, dropper) and auto-compaction. The extension is effectively inactive. Only explicit `/remendra` compaction works.
 
-Can also be set via environment variables: `PI_BLACKHOLE_PASSIVE=true` (also accepts legacy `PI_VCC_OM_PASSIVE` or `PI_OBSERVATIONAL_MEMORY_PASSIVE` for compatibility)
+Can also be set via environment variables: `PI_REMENDRA_PASSIVE=true` (also accepts legacy `PI_VCC_OM_PASSIVE` or `PI_OBSERVATIONAL_MEMORY_PASSIVE` for compatibility)
 
 ### `debug`
 
 **Default:** `false`
 
-When `true`, writes a pre-compaction debug snapshot to `/tmp/pi-blackhole-debug.json` every time compaction runs. This captures the full state just before the algorithmic summary is built — useful for troubleshooting what the compactor sees.
+When `true`, writes a pre-compaction debug snapshot to `/tmp/pi-remendra-debug.json` every time compaction runs. This captures the full state just before the algorithmic summary is built — useful for troubleshooting what the compactor sees.
 
 ### `debugLog`
 
 **Default:** `false`
 
-When `true`, writes a continuous debug log (JSONL format) to `~/.pi/agent/pi-blackhole/debug.ndjson`. This logs every worker run, model selection, error, and state transition — much more detailed than the `debug` snapshot. Useful for diagnosing worker failures or unexpected behavior.
+When `true`, writes a continuous debug log (JSONL format) to `~/.pi/agent/pi-remendra/debug.ndjson`. This logs every worker run, model selection, error, and state transition — much more detailed than the `debug` snapshot. Useful for diagnosing worker failures or unexpected behavior.
 
 ### `agentMaxTurns`
 

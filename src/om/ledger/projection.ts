@@ -172,7 +172,7 @@ export function visibleProjection(entries: Entry[], upToEntryId?: string): Proje
     const details = latestV3CompactionDetails(entries);
     if (details) return projectionFromMemoryDetails(details);
     // No compaction has run yet — show everything so the user sees
-    // recorded data until first /blackhole creates a proper snapshot.
+    // recorded data until first /remendra creates a proper snapshot.
     return fullProjection(entries);
   }
 

@@ -2,9 +2,9 @@
  * Ported from upstream pi-vcc
  * Changes:
  *   - bun:test → vitest, .js extensions
- *   - Adapted for blackhole's registerBeforeCompactHook which requires omRuntime param
+ *   - Adapted for remendra's registerBeforeCompactHook which requires omRuntime param
  *   - Added mockRuntime with ensureConfig that reads our config format
- *   - Removed PI_VCC_CONFIG_PATH env var (blackhole uses unified config)
+ *   - Removed PI_VCC_CONFIG_PATH env var (remendra uses unified config)
  */
 import { describe, test, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from "vitest";
 import { existsSync, unlinkSync, readFileSync, mkdtempSync, rmSync } from "fs";
@@ -17,11 +17,11 @@ import {
 
 let tmpDir: string;
 let CONFIG_PATH: string;
-const DEBUG_PATH = "/tmp/pi-blackhole-debug.json";
+const DEBUG_PATH = "/tmp/pi-remendra-debug.json";
 
 beforeAll(() => {
   tmpDir = mkdtempSync(join(tmpdir(), "pi-vcc-test-"));
-  CONFIG_PATH = join(tmpDir, "blackhole-config.json");
+  CONFIG_PATH = join(tmpDir, "remendra-config.json");
 });
 
 afterAll(() => {
@@ -36,7 +36,7 @@ function createMockPi(initialConfig?: Record<string, unknown>, ctxModel?: unknow
     overrideDefaultCompaction: false,
     noAutoCompact: false,
     compaction: "auto",
-    compactionEngine: "blackhole",
+    compactionEngine: "remendra",
     tailBehavior: "pi-default",
     ...(initialConfig ?? {}),
   };
@@ -224,7 +224,7 @@ describe("registerBeforeCompactHook: new config key guards", () => {
     if (existsSync(DEBUG_PATH)) unlinkSync(DEBUG_PATH);
   });
 
-  test("T28: compaction:off + /blackhole → proceeds (blackhole pipeline)", () => {
+  test("T28: compaction:off + /remendra → proceeds (remendra pipeline)", () => {
     const { pi, invoke, omRuntime } = createMockPi({ compaction: "off" });
     registerBeforeCompactHook(pi, omRuntime);
 
@@ -236,7 +236,7 @@ describe("registerBeforeCompactHook: new config key guards", () => {
     ];
     const result = invoke(makeEvent(entries, PI_VCC_COMPACT_INSTRUCTION));
 
-    // compaction: "off" allows explicit /blackhole through blackhole's pipeline
+    // compaction: "off" allows explicit /remendra through remendra's pipeline
     expect(result.cancel).toBeUndefined();
     expect(result.compaction).toBeDefined();
   });
@@ -256,7 +256,7 @@ describe("registerBeforeCompactHook: new config key guards", () => {
     expect(result).toBeUndefined();
   });
 
-  test("T30: compaction:manual + /blackhole → proceeds (allows manual)", () => {
+  test("T30: compaction:manual + /remendra → proceeds (allows manual)", () => {
     const { pi, invoke, omRuntime } = createMockPi({ compaction: "manual" });
     registerBeforeCompactHook(pi, omRuntime);
 
@@ -288,7 +288,7 @@ describe("registerBeforeCompactHook: new config key guards", () => {
     expect(result).toBeUndefined();
   });
 
-  test("T32: compaction:auto + /blackhole → proceeds", () => {
+  test("T32: compaction:auto + /remendra → proceeds", () => {
     const { pi, invoke, omRuntime } = createMockPi({ compaction: "auto" });
     registerBeforeCompactHook(pi, omRuntime);
 
@@ -337,7 +337,7 @@ describe("registerBeforeCompactHook: new config key guards", () => {
     expect(result).toBeUndefined();
   });
 
-  test("T35: compactionEngine:pi-default + /blackhole → proceeds (/blackhole always uses blackhole)", () => {
+  test("T35: compactionEngine:pi-default + /remendra → proceeds (/remendra always uses remendra)", () => {
     const { pi, invoke, omRuntime } = createMockPi({
       compactionEngine: "pi-default",
     });
@@ -516,7 +516,7 @@ describe("registerBeforeCompactHook: provider-aware skip", () => {
     ).toBeUndefined();
   });
 
-  test("explicit /blackhole on a listed provider → still steps aside", () => {
+  test("explicit /remendra on a listed provider → still steps aside", () => {
     const { pi, invoke, omRuntime } = createMockPi(
       { skipForProviders: ["openai-codex"] },
       codexModel,
@@ -532,7 +532,7 @@ describe("registerBeforeCompactHook: provider-aware skip", () => {
     ).toBeUndefined();
   });
 
-  test("non-listed provider (non-Codex) → normal blackhole compaction", () => {
+  test("non-listed provider (non-Codex) → normal remendra compaction", () => {
     const { pi, invoke, omRuntime } = createMockPi(
       { skipForProviders: ["openai-codex"] },
       { provider: "anthropic", api: "completions", id: "claude" },

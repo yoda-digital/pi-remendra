@@ -1,5 +1,5 @@
 /**
- * /blackhole-export command — distill the project's observational memory
+ * /remendra-export command — distill the project's observational memory
  * (observations, reflections across past session files + pending buffers)
  * into an import-ready markdown artifact. plan-07 Appendix A.
  */
@@ -17,10 +17,10 @@ function defaultOutPath(cwd: string, now: Date): string {
   return join(cwd, `memory-export-${stamp}.md`);
 }
 
-export const registerBlackholeExportCommand = (pi: ExtensionAPI) => {
-  pi.registerCommand("blackhole-export", {
+export const registerRemendraExportCommand = (pi: ExtensionAPI) => {
+  pi.registerCommand("remendra-export", {
     description:
-      "Export distilled project memory (observations/reflections from past sessions) to markdown. Usage: /blackhole-export [out:<path>]. If no out: is provided, writes to the project local cwd.",
+      "Export distilled project memory (observations/reflections from past sessions) to markdown. Usage: /remendra-export [out:<path>]. If no out: is provided, writes to the project local cwd.",
     handler: async (args: string, ctx) => {
       ctx.ui.notify(
         "Exporting project memory… this may take a few minutes depending on the number of session files for the project.",
@@ -148,7 +148,7 @@ export const registerBlackholeExportCommand = (pi: ExtensionAPI) => {
       lines.push("", "The file is plain markdown — curate it, then import into any memory system.");
 
       pi.sendMessage({
-        customType: "blackhole-export",
+        customType: "remendra-export",
         content: lines.join("\n"),
         display: true,
       });

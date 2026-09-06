@@ -1,5 +1,5 @@
 /**
- * Tests for the /blackhole-memory command (status, view, full).
+ * Tests for the /remendra-memory command (status, view, full).
  */
 import { describe, it, expect, vi } from "vitest";
 
@@ -126,12 +126,12 @@ function createMockEnvironment() {
   };
 }
 
-describe("/blackhole-memory command", () => {
+describe("/remendra-memory command", () => {
   it("registers the command on pi", () => {
     const { pi, runtime } = createMockEnvironment();
     registerMemoryCommand(pi as any, runtime as any);
     expect(pi.registerCommand).toHaveBeenCalledWith(
-      "blackhole-memory",
+      "remendra-memory",
       expect.objectContaining({
         description: expect.stringContaining("memory"),
       }),
@@ -145,7 +145,7 @@ describe("/blackhole-memory command", () => {
     const ui = { notify: vi.fn() };
     const entries = buildBranch({ observations: 3, reflections: 2 });
 
-    await handlerMap.get("blackhole-memory")!([], {
+    await handlerMap.get("remendra-memory")!([], {
       cwd: "/tmp/test",
       sessionManager: {
         getBranch: vi.fn(() => entries),
@@ -175,7 +175,7 @@ describe("/blackhole-memory command", () => {
     // 2 observations, 1 reflection, 1 dropped
     const entries = buildBranch({ observations: 2, reflections: 1, drops: 1 });
 
-    await handlerMap.get("blackhole-memory")!([], {
+    await handlerMap.get("remendra-memory")!([], {
       cwd: "/tmp/test",
       sessionManager: {
         getBranch: vi.fn(() => entries),
@@ -197,7 +197,7 @@ describe("/blackhole-memory command", () => {
 
     const ui = { notify: vi.fn() };
 
-    await handlerMap.get("blackhole-memory")!([], {
+    await handlerMap.get("remendra-memory")!([], {
       cwd: "/tmp/test",
       sessionManager: {
         getBranch: vi.fn(() => []),
@@ -219,7 +219,7 @@ describe("/blackhole-memory command", () => {
 
     const ui = { notify: vi.fn() };
 
-    await handlerMap.get("blackhole-memory")!([], {
+    await handlerMap.get("remendra-memory")!([], {
       cwd: "/tmp/test",
       sessionManager: {
         getBranch: vi.fn(() => []),
@@ -242,7 +242,7 @@ describe("/blackhole-memory command", () => {
 
     const ui = { notify: vi.fn() };
 
-    await handlerMap.get("blackhole-memory")!([], {
+    await handlerMap.get("remendra-memory")!([], {
       cwd: "/tmp/test",
       sessionManager: {
         getBranch: vi.fn(() => []),
@@ -264,7 +264,7 @@ describe("/blackhole-memory command", () => {
     const ui = { notify: vi.fn() };
     const entries = buildBranch({ observations: 2, reflections: 1 });
 
-    await handlerMap.get("blackhole-memory")!(["view"], {
+    await handlerMap.get("remendra-memory")!(["view"], {
       cwd: "/tmp/test",
       sessionManager: {
         getBranch: vi.fn(() => entries),
@@ -290,7 +290,7 @@ describe("/blackhole-memory command", () => {
     const ui = { notify: vi.fn() };
     const entries = buildBranch({ observations: 2, reflections: 1 });
 
-    await handlerMap.get("blackhole-memory")!(["full"], {
+    await handlerMap.get("remendra-memory")!(["full"], {
       cwd: "/tmp/test",
       sessionManager: {
         getBranch: vi.fn(() => entries),
@@ -311,7 +311,7 @@ describe("/blackhole-memory command", () => {
 
     const ui = { notify: vi.fn() };
 
-    await handlerMap.get("blackhole-memory")!(["invalid-mode"], {
+    await handlerMap.get("remendra-memory")!(["invalid-mode"], {
       cwd: "/tmp/test",
       sessionManager: {
         getBranch: vi.fn(() => []),
@@ -331,7 +331,7 @@ describe("/blackhole-memory command", () => {
 
     const ui = { notify: vi.fn() };
 
-    await handlerMap.get("blackhole-memory")!([], {
+    await handlerMap.get("remendra-memory")!([], {
       cwd: "/tmp/test",
       sessionManager: {
         getBranch: vi.fn(() => []),

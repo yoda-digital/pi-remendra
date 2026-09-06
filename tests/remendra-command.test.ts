@@ -1,5 +1,5 @@
 /**
- * Tests for /blackhole command — compaction trigger, om-off/om-on, noAutoCompact flush.
+ * Tests for /remendra command — compaction trigger, om-off/om-on, noAutoCompact flush.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
@@ -10,7 +10,7 @@ const { testRoot } = vi.hoisted(() => {
   const { join } = require("node:path");
   const { tmpdir } = require("node:os");
   return {
-    testRoot: join(tmpdir(), `pi-blackhole-cmd-test-${process.pid}-${Date.now()}`),
+    testRoot: join(tmpdir(), `pi-remendra-cmd-test-${process.pid}-${Date.now()}`),
   };
 });
 
@@ -121,20 +121,20 @@ function createMockEnvironment() {
   };
 }
 
-describe("/blackhole command", () => {
+describe("/remendra command", () => {
   beforeEach(() => {
-    mkdirSync(join(testRoot, "agent", "pi-blackhole"), { recursive: true });
+    mkdirSync(join(testRoot, "agent", "pi-remendra"), { recursive: true });
   });
 
   afterEach(() => {
     rmSync(testRoot, { recursive: true, force: true });
   });
 
-  it("registers the blackhole command", () => {
+  it("registers the remendra command", () => {
     const { pi, runtime } = createMockEnvironment();
     registerPiVccCommand(pi as any, runtime as any);
     expect(pi.registerCommand).toHaveBeenCalledWith(
-      "blackhole",
+      "remendra",
       expect.objectContaining({
         description: expect.stringContaining("Manual compact"),
       }),
@@ -147,13 +147,13 @@ describe("/blackhole command", () => {
 
     // Exactly one configuration entry — the settings handle, no separate
     // "configure" entry in the dropdown
-    const completions = completionMap.get("blackhole")!("");
+    const completions = completionMap.get("remendra")!("");
     const values = completions.map((c) => c.value);
     expect(values).toContain("settings");
     expect(values).not.toContain("configure");
 
-    // Typing /blackhole config… surfaces the settings entry via its alias
-    const configMatches = completionMap.get("blackhole")!("config").map((c) => c.value);
+    // Typing /remendra config… surfaces the settings entry via its alias
+    const configMatches = completionMap.get("remendra")!("config").map((c) => c.value);
     expect(configMatches).toEqual(["settings"]);
   });
 
@@ -162,7 +162,7 @@ describe("/blackhole command", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("", ctx);
+    await handlerMap.get("remendra")!("", ctx);
 
     expect(ctx.compact).toHaveBeenCalledTimes(1);
     const call = ctx.compact.mock.calls[0][0];
@@ -175,7 +175,7 @@ describe("/blackhole command", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("", ctx);
+    await handlerMap.get("remendra")!("", ctx);
 
     const call = ctx.compact.mock.calls[0][0];
     call.onComplete();
@@ -189,12 +189,12 @@ describe("/blackhole command", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("", ctx);
+    await handlerMap.get("remendra")!("", ctx);
 
     const call = ctx.compact.mock.calls[0][0];
     call.onComplete();
 
-    expect(notifyCalls[notifyCalls.length - 1].msg).toContain("Compacted with blackhole");
+    expect(notifyCalls[notifyCalls.length - 1].msg).toContain("Compacted with remendra");
   });
 
   it("handles onError for cancellation", async () => {
@@ -202,7 +202,7 @@ describe("/blackhole command", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("", ctx);
+    await handlerMap.get("remendra")!("", ctx);
 
     const call = ctx.compact.mock.calls[0][0];
     call.onError(new Error("Compaction cancelled"));
@@ -216,7 +216,7 @@ describe("/blackhole command", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("", ctx);
+    await handlerMap.get("remendra")!("", ctx);
 
     const call = ctx.compact.mock.calls[0][0];
     call.onError(new Error("Model API error"));
@@ -225,25 +225,25 @@ describe("/blackhole command", () => {
     expect(notifyCalls[notifyCalls.length - 1].msg).toContain("Compaction failed: Model API error");
   });
 
-  it("/blackhole om-off disables memory and saves config", async () => {
+  it("/remendra om-off disables memory and saves config", async () => {
     const { pi, runtime, handlerMap, makeHandlerArgs, notifyCalls } = createMockEnvironment();
     registerPiVccCommand(pi as any, runtime as any);
     runtime.config.memory = true;
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("om-off", ctx);
+    await handlerMap.get("remendra")!("om-off", ctx);
 
     expect(runtime.config.memory).toBe(false);
     expect(notifyCalls[0].msg).toContain("Observational memory disabled");
   });
 
-  it("/blackhole om-on enables memory and saves config", async () => {
+  it("/remendra om-on enables memory and saves config", async () => {
     const { pi, runtime, handlerMap, makeHandlerArgs, notifyCalls } = createMockEnvironment();
     registerPiVccCommand(pi as any, runtime as any);
     runtime.config.memory = false;
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("om-on", ctx);
+    await handlerMap.get("remendra")!("om-on", ctx);
 
     expect(runtime.config.memory).toBe(true);
     expect(notifyCalls[0].msg).toContain("Observational memory enabled");
@@ -255,7 +255,7 @@ describe("/blackhole command", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     // Write a pending state file — name pattern is <sessionId>-pending.json
-    const pendingDir = join(testRoot, "agent", "pi-blackhole");
+    const pendingDir = join(testRoot, "agent", "pi-remendra");
     const pendingFile = join(pendingDir, "test-session-pending.json");
     writeFileSync(
       pendingFile,
@@ -303,7 +303,7 @@ describe("/blackhole command", () => {
     );
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("", ctx);
+    await handlerMap.get("remendra")!("", ctx);
 
     expect(notifyCalls[0].msg).toContain("pending entries flushed");
     expect(existsSync(pendingFile)).toBe(false); // cleared after flush
@@ -314,16 +314,16 @@ describe("/blackhole command", () => {
 
 // ── Feature 1: Follow-up prompt after compaction ────────────────────────────
 
-describe("/blackhole follow-up prompt", () => {
+describe("/remendra follow-up prompt", () => {
   beforeEach(() => {
-    mkdirSync(join(testRoot, "agent", "pi-blackhole"), { recursive: true });
+    mkdirSync(join(testRoot, "agent", "pi-remendra"), { recursive: true });
   });
 
   afterEach(() => {
     rmSync(testRoot, { recursive: true, force: true });
   });
 
-  it("extracts follow-up text from /blackhole <args> and sends it after compaction", async () => {
+  it("extracts follow-up text from /remendra <args> and sends it after compaction", async () => {
     const sendUserMessageCalls: Array<{ content: string }> = [];
     const { pi, runtime, handlerMap, makeHandlerArgs } = createMockEnvironment();
     (pi as any).sendUserMessage = vi.fn((content: string) => {
@@ -332,7 +332,7 @@ describe("/blackhole follow-up prompt", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("fix the auth bug", ctx);
+    await handlerMap.get("remendra")!("fix the auth bug", ctx);
 
     expect(ctx.compact).toHaveBeenCalledTimes(1);
     const call = ctx.compact.mock.calls[0][0];
@@ -348,7 +348,7 @@ describe("/blackhole follow-up prompt", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("configure", ctx);
+    await handlerMap.get("remendra")!("configure", ctx);
 
     // Should NOT compact — subcommand handled separately
     expect(ctx.compact).not.toHaveBeenCalled();
@@ -359,7 +359,7 @@ describe("/blackhole follow-up prompt", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("settings", ctx);
+    await handlerMap.get("remendra")!("settings", ctx);
 
     // Should open the config overlay (like configure), not compact
     expect(ctx.compact).not.toHaveBeenCalled();
@@ -374,7 +374,7 @@ describe("/blackhole follow-up prompt", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("", ctx);
+    await handlerMap.get("remendra")!("", ctx);
 
     expect(ctx.compact).toHaveBeenCalledTimes(1);
     const call = ctx.compact.mock.calls[0][0];
@@ -391,7 +391,7 @@ describe("/blackhole follow-up prompt", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("continue the refactor", ctx);
+    await handlerMap.get("remendra")!("continue the refactor", ctx);
 
     const call = ctx.compact.mock.calls[0][0];
     // Simulate compaction completion
@@ -411,7 +411,7 @@ describe("/blackhole follow-up prompt", () => {
     registerPiVccCommand(pi as any, runtime as any);
 
     const ctx = makeHandlerArgs();
-    await handlerMap.get("blackhole")!("continue", ctx);
+    await handlerMap.get("remendra")!("continue", ctx);
 
     const call = ctx.compact.mock.calls[0][0];
     // Simulate compaction failure

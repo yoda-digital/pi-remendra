@@ -57,7 +57,7 @@ describe("isManualMode", () => {
 // ── Config migration + isManualMode parity ───────────────────────────────────
 
 describe("Config migration — manual mode parity", () => {
-  const testDir = join(tmpdir(), `pi-blackhole-manual-parity-${randomUUID().slice(0, 8)}`);
+  const testDir = join(tmpdir(), `pi-remendra-manual-parity-${randomUUID().slice(0, 8)}`);
 
   beforeEach(() => {
     __setTestConfigDir(testDir);
@@ -74,7 +74,7 @@ describe("Config migration — manual mode parity", () => {
   it("migrated config (noAutoCompact removed, compaction:'manual') passes isManualMode", async () => {
     const { loadUnifiedConfig, isManualMode } = await import("../src/core/unified-config.js");
 
-    const configPath = join(testDir, "pi-blackhole", "pi-blackhole-config.json");
+    const configPath = join(testDir, "pi-remendra", "pi-remendra-config.json");
     mkdirSync(dirname(configPath), { recursive: true });
     // Simulate post-migration config (old key removed, new key present)
     writeFileSync(configPath, JSON.stringify({ compaction: "manual" }));
@@ -88,7 +88,7 @@ describe("Config migration — manual mode parity", () => {
   it("auto mode config has noAutoCompact undefined and isManualMode false", async () => {
     const { loadUnifiedConfig, isManualMode } = await import("../src/core/unified-config.js");
 
-    const configPath = join(testDir, "pi-blackhole", "pi-blackhole-config.json");
+    const configPath = join(testDir, "pi-remendra", "pi-remendra-config.json");
     mkdirSync(dirname(configPath), { recursive: true });
     writeFileSync(configPath, JSON.stringify({ compaction: "auto" }));
 
@@ -101,7 +101,7 @@ describe("Config migration — manual mode parity", () => {
   it("legacy config (noAutoCompact:true, no new keys) passes isManualMode before migration", async () => {
     const { loadUnifiedConfig, isManualMode } = await import("../src/core/unified-config.js");
 
-    const configPath = join(testDir, "pi-blackhole", "pi-blackhole-config.json");
+    const configPath = join(testDir, "pi-remendra", "pi-remendra-config.json");
     mkdirSync(dirname(configPath), { recursive: true });
     writeFileSync(configPath, JSON.stringify({ noAutoCompact: true }));
 

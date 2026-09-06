@@ -3,7 +3,7 @@
  *
  * When a model returns a retryable error (429, 5xx, timeout),
  * we record a cooldown so it won't be retried for the configured duration.
- * Cooldowns are persisted to `~/.pi/agent/pi-blackhole/pi-blackhole-cooldown.json`.
+ * Cooldowns are persisted to `~/.pi/agent/pi-remendra/pi-remendra-cooldown.json`.
  */
 
 /**
@@ -15,7 +15,7 @@
  * Key design:
  * - isCooldownActive reads from disk every call (no in-memory cache needed).
  * - recordCooldown writes to disk synchronously.
- * - Cooldowns survive pi restarts via pi-blackhole/pi-blackhole-cooldown.json.
+ * - Cooldowns survive pi restarts via pi-remendra/pi-remendra-cooldown.json.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -24,8 +24,8 @@ import type { OmModelConfig } from "../core/unified-config.js";
 
 // ── Persistence ─────────────────────────────────────────────────────────────
 
-const CONFIG_DIR = "pi-blackhole";
-const COOLDOWN_FILE = "pi-blackhole-cooldown.json";
+const CONFIG_DIR = "pi-remendra";
+const COOLDOWN_FILE = "pi-remendra-cooldown.json";
 
 function cooldownPath(): string {
   return join(getAgentDir(), CONFIG_DIR, COOLDOWN_FILE);

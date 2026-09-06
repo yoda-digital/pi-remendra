@@ -1,4 +1,4 @@
-# Upstream semantic diff — elpapi42/pi-observational-memory token & trigger fixes → pi-blackhole
+# Upstream semantic diff — elpapi42/pi-observational-memory token & trigger fixes → pi-remendra
 
 **Date:** 2026-08-01
 **Source artifacts (fetched via `gh`):**
@@ -73,7 +73,7 @@ Two more correctness rules from the anchor logic:
 
 ---
 
-## 2. Semantic mapping onto pi-blackhole
+## 2. Semantic mapping onto pi-remendra
 
 ### 2.1 Host capability (verified against our installed pi 0.83.0)
 
@@ -610,7 +610,7 @@ This is the **config-override-aware window resolution upstream lacks**. Any deri
 ### 5.8 `src/om/compaction-trigger.ts` — our compaction hook (REWRITTEN vs upstream)
 
 - `autoCompactionSkipReason(runtime)` gating: `compaction: "off"` → skip; `compaction: "manual"` → skip; `compactionEngine: "pi-default"` → skip; legacy keys (`passive`, `noAutoCompact`, `overrideDefaultCompaction`) only when new keys are absent. **Memory does not gate compaction** (memory:false + compaction:auto = compact without OM).
-- **Mid-run resume**: `MID_RUN_RESUME_CUSTOM_TYPE = "blackhole-resume"`, `MID_RUN_RESUME_MESSAGE` injected after a mid-run compaction so the agent resumes instead of stopping (ctx.compact() aborts the in-flight run and pi does not auto-continue). **Upstream has no equivalent.**
+- **Mid-run resume**: `MID_RUN_RESUME_CUSTOM_TYPE = "remendra-resume"`, `MID_RUN_RESUME_MESSAGE` injected after a mid-run compaction so the agent resumes instead of stopping (ctx.compact() aborts the in-flight run and pi does not auto-continue). **Upstream has no equivalent.**
 - `notifySafely` + `isStaleExtensionContextError` — **the deferred microtask (setTimeout) and async work may outlive the extension ctx (stale after session replacement/reload)**; calls into ctx can throw "extension ctx is stale". **This is why lazy `ctx.getContextUsage()` inside deferred work needs try/catch or synchronous capture — a real design constraint PR #40 doesn't have (their ctx lives long enough).**
 - `RETRYABLE_ERROR_RE` imported from `./retryable-error.js`.
 - Three `rawTokensSinceLastCompaction` call sites: L135 (turn_end path), L289 (agent_end path), L411 (deferred re-check).
@@ -816,7 +816,7 @@ Fire-rate thresholds per tier (usage basis, threshold-independent): fire-20% / f
 4. **Cap interplay with `effectiveContextWindow`**: our pre-check compares `chunkTokens + AGENT_LOOP_RESERVE` vs `effectiveObsCtx`; if the serializer budget becomes honest (labels + separators + excerpts), `chunkTokens` from the serializer is the right numerator. If the cap is derived from the *same* window source as the pre-check, the two can be reconciled (cap = fraction of effective window).
 5. **`ToolResultMessage.usage` is explicitly "not part of main LLM context accounting"** — baselines must only use assistant-message usage; tool-result usage fields (if ever populated) must be ignored by the helpers.
 6. **Stale-ctx hazard for `getContextUsage`**: our compaction trigger and consolidation stages outlive the extension ctx in deferred paths; usage reads need synchronous capture or guarded lazy reads. (See §7.4.)
-7. **Status display basis**: `/blackhole-memory` shows estimate-based progress vs static thresholds; the footer shows real percent. PR #40 leaves status sums estimate-based (self-consistent) but commit 3677e591 shows the *resolved threshold* on the compaction line — minimal change that removes the biggest visible mismatch (threshold, not numerator).
+7. **Status display basis**: `/remendra-memory` shows estimate-based progress vs static thresholds; the footer shows real percent. PR #40 leaves status sums estimate-based (self-consistent) but commit 3677e591 shows the *resolved threshold* on the compaction line — minimal change that removes the biggest visible mismatch (threshold, not numerator).
 8. **The `not_due` cursor advance is a silent fire-suppressor**: `runObserverStage` advances the observer cursor with reason `"not_due"` when tokens < threshold — under real-usage counting, if the delta computation is wrong (e.g. baseline undefined → raw fallback → estimate < threshold), the cursor still advances and the stage won't re-check until new entries land. The fallback path must not advance coverage/cursors on unmeasurable baselines (PR #40's "fall back rather than clamp/starve" rule applies to cursor advancement too).
 9. **Upstream notification semantics changed**: PR #34 reports chunk tokens (`~X-token chunk`), ours reports `~X-token chunk (of Y accumulated)` — after porting, the "accumulated" part (backlog) is the informative number for the user; upstream dropped it in favor of honesty about what's sent. Decide which surface to keep.
 10. **Test surface to extend**: `tests/session-ledger-progress.test.ts` (usage-aware paths, delta calculations, fallback cases), `tests/consolidation-trigger.test.ts` (cursor + pending anchors, manual mode), `tests/compaction-trigger.test.ts` (getContextUsage paths + stale-ctx), plus adapted upstream suites (`observer-chunk-cap`, `source-serialization-budget`, `stream-errors`).

@@ -2,7 +2,7 @@
  * Ported from upstream pi-observational-memory
  * Changes:
  *   - Import path: hooks/compaction-trigger.js → om/compaction-trigger.js
- *   - Adapted for blackhole's queueMicrotask-based deferral (upstream uses setTimeout)
+ *   - Adapted for remendra's queueMicrotask-based deferral (upstream uses setTimeout)
  *   - Added noAutoCompact, memory, ensureConfig to runtime mock
  *   - Added getSessionId to sessionManager mock
  *   - Uses await flushAll() instead of vi.runAllTimersAsync()
@@ -51,7 +51,7 @@ function captureHandler(
     /** NEW: Unified compaction control */
     compaction?: "auto" | "manual" | "off";
     /** NEW: Which engine handles compaction */
-    compactionEngine?: "blackhole" | "pi-default";
+    compactionEngine?: "remendra" | "pi-default";
     /** NEW: Mid-run (turn_end) compaction behavior */
     midRunCompaction?: "resume" | "pause" | "off";
   } = {},
@@ -158,7 +158,7 @@ function fakeCtx(branches: TestEntry[][], overrides: Record<string, unknown> = {
 const dueBranch = [textCustomMessage("raw-1", "aaaaaaaaaaaa")]; // 3 tokens
 const belowBranch = [textCustomMessage("raw-1", "aaaa")]; // 1 token
 
-describe("V3 compaction trigger (blackhole)", () => {
+describe("V3 compaction trigger (remendra)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });

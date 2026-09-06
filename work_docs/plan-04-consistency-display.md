@@ -9,7 +9,7 @@
 ## 1. Goal
 
 1. **One counting rule for observations everywhere** — `observationLineTokenCount` for stored `tokenCount` and every pool sum, ending the existing display-vs-pool inconsistency (`buildExistingObservationsSummary` counts full lines; pools count bare content).
-2. **Honest status display** — `/blackhole-memory` shows basis-tagged progress (`~` prefix on estimate-basis numbers) and **resolved** thresholds (the auto-derived number, not `0`).
+2. **Honest status display** — `/remendra-memory` shows basis-tagged progress (`~` prefix on estimate-basis numbers) and **resolved** thresholds (the auto-derived number, not `0`).
 3. **Docs that tell the truth** — README/CONFIG.md/llms.txt rewritten for auto-derivation + migration guide; presets retired into override guidance.
 
 ## 2. File-by-file spec
@@ -62,7 +62,7 @@ New tab in the configure overlay (`src/om/configure-overlay.ts`, alongside the e
 - Defaults table updated (0 = auto everywhere + `thresholdScale: 1.0`).
 
 **`llms.txt`:**
-- "Context size presets" section (L323–348) → rewritten: derivation is now runtime behavior; the old guidance formulas are superseded by the documented auto-derivation constants; preset blocks removed; guidance becomes "install, pick a posture in /blackhole configure, done — override individual fields only if you know why".
+- "Context size presets" section (L323–348) → rewritten: derivation is now runtime behavior; the old guidance formulas are superseded by the documented auto-derivation constants; preset blocks removed; guidance becomes "install, pick a posture in /remendra configure, done — override individual fields only if you know why".
 
 **`CHANGELOG.md`:** breaking-change entry (counting basis, defaults → auto, migration ×1.45, new debug events `observer.chunk_capped` / `*.stream_error` / `observer.upper_bound`).
 
@@ -71,7 +71,7 @@ New tab in the configure overlay (`src/om/configure-overlay.ts`, alongside the e
 1. `observationLineTokenCount` adoption (stored + all sum sites) → verify: `rg "sum.*tokenCount|tokenCount.*reduce" src/` shows only line-based computation at sum sites; tsc
 2. Pool/projection/coverage tests updated → verify: `npx vitest run tests/dropper.test.ts tests/dropper-coverage.test.ts tests/projection.test.ts tests/fold.test.ts`
 3. Presets tab in the configure overlay (§2.3) → verify: overlay opens the tab; each profile writes the documented fields to the chosen scope; `tests/configure-overlay.test.ts` + `tests/config-manager-modal.test.ts` updated green
-4. `memory.ts` display (basis tags, resolved thresholds, pool lines, basis hint) → verify: `tests/memory-command.test.ts` updated green; manual `/blackhole-memory` eyeball in a live session
+4. `memory.ts` display (basis tags, resolved thresholds, pool lines, basis hint) → verify: `tests/memory-command.test.ts` updated green; manual `/remendra-memory` eyeball in a live session
 5. CONFIG.md / README.md / llms.txt / CHANGELOG.md → verify: docs review; every number in docs matches `unified-config.ts` defaults and resolver constants (grep cross-check)
 6. Full suite → verify: `npx vitest run`
 7. Commit: "feat(om): line-based observation accounting, honest status display, presets tab, auto-derivation docs (plan-04)" → verify: single commit

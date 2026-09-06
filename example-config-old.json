@@ -1,5 +1,5 @@
 {
-  "_comment": "blackhole unified configuration — ~/.pi/agent/pi-blackhole/pi-blackhole-config.json",
+  "_comment": "remendra unified configuration — ~/.pi/agent/pi-remendra/pi-remendra-config.json",
   "_all_settings_in_one_file": true,
 
   "overrideDefaultCompaction": false,
@@ -111,13 +111,13 @@
     "On retryable error (429, 5xx, timeout), the model is cooled down for cooldownHours.",
     "Cooled-down models are skipped on subsequent consolidation attempts until cooldown expires.",
     "After all candidates exhausted, the stage aborts. 30s retry gate prevents spam.",
-    "Cooldowns persist in ~/.pi/agent/pi-blackhole/pi-blackhole-cooldown.json (survives pi restarts).",
+    "Cooldowns persist in ~/.pi/agent/pi-remendra/pi-remendra-cooldown.json (survives pi restarts).",
     "Valid thinking values: off, minimal, low, medium, high, xhigh.",
-    "Env override for passive mode: PI_BLACKHOLE_PASSIVE=true.",
+    "Env override for passive mode: PI_REMENDRA_PASSIVE=true.",
     "",
     "noAutoCompact mode accumulates observationBatches/reflectionBatches in",
     "<sessionId>-pending.json (per-session) across pipeline runs.",
-    "On /blackhole flush, all accumulated batches are written to the branch and the file is cleared.",
+    "On /remendra flush, all accumulated batches are written to the branch and the file is cleared.",
     "The observer preamble (CURRENT OBSERVATIONS)",
     "is capped to observerPreambleMaxTokens (default 0 = auto 30% of observerChunkMaxTokens).",
     "This is a soft safety valve — it only trims when accumulated observations exceed",

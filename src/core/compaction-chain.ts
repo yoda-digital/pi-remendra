@@ -259,7 +259,7 @@ export function renderSegmentCoverageMarker(
       }`
     : "";
   return [
-    `[Blackhole Append Segment ${sequence}]`,
+    `[Remendra Append Segment ${sequence}]`,
     `Coverage: ${coverage.firstCoveredEntryId}..${coverage.lastCoveredEntryId}; firstKept=${firstKept}; sourceMessages=${coverage.sourceMessageCount}${legacy}`,
     "Read segments in sequence. Later segments override earlier conflicting state.",
   ].join("\n");
@@ -284,7 +284,7 @@ const createSegment = (
 /**
  * Build the version-2 details for one compaction.
  *
- * Automatic compaction appends when the prior chain is valid. Manual /blackhole
+ * Automatic compaction appends when the prior chain is valid. Manual /remendra
  * and a legacy checkpoint create one new chain-start segment. A malformed version-2
  * chain throws so the caller keeps the complete rewrite-compatible fallback.
  */
@@ -360,7 +360,7 @@ export function buildAppendOnlyDetails(
   }
 
   return {
-    compactor: "blackhole",
+    compactor: "remendra",
     version: 2,
     summaryMode: "append",
     chainStart,
@@ -418,10 +418,10 @@ export function projectAppendOnlyContext(
     ? [
         {
           role: "custom",
-          customType: "blackhole-compaction-tail",
+          customType: "remendra-compaction-tail",
           content: trailing,
           display: false,
-          details: { compactor: "blackhole", version: 2 },
+          details: { compactor: "remendra", version: 2 },
           timestamp: timestampOf(latest, segmentMessages.length),
         },
       ]
