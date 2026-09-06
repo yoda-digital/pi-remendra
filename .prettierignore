@@ -1,0 +1,8 @@
+dist/
+node_modules/
+pnpm-lock.yaml
+docs/
+tests/fixtures/
+.husky/
+.pi/
+*.md

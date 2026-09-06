@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "mode": "active",
+  "contextTokens": 2400,
+  "summaryTokens": 6000,
+  "outputReserve": 8000,
+  "includeUser": false,
+  "observer": true,
+  "observerInputTokens": 6000,
+  "observerOutputTokens": 1600,
+  "dailyTokenBudget": 80000,
+  "jobTimeoutMs": 45000,
+  "maxAttempts": 2,
+  "models": [],
+  "useSessionModel": true,
+  "excludedPaths": [".env", "credentials", "secrets"],
+  "redactionPatterns": [],
+  "recallTokens": 6000
+}

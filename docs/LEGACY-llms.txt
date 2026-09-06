@@ -1,0 +1,573 @@
+# pi-blackhole: Agent Setup Guide
+
+docs/CONFIG.md is the authoritative source for configuration. Always check it first before relying on summaries from this file.
+
+pi-blackhole is a Pi extension that replaces Pi's costly LLM-based compaction with a fast, deterministic algorithm — and adds a durable memory layer that survives across compactions. Three background workers (observer, reflector, dropper) run during the session to extract facts, distill stable reflections, and prune old observations — all using cheap/free models, never the expensive session model unless necessary.
+
+**One config file. Install and forget, or tune to taste.**
+
+This guide is written for an AI assistant (the agent). Read it end-to-end before starting the setup conversation. Follow the stages in order. Do not skip to config generation without completing the interview.
+
+The tone in this file is for the agent — verbose where it helps the agent understand the reasoning. Only the quoted example statements to the user need to be concise and user-facing.
+
+---
+
+## Philosophy
+
+The user wants pi-blackhole to work and not think about it again. Your job is to extract their preferences with as few questions as possible, explain *why* each choice matters so they can make an informed decision, then produce a correct config file.
+
+**Key principle:** You do the hard work — read the docs, understand the tradeoffs, explain them in plain language, produce the right config. The user just answers a few questions in natural language and you handle the rest.
+
+Do not explain internals (markers, pipeline stages, ledger entries, compaction projections) unless the user specifically asks. Frame everything in terms of outcomes: cost, speed, context retention, control.
+
+---
+
+## Vocabulary
+
+Use these terms consistently. The user will encounter them in the config and in `/blackhole-memory` output.
+
+| Term | Meaning (for the user) |
+|------|----------------------|
+| **Compaction** | When the extension compresses old conversation to save context space. Happens automatically or on demand. |
+| **Observational memory** | Durable facts and decisions that survive compaction — the agent remembers them even after old messages are compressed. |
+| **Workers** | Background tasks that extract facts and keep memory tidy. They use separate (cheap/free) models so your main model isn't disturbed. |
+| **Fallback chain** | If the worker's primary model fails (rate limit, timeout), a backup model is tried automatically. Then another. Last resort is your main conversation model. |
+| **Cooldown** | If a model keeps failing, it's temporarily skipped — prevents hammering a broken API. Cooldowns survive Pi restarts. |
+
+---
+
+## Stage 1: Preparation — read before asking the user
+
+Packages in Pi can be installed in non-standard locations. If you cannot find `docs/CONFIG.md` next to this file, run `pi list`, locate the `pi-blackhole` package, and read its `docs/CONFIG.md` from there.
+
+Read these files fully. They contain every default, behavioral nuance, and edge case you need.
+
+- **`docs/CONFIG.md`** — full config reference with every key, type, default, and behavior (in `docs/` next to this file)
+- **`README.md`** — overview, commands, settings table, configuration presets (low/medium/high context), feature comparison
+- **`example-config.json`** — annotated example with model choices, fallback rationale, and thinking levels
+
+Also scan the source tree for discovery (especially if you need to understand a specific behavior):
+
+```
+src/
+├── core/
+│   └── unified-config.ts     # Config loading, scaffolding, defaults, env var overrides, legacy fallback merge
+├── om/
+│   ├── consolidation.ts      # Worker orchestration (observer → reflector → dropper), fallback resolution, context window checks
+│   ├── runtime.ts             # Model resolution, cooldown integration, pipeline cursors, retry gate
+│   ├── cooldown.ts            # Cooldown persistence and expiry logic
+│   ├── pending.ts             # Per-session pending file management (manual compaction mode)
+│   ├── configure-overlay.ts   # The /blackhole configure TUI overlay — shows which keys are editable
+│   ├── model-budget.ts        # effectiveContextWindow() — context window override resolution order
+│   ├── debug-log.ts           # Debug logging (rotation, format)
+│   ├── retryable-error.ts     # Regex patterns for retryable error detection
+│   ├── compaction-trigger.ts  # Auto-compaction trigger on agent_end — wait loop, idle polling, session identity checks
+│   └── ledger/
+│       ├── index.ts           # Core OM operations: folding, projection, coverage markers, observation/reflection queries
+│       ├── types.ts           # Entry, Observation, Reflection, coverage-marker entry schemas
+│       ├── fold.ts            # Ledger folding — compaction-safe observation pool management
+│       └── recall.ts          # Ledger index for reverse recall lookup (OM→recall coupling)
+└── hooks/
+    └── before-compact.ts      # The join point: vcc compile() + OM projection injection + ownCut/branch cutting logic
+```
+
+Then inspect the user's environment:
+
+```bash
+# System and Pi info
+uname -s                                          # OS
+pi --version                                      # Pi version
+which pi && echo "pi found" || echo "pi not found"
+
+# Agent directory structure
+ls ~/.pi/agent/
+ls ~/.pi/agent/pi-blackhole/ 2>/dev/null || echo "no blackhole dir yet"
+
+# Pi settings — reads the user's current provider, model, and existing config
+cat ~/.pi/agent/settings.json                     # defaultProvider, defaultModel, enabledModels
+cat ~/.pi/agent/models.json                       # all configured providers and models with context windows
+cat ~/.pi/agent/pi-blackhole/pi-blackhole-config.json 2>/dev/null || echo "no blackhole config yet"
+```
+
+Do NOT read `~/.pi/agent/auth.json` — it contains API keys.
+
+Key things to extract from these files:
+- **Session model** (from `settings.json` `defaultModel`) — what the user uses for their main conversation. Workers should use cheaper/free models. The session model is the last-resort fallback.
+- **Available providers and models** (from `models.json`) — what the user has explicitly configured. Note which have free tiers.
+- **Built-in providers** — Pi also has built-in providers (openrouter, cerebras, ollama, etc.) that may have default models even if not explicitly listed in `models.json`. The user can reference models from built-in providers even if they don't appear in `models.json`. The OM pipeline will try to resolve them via `modelRegistry.find(provider, id)` — if the provider is known to Pi, it works. So **do not panic if a model ID isn't in `models.json`** — check if the provider is built-in first.
+- **Existing config** (if any) — what the user already configured, whether it uses legacy keys (see Stage 5 for migration).
+
+### How model resolution works internally
+
+When a worker runs, the runtime builds a candidate model list in this order:
+1. Primary stage model (e.g. `observerModel`)
+2. Stage fallback models (e.g. `observerFallbackModels`) — tried in array order
+3. Base model (`model`) — shared across all workers
+4. Session model (the user's main conversation model) — always the last resort, never cooled down
+
+Each candidate is resolved via `modelRegistry.find(provider, id)`. If Pi doesn't know the provider/model combination, it's skipped. The runtime tries up to 10 candidates per stage before giving up (enforced by `MAX_STAGE_ATTEMPTS = 10` in `consolidation.ts`).
+
+**Cooldown-aware skipping:** Before calling a candidate, the runtime checks `isCooldownActive()` (`cooldown.ts`). If the model is in cooldown, it's transparently skipped. Cooldowns are persisted to `pi-blackhole-cooldown.json` and survive Pi restarts.
+
+**Context window pre-check:** Before launching the agent loop for a worker, the runtime checks `effectiveContextWindow()` (`model-budget.ts`). If the estimated input (chunk tokens + 8k reserve) exceeds the model's context window, that model is skipped and a retryable error is recorded. Resolution order: (1) `OmModelConfig.contextWindow` override, (2) `model.contextWindow` from Pi's registry, (3) fallback of 128k.
+
+---
+
+## Stage 2: Interview — ask the user
+
+Ask these questions **one round at a time**. Do not dump all questions at once unless the user seems experienced. Explain *why* each choice matters — users who understand their options make better decisions and don't need to reconfigure later.
+
+Each question below has:
+- **Agent context** (what you need to know and why this matters) — this is for you, not the user
+- **User-facing statement** (quoted, what you actually say to the user)
+
+### Question 1: Compaction mode
+
+**Agent context:** This is the single most impactful decision. Three modes control when and how compaction fires. The key conceptual model:
+
+| Mode | Auto-compact | `/compact` (Pi built-in) | `/blackhole` |
+|------|:---:|:---:|:---:|
+| `"auto"` | blackhole fires at threshold | blackhole handles | blackhole handles |
+| `"manual"` | skipped | Pi handles | blackhole handles |
+| `"off"` | skipped (Pi handles) | Pi handles | blackhole handles |
+
+**`compaction: "off"` does NOT block `/blackhole`** — explicit `/blackhole` always uses the blackhole pipeline regardless of mode. This is intentional: even in Off mode, the user can type `/blackhole` to get the structured summary once in a while.
+
+If user picks Off, ask separately whether they also want to disable memory (`memory: false`). In Off mode, workers still run by default (memory extraction continues). Some users want Off specifically to stop compaction but keep observations flowing.
+
+**User-facing statement:**
+
+> pi-blackhole has three modes for compaction (compressing old conversation to save context space):
+>
+> - **Auto** — install and forget. Compaction fires automatically when enough conversation accumulates (~80k tokens by default). The extension handles everything. Best for most people.
+> - **Manual** — compaction only happens when you type `/blackhole`. You control when context gets compressed. Observations still accumulate in the background automatically. Good if you want to decide the right moment to compress.
+> - **Off** — Pi handles compaction normally. pi-blackhole only activates when you explicitly use `/blackhole`. Workers still run unless you also disable memory. Useful if you mainly want the memory features without changing how compaction works.
+>
+> Which fits how you work?
+
+**If Auto or Manual:** proceed to Question 2.
+**If Off, follow-up:** "Do you also want to disable the background memory workers entirely? That stops fact extraction and reflection synthesis. `/blackhole` would still run, but without memory content — just the structured summary."
+
+### Question 2: Model selection
+
+**Agent context:** Three workers, each with a different job and varying capability needs. The key insight is that workers don't need the session model's capability — they're doing structured extraction, synthesis, and pruning, not creative coding. Cheap/free models work great.
+
+Worker characteristics:
+- **Observer** — most frequent runner (every `observeAfterTokens` tokens). Reads conversation chunk (newest-first up to `observerChunkMaxTokens`) and extracts timestamped observations via an agent loop. Needs speed and structured extraction. A model with `thinking: "low"` helps it produce better structured output. Does NOT need deep reasoning.
+- **Reflector** — runs less often. Takes new observations and existing reflection summaries (compacted to ~15% of `reflectorInputMaxTokens`) and synthesizes durable reflections. Benefits from stronger reasoning (`thinking: "low"` or `"medium"`).
+- **Dropper** — runs when the observation pool exceeds `observationsPoolMaxTokens` or at `dropperPressureThreshold` pressure. Prunes low-value observations while keeping reflections. Needs judgment — similar capability to reflector, but can use `thinking: "off"` since it's mainly prioritization.
+
+Each model entry supports these fields (parsed by `parseModel()` in `unified-config.ts`):
+
+```typescript
+interface OmModelConfig {
+  provider: string;        // required — must match a known Pi provider
+  id: string;              // required — model ID as the provider knows it
+  thinking?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+  cooldownHours?: number;  // default 1h, 0 = in-memory only (no disk persistence)
+  contextWindow?: number;  // override Pi's registry value
+}
+```
+
+**Model ID resolution:** `modelRegistry.find(provider, id)` is used to resolve models. This means:
+- Models explicitly in `models.json` work (they're registered)
+- Models from built-in providers that Pi knows about work even if not in `models.json` (e.g., `openrouter/auto`, many free-tier models)
+- Unknown provider+id combos are silently skipped — the runtime logs a warning and tries the next fallback
+
+So when the user says "I want to use Qwen 3 Next via OpenRouter", you should check if OpenRouter is a known provider (it's built-in) and craft the correct model ID. **You don't need to find it in `models.json`** — just ensure the provider is known to Pi.
+
+**Fallback strategy:** Fallbacks should be from *different providers* to prevent correlated failures. If OpenRouter is rate-limiting, another OpenRouter model will also be rate-limited. A cerebras or ollama fallback will work. The fallback array is tried in order.
+
+**Thinking level:** Not all models support reasoning effort. If `thinking` is set on a model that doesn't support it, the provider silently ignores it — no error. Safe to set, but wasted config if the model doesn't support it.
+
+**User-facing statement:**
+
+> I have three background workers that keep your session memory durable. Each can use a different model:
+>
+> 1. The **fact extractor** — runs most frequently. Reads the latest conversation and pulls out facts and decisions. Needs a fast model with basic reasoning. Your main conversation model would work, but it's overkill — I recommend a cheap or free model here.
+> 2. The **memory synthesizer** — runs less often. Distills facts into durable reflections (patterns, constraints, decisions that survive future compressions). Needs stronger reasoning. Benefits from thinking/reasoning support.
+> 3. The **memory pruner** — runs when observations pile up. Removes old or low-value information. Similar capability to the synthesizer.
+>
+> Each worker has a **primary** model and a **fallback chain** — if one fails (rate limit, timeout), the next is tried automatically. Cooldowns prevent hammering broken APIs. Your conversation model is always the very last resort.
+>
+> Options:
+> - **Set specific models** for each worker. I'll pick the best available models from your configured providers.
+> - **Use one shared model** for all three workers.
+> - **Let me auto-choose** based on what's available. I'll put the fastest capable model on the fact extractor and a stronger one on the synthesizer.
+>
+> I can check your available models and suggest specific options if you want.
+
+After user chooses, examine what's available and propose specific models. The table in Stage 3 has good defaults.
+
+### Question 3: Context size
+
+**Agent context:** This determines ALL token thresholds — `compactAfterTokens`, `observeAfterTokens`, `reflectAfterTokens`, `observerChunkMaxTokens`, `observationsPoolMaxTokens`, `reflectorInputMaxTokens`, `dropperInputMaxTokens`. They all scale from `compactAfterTokens` which should be ~65% of the model's context window.
+
+The interaction with Pi's own threshold: Pi has `keepRecentTokens` (~20k tokens kept by default). Blackhole's `compactAfterTokens` is independent — it's the *trigger* point, not the *keep* point. When blackhole's trigger fires, `tailBehavior` determines what's kept visible.
+
+**Scaling rationale:** The ratios are designed so workers always have enough headroom. `compactAfterTokens` at 65% means there's 35% headroom for system prompts, tool definitions, and the summary itself. The observer chunk is capped at half of that so it never floods itself. The reflector/dropper budgets match `compactAfterTokens` because they need to see all accumulated observations plus summaries.
+
+**User-facing statement:**
+
+> What's the context window of your main conversation model? This tells me when compaction should fire and how much data the workers can process per run.
+>
+> Rule of thumb: compaction triggers at about 60-70% of your model's context window, leaving headroom for tools and system prompts.
+>
+> Standard presets:
+> - **Small models** (~32-64k context) — compact at ~30k tokens
+> - **Medium models** (~128k — GPT-4o, Claude Sonnet, Gemini Pro) — compact at ~80k tokens (this is the default, works for most people)
+> - **Large models** (~200k+ — Claude Opus, Gemini Ultra, big local models) — compact at ~180k tokens
+>
+> Tell me your model name and its context window, or just pick a preset.
+
+### Question 4 (optional): Compaction engine behavior
+
+**Agent context:** `compactionEngine` controls *who* handles the compaction *content* and *timing*. Only matters when `compaction: "auto"`. For `"manual"`/`"off"`, the engine field is irrelevant because blackhole's hook lets Pi handle everything except `/blackhole`.
+
+The interaction matrix:
+| `compaction` | `compactionEngine` | Auto-trigger | `/compact` | `/blackhole` |
+|---|---|---|---|---|
+| auto | blackhole | blackhole fires at threshold | blackhole handles | blackhole handles |
+| auto | pi-default | trigger skips (Pi decides when) | Pi handles | blackhole handles |
+| manual | (any) | skipped | Pi handles | blackhole handles |
+| off | (any) | skipped | Pi handles | blackhole handles |
+
+`tailBehavior` controls how much stays visible after compaction. Only applies when `compactionEngine: "blackhole"`:
+- `"minimal"` (default) — aggressive: keep only the last user message. Everything before gets compiled and removed from view.
+- `"pi-default"` — gentle: use Pi's `firstKeptEntryId`, respects Pi's `keepRecentTokens` (~20k tokens kept visible).
+
+Both `/blackhole` and auto-triggered default to `"minimal"`. Set explicitly to `"pi-default"` for a gentler cut.
+
+**User-facing statement:**
+
+> One more thing: who should handle the actual compaction?
+>
+> - **Blackhole engine (default):** pi-blackhole generates a structured summary with sections (goals, files changed, preferences, etc.) AND injects your durable memories. Everything in one compact block. This is the full experience.
+> - **Pi default engine:** Pi writes its own free-form summary. pi-blackhole only activates when you type `/blackhole`. Useful if you prefer Pi's summarization style and only want blackhole for the memory features.
+>
+> This only matters if you chose Auto mode. In Manual or Off mode, it doesn't change anything — Pi handles `/compact` and blackhole handles `/blackhole` regardless.
+>
+> Blackhole engine (full structured + memories) or Pi default (free-form)?
+
+---
+
+## Stage 3: Generate the config
+
+Based on interview answers, build the config object. Write it to:
+
+```
+~/.pi/agent/pi-blackhole/pi-blackhole-config.json
+```
+
+### Config structure rules
+
+```jsonc
+{
+  // ── Compaction mode ──
+  "compaction": "auto",           // "auto" | "manual" | "off"
+  "compactionEngine": "blackhole", // "blackhole" | "pi-default" — irrelevant for manual/off
+  "tailBehavior": "minimal",      // "minimal" (last user msg only, default) | "pi-default" (Pi's gentler cut)
+  "compactAfterTokens": 81000,    // auto-compaction threshold, ~65% of model's context window
+
+  // ── Memory ──
+  "memory": true,                 // false = no workers, no memory injection
+  "sessionFallback": true,        // false = skip worker when all configured models fail, don't use main model
+  "fullFoldAlways": true,         // false = early reflections/drops don't survive first compaction until pool fills
+
+  // ── Base model (shared fallback for all workers) ──
+  "model": { "provider": "...", "id": "..." },
+
+  // ── Per-worker primary models ──
+  "observerModel":  { "provider": "...", "id": "...", "thinking": "low", "cooldownHours": 1 },
+  "reflectorModel": { "provider": "...", "id": "...", "thinking": "low", "cooldownHours": 1 },
+  "dropperModel":   { "provider": "...", "id": "...", "thinking": "off", "cooldownHours": 1 },
+
+  // ── Per-worker fallback chains (different providers to avoid correlated failures) ──
+  "observerFallbackModels":  [ ... ],
+  "reflectorFallbackModels": [ ... ],
+  "dropperFallbackModels":   [ ... ],
+
+  // ── Token thresholds (scale from compactAfterTokens) ──
+  "observeAfterTokens": 15000,         // compactAfterTokens / ~5.4
+  "reflectAfterTokens": 25000,         // compactAfterTokens / ~3.2
+  "observerChunkMaxTokens": 40000,     // compactAfterTokens / ~2 — max conversation chunk sent to observer per run
+  "observerPreambleMaxTokens": 0,      // 0 = auto (30% of chunk). Caps prior-observation preamble in manual mode only.
+  "observationsPoolMaxTokens": 20000,  // compactAfterTokens / ~4 — max active observation pool before dropper prunes
+  "observationsPoolTargetTokens": 10000, // optional — dropper target after pruning; defaults to half of pool max
+  "reflectorInputMaxTokens": 80000,    // ~compactAfterTokens
+  "dropperInputMaxTokens": 80000,      // ~compactAfterTokens
+  "dropperPressureThreshold": 0.70,    // pool reaches 70% of reflectorInputMaxTokens → dropper fires even without new data
+  "agentMaxTurns": 16                  // max agent-loop turns per worker per run
+}
+```
+
+### Model entry format
+
+Each model entry supports these fields:
+
+```jsonc
+{
+  "provider": "openrouter",   // required — must be known to Pi (explicit in models.json or built-in)
+  "id": "qwen/qwen3-next-80b-a3b-instruct:free",  // required — model ID as the provider knows it
+  "thinking": "low",          // optional — "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
+  "cooldownHours": 6,         // optional — hours to skip after retryable error (default 1, 0 = in-memory only, no disk writes)
+  "contextWindow": 128000     // optional — override Pi's model registry value; used by context window pre-check
+}
+```
+
+**`cooldownHours: 0` behavior:** When set to 0, the model is never written to the cooldown file on disk. Instead, failures are tracked in-memory for the current consolidation stage only (`Runtime.failedInCycle` Set in `runtime.ts`). This means:
+- The model is skipped for the rest of the current pipeline stage
+- It's available again on the next pipeline run (no persisted cooldown)
+- Useful for testing or when you don't want cooldown state to persist across restarts
+
+### Context size presets
+
+Match `compactAfterTokens` to ~65% of the user's model context window. Then scale thresholds proportionally:
+
+| Setting | ~128k model (default) | ~64k model (low) | ~200k+ model (high) |
+|---------|:---------------------:|:-----------------:|:-------------------:|
+| `compactAfterTokens` | 81000 | 30000 | 180000 |
+| `observeAfterTokens` | 15000 | 5000 | 20000 |
+| `reflectAfterTokens` | 25000 | 10000 | 40000 |
+| `observerChunkMaxTokens` | 40000 | 15000 | 80000 |
+| `observationsPoolMaxTokens` | 20000 | 8000 | 40000 |
+| `reflectorInputMaxTokens` | 80000 | 30000 | 160000 |
+| `dropperInputMaxTokens` | 80000 | 30000 | 160000 |
+
+Sizing formula (for non-standard context windows):
+```
+compactAfterTokens:        round(model_context * 0.65,     nearest_1000)
+observeAfterTokens:        round(compactAfterTokens / 5.4, nearest_1000)
+reflectAfterTokens:        round(compactAfterTokens / 3.2, nearest_1000)
+observerChunkMaxTokens:    round(compactAfterTokens / 2,   nearest_1000)
+observationsPoolMaxTokens: round(compactAfterTokens / 4,   nearest_1000)
+reflectorInputMaxTokens:   round(compactAfterTokens,       nearest_1000)
+dropperInputMaxTokens:     round(compactAfterTokens,       nearest_1000)
+```
+
+The ratios are the same as the default 128k presets — scale linearly. The default presets are slightly hand-tuned from pure math for cost-efficiency (observer threshold is raised a bit, reflector similarly). For custom sizes, the formulas above are a good starting point; the user can tune from there.
+
+### Fallback chain strategy
+
+- **Different providers for fallbacks** — if primary is cerebras, use openrouter or ollama. Correlated failures (one provider down = all its models blocked) skip together.
+- **Free tiers first** — primary and fallbacks should all be free-tier if possible. Session model is the expensive safety net.
+- **2-3 fallbacks max** — more doesn't improve reliability significantly after the first few.
+- **Fallback order matters** — the array order IS the resolution order after the primary. Put the most reliable fallback first.
+
+### Good default model picks
+
+These are known to work well as of mid-2025. Provider/model availability changes — check what the user has access to. All listed here are free-tier.
+
+| Role | Provider | Model | Thinking | Why |
+|------|----------|-------|----------|-----|
+| Observer | openrouter | `qwen/qwen3-next-80b-a3b-instruct:free` | low | Fast extraction, 80b params, strong structured output at zero cost |
+| Observer fb 1 | ollama | `gemma4:31b-cloud` | off | Different provider, fast, 31b — enough for extraction |
+| Observer fb 2 | openrouter | `google/gemma-4-31b-it:free` | off | Same model class via OpenRouter free |
+| Reflector | cerebras | `gpt-oss-120b` | low | Strong reasoning, 120b, free. Great for synthesis |
+| Reflector fb 1 | zai | `glm-4.7` | low | Different provider, thinking support, 128k context |
+| Reflector fb 2 | openrouter | `openai/gpt-oss-120b:free` | low | Same model via OpenRouter free |
+| Dropper | same as reflector | — | off | Dropper mainly does prioritization, needs less thinking |
+
+If the user doesn't have all these providers, adapt. The key constraints:
+- Observer needs speed > reasoning (cheap, fast, structured output)
+- Reflector needs reasoning > speed (stronger model, thinking enabled)
+- Dropper is like reflector but can use lower thinking
+
+### Minimal config (one model for all workers)
+
+If the user doesn't want per-worker tuning, just set `model` — all workers fall back to it:
+
+```json
+{
+  "compaction": "auto",
+  "compactionEngine": "blackhole",
+  "tailBehavior": "minimal",
+  "memory": true,
+  "model": { "provider": "openrouter", "id": "google/gemma-4-31b-it:free" },
+
+  "observeAfterTokens": 15000,
+  "reflectAfterTokens": 25000,
+  "compactAfterTokens": 81000,
+  "observerChunkMaxTokens": 40000,
+  "observationsPoolMaxTokens": 20000,
+  "reflectorInputMaxTokens": 80000,
+  "dropperInputMaxTokens": 80000
+}
+```
+
+---
+
+## Stage 4: Verify
+
+After writing the config:
+
+```bash
+# Validate JSON
+cat ~/.pi/agent/pi-blackhole/pi-blackhole-config.json | python3 -m json.tool > /dev/null && echo "valid JSON"
+
+# Check the extension loads it
+# Tell the user to run /reload or restart Pi, then /blackhole-memory
+# /blackhole-memory shows the active configuration and pipeline status
+```
+
+Tell the user:
+> "The config is written. Run `/reload` or restart Pi. Then type `/blackhole-memory` to confirm the pipeline initializes with your settings. If everything looks good, you're set."
+
+---
+
+## Stage 5: Edge cases and gotchas
+
+### Config file is at the right path
+
+`~/.pi/agent/pi-blackhole/pi-blackhole-config.json` — NOT `~/.pi/agent/pi-blackhole-config.json`. The directory `pi-blackhole/` is under the agent directory. Check both locations if the extension doesn't pick up the config.
+
+### Config must be valid JSON
+
+A trailing comma, truncated write, or sync conflict causes the config to be rejected:
+- Yellow warning shown in the TUI
+- `/blackhole configure` overlay shows a red error banner and blocks Ctrl+S
+- The runtime falls back to defaults but model configs (`observerModel`, etc.) are preserved from the last valid read
+
+Fix the JSON directly in the file, then reopen the overlay.
+
+### Config saves preserve unknown keys
+
+The overlay only manages the keys it knows about (compaction, engine, tail behavior, token thresholds, booleans). Model configs (`observerModel`, fallback arrays) are preserved on save because they're not in the overlay's field list. However, if the file has **invalid JSON**, the overlay blocks save entirely — it won't overwrite the file.
+
+### Legacy migration
+
+If the user has an old config from pi-vcc or pi-observational-memory, it's auto-migrated at load time:
+
+| Old key | Migrates to |
+|---------|-------------|
+| `overrideDefaultCompaction: true` | `compactionEngine: "blackhole"` + `tailBehavior: "minimal"` |
+| `noAutoCompact: true` | `compaction: "manual"` |
+| `passive: true` | `compaction: "off"` + `memory: false` |
+
+Old keys are **removed from the in-memory copy** after migration. The on-disk file is unchanged until you write a new config. A migration reminder notification appears (max 2 times per session) until the user saves with the new keys via `/blackhole configure`.
+
+**Legacy fallback sources** (checked when the unified config file doesn't exist, in order):
+- `~/.pi/agent/pi-vcc-config.json` — old pi-vcc standalone config
+- `~/.pi/agent/settings.json["pi-blackhole"]` — embedded in Pi's settings
+- `~/.pi/agent/settings.json["observational-memory"]` — old OM embedded config
+- `.pi/settings.json["pi-blackhole"]` (project-level, relative to cwd) — per-project override
+- `.pi/settings.json["observational-memory"]` (project-level, relative to cwd) — per-project override
+
+After writing the new config, old locations are unused. Recommend keeping them as backup or deleting them — either is fine.
+
+This is handled by `loadUnifiedConfig()` in `src/core/unified-config.ts:90-118`.
+
+### Cooldowns persist across restarts
+
+`~/.pi/agent/pi-blackhole/pi-blackhole-cooldown.json` — if the user switches models, stale cooldowns for old models are harmless but can be cleaned up. Cooldown entries have `until` (ISO timestamp), `reason`, and `stage` fields. Expired entries are lazily cleaned on read.
+
+### Models must be known to Pi
+
+If a model ID+provider combination isn't known to Pi's `modelRegistry`, the pipeline skips it with a warning. This applies to:
+- Models explicitly in `models.json` — always work
+- Models from built-in providers — work if the provider is built-in (openrouter, cerebras, ollama, etc.)
+- Unknown providers or incorrect model IDs — silently skipped, next fallback tried
+
+Common gotcha: the model ID string must match exactly what the provider expects (case-sensitive, including `/` and `:` separators for OpenRouter models like `google/gemma-4-31b-it:free`).
+
+### New providers need Pi registration
+
+pi-blackhole doesn't manage providers. If the user wants to use a provider not in their `models.json` and not built-in, they need to add it to Pi's model registry first with proper `api`, `baseUrl`, `apiKey`, and models. See Pi's provider documentation.
+
+### Thinking level not all models support
+
+Check `models.json` for `reasoning: true` on the model entry. Also check the provider's `compat` field. Setting `thinking` on a model that doesn't support it is harmless — the provider ignores it silently. But it's wasted config.
+
+### Hardcoded constants (not configurable)
+
+These affect behavior but aren't user-configurable. Useful for diagnosis:
+
+| Constant | Value | Location | Effect |
+|----------|-------|----------|--------|
+| Retry gate | 30s | `runtime.ts:55` | After any worker stage fails, wait 30s before retrying the next consolidation run |
+| Stage attempts | 10 | `consolidation.ts:85` | Max model resolution attempts per stage before giving up entirely |
+| Context reserve | 8k tokens | `consolidation.ts:35` | Fixed overhead reserved for system prompt + tool definitions in context window pre-check |
+| Agent loop max | 32k tokens | `model-budget.ts:4` | Max tokens the agent can generate per worker invocation (capped by model's own maxTokens too) |
+| Dropper summary | 20% | `consolidation.ts` (computed) | Fraction of `dropperInputMaxTokens` allocated for existing observation summaries |
+| Reflector summary | 15% x2 | `consolidation.ts` (computed) | Fraction of `reflectorInputMaxTokens` for existing reflection + observation summaries (each) |
+
+### `_notes` and `_comment` fields
+
+The config parser ignores unknown keys. Users can add `_notes` (array of strings) or `_comment` (string) to document their choices inline:
+
+```json
+{
+  "_comment": "Tuned for my Cerebras + OpenRouter free model setup",
+  "_notes": ["auto mode, minimal tail", "observer: fast extraction via openrouter"]
+}
+```
+
+These are preserved by `saveUnifiedConfig()` and ignored by the runtime. Good for documenting why specific choices were made.
+
+### Exact file paths
+
+| File | Purpose |
+|------|---------|
+| `~/.pi/agent/pi-blackhole/pi-blackhole-config.json` | Main config |
+| `~/.pi/agent/pi-blackhole/pi-blackhole-cooldown.json` | Persisted model cooldowns (survives restarts) |
+| `~/.pi/agent/pi-blackhole/<sessionId>-pending.json` | Per-session pending state (manual compaction mode) |
+| `~/.pi/agent/pi-blackhole/debug.ndjson` | Debug logging output (when `debugLog: true`). Rotates at 10 MB (renamed to `.1`, then overwritten). |
+| `/tmp/pi-blackhole-debug.json` | Debug snapshot (when `debug: true`) — overwritten each compaction |
+
+### Environment variable overrides
+
+These override config file values at load time, applied AFTER config is parsed. Useful for testing or temporary overrides without editing JSON:
+
+| Variable | Effect | Accepted values |
+|----------|--------|-----------------|
+| `PI_BLACKHOLE_PASSIVE` | Sets `compaction: "off"` + `memory: false` | `1`, `true`, `yes`, `on` |
+| `PI_BLACKHOLE_COMPACTION` | Overrides `compaction` | `auto`, `manual`, `off` |
+| `PI_BLACKHOLE_COMPACTION_ENGINE` | Overrides `compactionEngine` | `blackhole`, `pi-default` |
+
+Legacy aliases (still work): `PI_VCC_OM_PASSIVE`, `PI_OBSERVATIONAL_MEMORY_PASSIVE`.
+
+These are processed in `loadUnifiedConfig()` in `unified-config.ts`. The passive env var is checked first (overrides both keys), then the individual overrides are applied on top.
+
+### Commands
+
+| Command | What it does |
+|---------|-------------|
+| `/blackhole` | Compact the conversation. Subcommands: `configure` (settings overlay), `om-off` / `om-on` (toggle memory without editing config) |
+| `/blackhole-memory` | Pipeline status: token progress, observation/reflection counts, pending data, last errors |
+| `/blackhole-memory view` | Show visible memories (after compaction trimming), copied to clipboard |
+| `/blackhole-memory full` | Show ALL recorded memories including dropped observations, copied to clipboard |
+| `/blackhole-recall <query>` | Search session history. Supports `page:N`, `scope:all`, `mode:file`, `mode:touched` |
+| `/blackhole-export [out:<path>]` | Export distilled project memory (observations/reflections across past sessions + pending buffers) to import-ready markdown, deduped and ranked |
+| `/blackhole cleanup` | Scan and interactively clean up orphaned `*-pending.json` files |
+
+---
+
+## Stage 6: Anti-patterns
+
+**Do not hardcode model IDs from your own knowledge without checking.** Pi's model registry is the source of truth for what's available. However, built-in providers (openrouter, cerebras, ollama, etc.) have models that may not be in `models.json` — if the user says "I want to use Qwen via OpenRouter," and OpenRouter is a known provider, construct the model ID and it will work. The model ID format matters (case, separators). When in doubt, ask the user for the exact model ID they use.
+
+**Do not set every worker to the session model.** The whole point of background workers is to use cheap/free models. The session model is expensive and should only be the last-resort fallback. Setting `sessionFallback: true` (default) already ensures the session model is tried last — you don't need to also configure it as a primary or base model.
+
+**Do not set all fallbacks from the same provider as the primary.** If OpenRouter is rate-limiting, another OpenRouter model is also rate-limited. Pick fallbacks from different providers (cerebras, ollama, zai, opencode). The runtime doesn't check for this — it just tries candidates in order.
+
+**Do not ask all questions at once.** The user tunes out. One question, explain, get answer, confirm understanding, next question. The only exception is if the user seems experienced and says "just give me the defaults" — then use defaults for everything they didn't specify and explain what you chose.
+
+**Do not skip the explanation.** "Auto, Manual, or Off?" without context forces the user to guess. Always include the one-sentence "why this matters" with each option. The quoted user-facing statements in Stage 2 are designed for this.
+
+**Do not touch `auth.json`.** It contains API keys. Never read it, never reference it.
+
+**Do not set `compactAfterTokens` the user's model can't handle.** 65% of context window max. If the model has 32k context, `compactAfterTokens` should be ~20k, not 81k. The compaction fires, generates a summary, and keeps a tail — if the sum of summary + tail + system prompt exceeds the model's context, the model will fail or degrade.
+
+**Do not set model fields without `provider` and `id`.** Both are required. Setting just one — e.g. `{ "provider": "openrouter" }` without an `id` — silently ignores the entire model block. The parser checks both are non-empty strings. Same for fallback array entries: invalid entries (missing provider or id) are filtered out silently.
+
+---
+
+## Stage 7: Done-state
+
+The config is written to `~/.pi/agent/pi-blackhole/pi-blackhole-config.json`. The user needs to:
+
+1. `/reload` or restart Pi to pick up the new config
+2. Run `/blackhole-memory` to confirm the pipeline starts and shows expected settings
+3. (Optional) Run `/blackhole` to test a compaction
+
+After verification, the setup is complete. The user can forget about it until they want to change models or thresholds.
