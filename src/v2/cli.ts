@@ -40,7 +40,7 @@ export function main(argv: string[]): void {
       const all = rows.filter(
         (row): row is SessionEntry =>
           jsonObject(row) && typeof row.id === "string" && row.type !== "session",
-      ) as SessionEntry[];
+      );
       const byId = new Map(all.map((e) => [e.id, e]));
       let current = all.at(-1);
       const visited = new Set<string>();

@@ -7,18 +7,24 @@ export function importLegacy(
   store: MemoryStore,
   scope: Scope,
   text: string,
-): { imported: number; duplicates: number; skipped: number } {
+): { imported: number; duplicates: number; skipped: number; partialFailures: number } {
   if (Buffer.byteLength(text) > 20 * 1024 * 1024)
     throw new Error("Legacy import exceeds 20 MiB; split it first");
   let values: unknown[];
   try {
     const value: unknown = JSON.parse(text);
     values = Array.isArray(value) ? value : [value];
-  } catch {
-    values = text
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => JSON.parse(line) as unknown);
+  } catch (jsonError) {
+    try {
+      values = text
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as unknown);
+    } catch (jsonlError) {
+      throw new Error(
+        `Input is neither valid JSON (${jsonError instanceof Error ? jsonError.message : String(jsonError)}) nor JSONL (${jsonlError instanceof Error ? jsonlError.message : String(jsonlError)})`,
+      );
+    }
   }
   const candidates: Array<{ value: Record<string, unknown>; type: string }> = [];
   let skipped = 0;
@@ -38,7 +44,8 @@ export function importLegacy(
   for (const value of values) visit(value);
   return store.transaction(() => {
     let imported = 0,
-      duplicates = 0;
+      duplicates = 0,
+      partialFailures = 0;
     for (const { value, type } of candidates) {
       const id = String(value.id),
         content = String(value.content);
@@ -55,19 +62,10 @@ export function importLegacy(
         continue;
       }
       const entryId = `legacy:${hash(JSON.stringify([id, content])).slice(0, 32)}`;
-      const source = store.ingest(scope, [
-        {
-          entryId,
-          role: "import",
-          text: content,
-          timestamp:
-            typeof value.timestamp === "string" && value.timestamp
-              ? value.timestamp
-              : typeof value.createdAt === "string" && value.createdAt
-                ? value.createdAt
-                : new Date().toISOString(),
-        },
-      ]);
+      let timestamp = new Date().toISOString();
+      if (typeof value.timestamp === "string" && value.timestamp) timestamp = value.timestamp;
+      else if (typeof value.createdAt === "string" && value.createdAt) timestamp = value.createdAt;
+      const source = store.ingest(scope, [{ entryId, role: "import", text: content, timestamp }]);
       const s = source.keys[0] ? store.source(source.keys[0]) : undefined;
       if (!s || s.erased) {
         skipped++;
@@ -104,13 +102,19 @@ export function importLegacy(
               "pin",
             );
           }
-        } catch {
-          /* Migration status changes are best-effort */
+        } catch (statusError) {
+          partialFailures++;
+          console.error(
+            "[remendra] migration status change failed for",
+            result.claim.id,
+            ":",
+            statusError instanceof Error ? statusError.message : String(statusError),
+          );
         }
       }
       if (result.duplicate) duplicates++;
       else imported++;
     }
-    return { imported, duplicates, skipped };
+    return { imported, duplicates, skipped, partialFailures };
   });
 }

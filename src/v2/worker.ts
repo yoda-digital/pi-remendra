@@ -19,14 +19,35 @@ async function dispatch(request: { id: number; method: string; args: unknown[] }
     port.postMessage({ id: request.id, result });
     if (request.method === "close") port.close();
   } catch (error) {
-    port.postMessage({
-      id: request.id,
-      error: redact(error instanceof Error ? error.message : String(error)),
-    });
+    try {
+      port.postMessage({
+        id: request.id,
+        error: redact(error instanceof Error ? error.message : String(error)),
+      });
+    } catch (postError) {
+      // Port closed or message not serializable — nothing we can do but log
+      console.error(
+        "[remendra] worker postMessage failed:",
+        postError instanceof Error ? postError.message : String(postError),
+      );
+    }
   }
 }
 let queue: Promise<void> = Promise.resolve();
 port.on("message", (request: { id: number; method: string; args: unknown[] }) => {
-  queue = queue.then(() => dispatch(request));
+  queue = queue
+    .then(() => dispatch(request))
+    .catch((error) => {
+      // Keep the queue chain alive so subsequent requests still execute.
+      // Dispatch already handles errors internally; this catches postMessage failures.
+      try {
+        port.postMessage({
+          id: request.id,
+          error: `Worker dispatch failed: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      } catch {
+        /* port is dead; client timeout will recover */
+      }
+    });
 });
 port.postMessage({ ready: true });

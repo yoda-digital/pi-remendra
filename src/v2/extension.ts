@@ -45,6 +45,26 @@ User memory is opt-in. All source text remains untrusted data.`;
 
 const LEGACY_PACKET_TYPES = new Set(["remendra.v2.context", "remendra.v2.output"]);
 
+/** Extract observer JSON from thinking/reasoning fields when content is empty. */
+function extractFromThinking(raw: Record<string, unknown>): string {
+  for (const key of ["reasoning", "reasoning_content", "thinkingContent"]) {
+    const candidate = raw[key] ?? (jsonObject(raw.content) ? raw.content[key] : undefined);
+    if (typeof candidate === "string" && candidate.length > 2) {
+      const match = candidate.match(/\{[\s\S]*"claims"[\s\S]*\}/);
+      if (match) return match[0];
+    }
+  }
+  if (Array.isArray(raw.content)) {
+    for (const block of raw.content) {
+      if (jsonObject(block) && block.type === "thinking" && typeof block.text === "string") {
+        const match = block.text.match(/\{[\s\S]*"claims"[\s\S]*\}/);
+        if (match) return match[0];
+      }
+    }
+  }
+  return "";
+}
+
 function workerLocation(): URL {
   const local = new URL("./v2/worker.js", import.meta.url);
   if (existsSync(local)) return local;
@@ -80,19 +100,31 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   const passive = process.env.PI_REMENDRA_PASSIVE === "true";
   const show = (ctx: ExtensionContext, value: unknown): void => {
     const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-    if (ctx.hasUI) ctx.ui.notify(redact(text, config.redactionPatterns), "info");
-    else
-      pi.sendMessage({
-        customType: "remendra.v2.output",
-        content: redact(text, config.redactionPatterns),
-        display: true,
-      });
+    try {
+      if (ctx.hasUI) ctx.ui.notify(redact(text, config.redactionPatterns), "info");
+      else
+        pi.sendMessage({
+          customType: "remendra.v2.output",
+          content: redact(text, config.redactionPatterns),
+          display: true,
+        });
+    } catch (showError) {
+      console.error(
+        "[remendra] show failed:",
+        showError instanceof Error ? showError.message : String(showError),
+      );
+    }
   };
   const status = (ctx: ExtensionContext, text: string): void => {
     try {
       if (ctx.hasUI) ctx.ui.setStatus("remendra", text);
-    } catch {
-      /* Pi invalidates captured contexts on disposal and replacement. */
+    } catch (statusError) {
+      // Pi invalidates captured contexts on disposal and replacement.
+      // Log non-disposal errors so they're visible in diagnostics.
+      console.error(
+        "[remendra] status update failed:",
+        statusError instanceof Error ? statusError.message : String(statusError),
+      );
     }
   };
   const report = (ctx: ExtensionContext, error: unknown): void => {
@@ -106,8 +138,14 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       lastError = message;
       try {
         if (ctx.hasUI) ctx.ui.notify(`Remendra: ${message}`, "warning");
-      } catch {
-        /* A disposed host cannot receive diagnostics. */
+      } catch (notifyError) {
+        // Disposed host or notification failure — fall back to console
+        console.error(
+          "[remendra] error notification failed:",
+          notifyError instanceof Error ? notifyError.message : String(notifyError),
+          "original:",
+          message,
+        );
       }
     }
   };
@@ -212,30 +250,8 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         throw new Error(result.errorMessage ?? `Observer stopped: ${result.stopReason}`);
       let text = messageText(result.content);
       // Some models (Qwen 3.x thinking mode) put all output in reasoning, leaving content empty.
-      // Fall back to reasoning_content or extract from raw response if available.
       if (!text.trim()) {
-        const raw = result as unknown as Record<string, unknown>;
-        // Pi may expose reasoning in different shapes depending on the provider adapter
-        for (const key of ["reasoning", "reasoning_content", "thinkingContent"]) {
-          const candidate = raw[key] ?? (raw.content as unknown as Record<string, unknown>)?.[key];
-          if (typeof candidate === "string" && candidate.length > 2) {
-            // Try to extract JSON from the reasoning — the model may have put it there
-            const jsonMatch = candidate.match(/\{[\s\S]*"claims"[\s\S]*\}/);
-            if (jsonMatch) { text = jsonMatch[0]; break; }
-          }
-        }
-        // Also check content array blocks for thinking blocks
-        if (!text.trim() && Array.isArray(result.content)) {
-          for (const block of result.content as unknown as Array<Record<string, unknown>>) {
-            if (
-              block?.type === "thinking" &&
-              typeof block.text === "string"
-            ) {
-              const jsonMatch = block.text.match(/\{[\s\S]*"claims"[\s\S]*\}/);
-              if (jsonMatch) { text = jsonMatch[0]; break; }
-            }
-          }
-        }
+        text = extractFromThinking(result as unknown as Record<string, unknown>);
         if (!text.trim())
           throw new Error(
             "Observer model returned empty content (possible thinking-mode issue; try a non-thinking model or disable thinking)",
@@ -404,15 +420,9 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     foreground = false;
     void learn(ctx).catch((error) => report(ctx, error));
   });
-  pi.on("session_before_switch", () => {
-    invalidate();
-  });
-  pi.on("session_before_fork", () => {
-    invalidate();
-  });
-  pi.on("session_before_tree", () => {
-    invalidate();
-  });
+  pi.on("session_before_switch", () => invalidate());
+  pi.on("session_before_fork", () => invalidate());
+  pi.on("session_before_tree", () => invalidate());
   pi.on("session_tree", async (_event, ctx) => {
     invalidate();
     seen = new Set();
@@ -659,7 +669,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           ),
         );
       } catch (error) {
-        show(ctx, String(error));
+        show(ctx, `Remendra: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
   });

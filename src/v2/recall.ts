@@ -70,7 +70,13 @@ export function recall(
     );
   }
   if (!sessionFile) return "No persisted Pi session is available for transcript recall.";
-  if (statSync(sessionFile).size > 64 * 1024 * 1024)
+  let sessionSize: number;
+  try {
+    sessionSize = statSync(sessionFile).size;
+  } catch {
+    return "Session file is not accessible for transcript recall.";
+  }
+  if (sessionSize > 64 * 1024 * 1024)
     return "Original session exceeds the 64 MiB raw-recall limit. Use mode:source for indexed recall or inspect the original file directly.";
   const allowed = request.scope === "all" ? undefined : new Set(scope.entryIds);
   const full = loadAllMessages(sessionFile, true, allowed);

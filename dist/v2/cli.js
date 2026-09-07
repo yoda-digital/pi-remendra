@@ -79,7 +79,15 @@ function jsonObject(value) {
 }
 
 // src/v2/store.ts
-var parse = (row, key = "data") => row ? JSON.parse(String(row[key])) : void 0;
+var parse = (row, key = "data") => {
+  if (!row) return void 0;
+  try {
+    return JSON.parse(String(row[key]));
+  } catch (error) {
+    const id = String(row.id ?? row.key ?? "(unknown)");
+    throw new Error(`Corrupted ${key} in record ${id}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+};
 var nowISO = () => (/* @__PURE__ */ new Date()).toISOString();
 var MemoryStore = class {
   constructor(file) {
@@ -156,7 +164,6 @@ var MemoryStore = class {
   db;
   depth = 0;
   statements = /* @__PURE__ */ new Map();
-  lastScopeKey = "";
   statement(sql) {
     let statement = this.statements.get(sql);
     if (!statement) {
@@ -269,6 +276,12 @@ var MemoryStore = class {
       ordinal: Number(row.ordinal),
       erased: Boolean(row.erased)
     };
+  }
+  /** Like source(), but throws with context when the key doesn't resolve. */
+  requireSource(key, context) {
+    const s = this.source(key);
+    if (!s) throw new Error(`Source not found for key ${key.slice(0, 20)}${context ? ` (${context})` : ""}`);
+    return s;
   }
   ingest(scope, inputs, patterns = [], excludedPaths = []) {
     return this.transaction(() => {
@@ -476,6 +489,47 @@ var MemoryStore = class {
     }
     return claim && this.inScope(claim, scope, all) ? claim : void 0;
   }
+  /** Find claims that conflict with the given claim on subject/predicate/value within overlapping time. */
+  conflicting(claim, scope, excludeId) {
+    if (!claim.subject || !claim.predicate || claim.value === void 0) return [];
+    const rows = excludeId ? [
+      ...this.all(
+        "SELECT data FROM claims WHERE project_id=? AND id<>? AND status IN ('active','disputed')",
+        scope.projectId,
+        excludeId
+      ),
+      ...this.all(
+        "SELECT data FROM claims WHERE visibility='user' AND id<>? AND status IN ('active','disputed')",
+        excludeId
+      )
+    ] : [
+      ...this.all(
+        "SELECT data FROM claims WHERE project_id=? AND status IN ('active','disputed')",
+        scope.projectId
+      ),
+      ...this.all(
+        "SELECT data FROM claims WHERE visibility='user' AND status IN ('active','disputed')"
+      )
+    ];
+    const seen = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      const c = parse(row);
+      if (!seen.has(c.id)) seen.set(c.id, row);
+    }
+    const adjScope = { ...scope, includeUser: claim.visibility === "user" || scope.includeUser };
+    const result = [];
+    for (const row of seen.values()) {
+      const other = parse(row);
+      if (!this.inScope(other, adjScope) || other.hidden || other.visibility !== claim.visibility || other.environment !== claim.environment)
+        continue;
+      if (normalize(other.subject ?? "") !== normalize(claim.subject) || normalize(other.predicate ?? "") !== normalize(claim.predicate))
+        continue;
+      if (other.value === void 0 || equivalent(other.value, claim.value)) continue;
+      const overlaps = (!other.validUntil || !claim.validFrom || Date.parse(other.validUntil) > Date.parse(claim.validFrom)) && (!claim.validUntil || !other.validFrom || Date.parse(claim.validUntil) > Date.parse(other.validFrom));
+      if (overlaps) result.push(other);
+    }
+    return result;
+  }
   record(scope, input, actor) {
     return this.transaction(() => {
       input = { ...input };
@@ -504,7 +558,7 @@ var MemoryStore = class {
       const evidence = [
         ...new Map(input.evidence.map((e) => [`${e.sourceKey}:${e.start}:${e.end}`, e])).values()
       ];
-      const anchor = input.anchor ?? (evidence.length ? this.source(evidence.at(-1).sourceKey).entryId : scope.entryIds.at(-1));
+      const anchor = input.anchor ?? (evidence.length ? this.requireSource(evidence.at(-1).sourceKey, "anchor lookup").entryId : scope.entryIds.at(-1));
       if (!anchor) throw new Error("A memory needs a source or current session anchor");
       const time = nowISO();
       const claim = {
@@ -539,42 +593,15 @@ var MemoryStore = class {
         claim.status = "stale";
       const conflicts = [];
       const canDispute = actor !== "import" && claim.status === "active";
-      if (claim.subject && claim.predicate && claim.value !== void 0) {
-        const conflictRows = [
-          ...this.all(
-            "SELECT data FROM claims WHERE project_id=? AND status IN ('active','disputed')",
-            scope.projectId
-          ),
-          ...this.all(
-            "SELECT data FROM claims WHERE visibility='user' AND status IN ('active','disputed')"
-          )
-        ];
-        const seen = /* @__PURE__ */ new Map();
-        for (const row of conflictRows) {
-          const c = parse(row);
-          if (!seen.has(c.id)) seen.set(c.id, row);
-        }
-        for (const row of [...seen.values()]) {
-          const other = parse(row);
-          if (!this.inScope(other, {
-            ...scope,
-            includeUser: claim.visibility === "user" || scope.includeUser
-          }) || other.hidden || other.visibility !== claim.visibility || other.environment !== claim.environment)
-            continue;
-          if (normalize(other.subject ?? "") !== normalize(claim.subject) || normalize(other.predicate ?? "") !== normalize(claim.predicate))
-            continue;
-          const overlaps = (!other.validUntil || !claim.validFrom || Date.parse(other.validUntil) > Date.parse(claim.validFrom)) && (!claim.validUntil || !other.validFrom || Date.parse(claim.validUntil) > Date.parse(other.validFrom));
-          if (overlaps && other.value !== void 0 && !equivalent(other.value, claim.value)) {
-            conflicts.push(other.id);
-            if (canDispute) {
-              other.status = "disputed";
-              other.revision++;
-              other.updatedAt = time;
-              this.writeClaim(other, "disputed");
-              this.invalidate(other.id);
-              claim.status = "disputed";
-            }
-          }
+      for (const other of this.conflicting(claim, scope)) {
+        conflicts.push(other.id);
+        if (canDispute) {
+          other.status = "disputed";
+          other.revision++;
+          other.updatedAt = time;
+          this.writeClaim(other, "disputed");
+          this.invalidate(other.id);
+          claim.status = "disputed";
         }
       }
       this.writeClaim(claim, "recorded");
@@ -684,34 +711,8 @@ var MemoryStore = class {
         claim.status = "active";
         claim.actor = "user";
       }
-      if (["accept", "promote"].includes(action) && claim.status === "active" && claim.subject && claim.predicate && claim.value !== void 0) {
-        const changeConflictRows = [
-          ...this.all(
-            "SELECT data FROM claims WHERE project_id=? AND id<>? AND status IN ('active','disputed')",
-            scope.projectId,
-            claim.id
-          ),
-          ...this.all(
-            "SELECT data FROM claims WHERE visibility='user' AND id<>? AND status IN ('active','disputed')",
-            claim.id
-          )
-        ];
-        const changeSeen = /* @__PURE__ */ new Map();
-        for (const row of changeConflictRows) {
-          const c = parse(row);
-          if (!changeSeen.has(c.id)) changeSeen.set(c.id, row);
-        }
-        for (const row of [...changeSeen.values()]) {
-          const other = parse(row);
-          if (!this.inScope(other, {
-            ...scope,
-            includeUser: claim.visibility === "user" || scope.includeUser
-          }) || other.hidden || other.visibility !== claim.visibility || other.environment !== claim.environment)
-            continue;
-          if (normalize(other.subject ?? "") !== normalize(claim.subject) || normalize(other.predicate ?? "") !== normalize(claim.predicate) || other.value === void 0 || equivalent(other.value, claim.value))
-            continue;
-          if (other.validUntil && claim.validFrom && Date.parse(other.validUntil) <= Date.parse(claim.validFrom) || claim.validUntil && other.validFrom && Date.parse(claim.validUntil) <= Date.parse(other.validFrom))
-            continue;
+      if (["accept", "promote"].includes(action) && claim.status === "active") {
+        for (const other of this.conflicting(claim, scope, claim.id)) {
           claim.status = "disputed";
           other.status = "disputed";
           other.revision++;
@@ -881,7 +882,7 @@ var MemoryStore = class {
       all ? 1 : 0,
       scope.sessionId,
       Math.min(100, limit)
-    ).map((r) => this.source(String(r.key)));
+    ).map((r) => this.requireSource(String(r.key), "source search"));
   }
   explain(id, scope) {
     const claim = this.claim(id, scope, true);
@@ -924,7 +925,7 @@ var MemoryStore = class {
       const chunks = [];
       let used = 0;
       for (const row of rows) {
-        const source = this.source(String(row.source_key));
+        const source = this.requireSource(String(row.source_key), "job lease");
         const start = Number(row.start);
         let end = Number(row.end);
         const remaining = inputTokens - used - 160;
@@ -1139,7 +1140,7 @@ var MemoryStore = class {
           for (const d of this.invalidate(String(row.claim_id))) ids.add(d);
         }
       for (const key of sourceKeys) {
-        const source = this.source(key);
+        const source = this.requireSource(key, "erase");
         this.run("INSERT OR IGNORE INTO erased_sources VALUES(?,?)", key, source.hash);
         this.run(
           "UPDATE sources SET text='',data=?,erased=1 WHERE key=?",
@@ -1657,8 +1658,14 @@ function importLegacy(store, scope, text) {
   try {
     const value = JSON.parse(text);
     values = Array.isArray(value) ? value : [value];
-  } catch {
-    values = text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  } catch (jsonError) {
+    try {
+      values = text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    } catch (jsonlError) {
+      throw new Error(
+        `Input is neither valid JSON (${jsonError instanceof Error ? jsonError.message : String(jsonError)}) nor JSONL (${jsonlError instanceof Error ? jsonlError.message : String(jsonlError)})`
+      );
+    }
   }
   const candidates = [];
   let skipped = 0;
@@ -1677,7 +1684,7 @@ function importLegacy(store, scope, text) {
   };
   for (const value of values) visit(value);
   return store.transaction(() => {
-    let imported = 0, duplicates = 0;
+    let imported = 0, duplicates = 0, partialFailures = 0;
     for (const { value, type } of candidates) {
       const id = String(value.id), content = String(value.content);
       if (!content.trim() || content.length > 12e3) {
@@ -1690,13 +1697,11 @@ function importLegacy(store, scope, text) {
         continue;
       }
       const entryId = `legacy:${hash(JSON.stringify([id, content])).slice(0, 32)}`;
+      let timestamp = (/* @__PURE__ */ new Date()).toISOString();
+      if (typeof value.timestamp === "string" && value.timestamp) timestamp = value.timestamp;
+      else if (typeof value.createdAt === "string" && value.createdAt) timestamp = value.createdAt;
       const source = store.ingest(scope, [
-        {
-          entryId,
-          role: "import",
-          text: content,
-          timestamp: typeof value.timestamp === "string" && value.timestamp ? value.timestamp : typeof value.createdAt === "string" && value.createdAt ? value.createdAt : (/* @__PURE__ */ new Date()).toISOString()
-        }
+        { entryId, role: "import", text: content, timestamp }
       ]);
       const s = source.keys[0] ? store.source(source.keys[0]) : void 0;
       if (!s || s.erased) {
@@ -1734,13 +1739,20 @@ function importLegacy(store, scope, text) {
               "pin"
             );
           }
-        } catch {
+        } catch (statusError) {
+          partialFailures++;
+          console.error(
+            "[remendra] migration status change failed for",
+            result.claim.id,
+            ":",
+            statusError instanceof Error ? statusError.message : String(statusError)
+          );
         }
       }
       if (result.duplicate) duplicates++;
       else imported++;
     }
-    return { imported, duplicates, skipped };
+    return { imported, duplicates, skipped, partialFailures };
   });
 }
 
@@ -2580,7 +2592,13 @@ function recall(store, scope, request, config, sessionFile) {
     );
   }
   if (!sessionFile) return "No persisted Pi session is available for transcript recall.";
-  if (statSync(sessionFile).size > 64 * 1024 * 1024)
+  let sessionSize;
+  try {
+    sessionSize = statSync(sessionFile).size;
+  } catch {
+    return "Session file is not accessible for transcript recall.";
+  }
+  if (sessionSize > 64 * 1024 * 1024)
     return "Original session exceeds the 64 MiB raw-recall limit. Use mode:source for indexed recall or inspect the original file directly.";
   const allowed = request.scope === "all" ? void 0 : new Set(scope.entryIds);
   const full = loadAllMessages(sessionFile, true, allowed);
@@ -2818,7 +2836,9 @@ var MemoryService = class {
     } catch (error) {
       try {
         this.store.failJob(job, error instanceof Error ? error.message : String(error), usage);
-      } catch {
+      } catch (failError) {
+        const msg = failError instanceof Error ? failError.message : String(failError);
+        console.error("[remendra] embed failJob failed:", msg, "job:", job.id);
       }
       throw error;
     }

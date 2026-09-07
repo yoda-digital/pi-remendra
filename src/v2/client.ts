@@ -30,7 +30,15 @@ export class MemoryClient {
     worker.on("message", (message: { id?: number; error?: string; result?: unknown }) => {
       if (message.id === undefined) return;
       const item = this.pending.get(message.id);
-      if (!item) return;
+      if (!item) {
+        // Late response after timeout — worker completed but we already rejected the caller
+        console.error(
+          "[remendra] late worker response for id",
+          message.id,
+          message.error ? `(error: ${message.error})` : "(success)",
+        );
+        return;
+      }
       clearTimeout(item.timer);
       this.pending.delete(message.id);
       if (message.error) item.reject(new Error(message.error));
@@ -82,8 +90,12 @@ export class MemoryClient {
     if (worker) {
       try {
         await this.call("close", [], 1000);
-      } catch {
-        /* Already failed; SQLite recovers on reopen. */
+      } catch (closeError) {
+        // Worker already dead or close timed out; SQLite WAL recovers on reopen
+        console.error(
+          "[remendra] close RPC failed:",
+          closeError instanceof Error ? closeError.message : String(closeError),
+        );
       } finally {
         await worker.terminate();
       }

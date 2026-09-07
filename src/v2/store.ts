@@ -31,8 +31,17 @@ import {
   terms,
 } from "./text.js";
 
-const parse = <T>(row: Record<string, unknown> | undefined, key = "data"): T | undefined =>
-  row ? (JSON.parse(String(row[key])) as T) : undefined;
+const parse = <T>(row: Record<string, unknown> | undefined, key = "data"): T | undefined => {
+  if (!row) return undefined;
+  try {
+    return JSON.parse(String(row[key])) as T;
+  } catch (error) {
+    const id = String(row.id ?? row.key ?? "(unknown)");
+    throw new Error(
+      `Corrupted ${key} in record ${id}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+};
 const nowISO = (): string => new Date().toISOString();
 
 /** Synchronous by design: instantiated only inside a storage worker (or an isolated test/CLI). */
@@ -40,7 +49,6 @@ export class MemoryStore {
   private db: Database;
   private depth = 0;
   private statements = new Map<string, Statement>();
-  private lastScopeKey = "";
   constructor(readonly file: string) {
     if (file !== ":memory:") mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
     this.db = openDatabase(file);
@@ -232,6 +240,16 @@ export class MemoryStore {
     };
   }
 
+  /** Like source(), but throws with context when the key doesn't resolve. */
+  private requireSource(key: string, context?: string): Source {
+    const s = this.source(key);
+    if (!s)
+      throw new Error(
+        `Source not found for key ${key.slice(0, 20)}${context ? ` (${context})` : ""}`,
+      );
+    return s;
+  }
+
   ingest(
     scope: Scope,
     inputs: SourceInput[],
@@ -382,7 +400,12 @@ export class MemoryStore {
       input.visibility !== "lineage"
     )
       throw new Error("Only the user can promote memory scope");
-    if (input.anchor && !scope.entryIds.includes(input.anchor) && actor !== "observer" && actor !== "import")
+    if (
+      input.anchor &&
+      !scope.entryIds.includes(input.anchor) &&
+      actor !== "observer" &&
+      actor !== "import"
+    )
       throw new Error("Claim anchor is outside the active lineage");
     for (const name of ["conditions", "cues", "alternatives"] as const) {
       if (
@@ -423,8 +446,7 @@ export class MemoryStore {
         (source.sessionId !== scope.sessionId || !scope.entryIds.includes(source.entryId))
       ) {
         // For observer, allow cross-session sources when the job explicitly leased them
-        if (actor !== "observer")
-          throw new Error("Evidence is outside this lineage");
+        if (actor !== "observer") throw new Error("Evidence is outside this lineage");
       }
       if (
         !Number.isInteger(e.start) ||
@@ -515,6 +537,64 @@ export class MemoryStore {
     return claim && this.inScope(claim, scope, all) ? claim : undefined;
   }
 
+  /** Find claims that conflict with the given claim on subject/predicate/value within overlapping time. */
+  private conflicting(claim: Claim, scope: Scope, excludeId?: string): Claim[] {
+    if (!claim.subject || !claim.predicate || claim.value === undefined) return [];
+    const rows = excludeId
+      ? [
+          ...this.all(
+            "SELECT data FROM claims WHERE project_id=? AND id<>? AND status IN ('active','disputed')",
+            scope.projectId,
+            excludeId,
+          ),
+          ...this.all(
+            "SELECT data FROM claims WHERE visibility='user' AND id<>? AND status IN ('active','disputed')",
+            excludeId,
+          ),
+        ]
+      : [
+          ...this.all(
+            "SELECT data FROM claims WHERE project_id=? AND status IN ('active','disputed')",
+            scope.projectId,
+          ),
+          ...this.all(
+            "SELECT data FROM claims WHERE visibility='user' AND status IN ('active','disputed')",
+          ),
+        ];
+    const seen = new Map<string, Record<string, unknown>>();
+    for (const row of rows) {
+      const c = parse<Claim>(row)!;
+      if (!seen.has(c.id)) seen.set(c.id, row);
+    }
+    const adjScope = { ...scope, includeUser: claim.visibility === "user" || scope.includeUser };
+    const result: Claim[] = [];
+    for (const row of seen.values()) {
+      const other = parse<Claim>(row)!;
+      if (
+        !this.inScope(other, adjScope) ||
+        other.hidden ||
+        other.visibility !== claim.visibility ||
+        other.environment !== claim.environment
+      )
+        continue;
+      if (
+        normalize(other.subject ?? "") !== normalize(claim.subject) ||
+        normalize(other.predicate ?? "") !== normalize(claim.predicate)
+      )
+        continue;
+      if (other.value === undefined || equivalent(other.value, claim.value)) continue;
+      const overlaps =
+        (!other.validUntil ||
+          !claim.validFrom ||
+          Date.parse(other.validUntil) > Date.parse(claim.validFrom)) &&
+        (!claim.validUntil ||
+          !other.validFrom ||
+          Date.parse(claim.validUntil) > Date.parse(other.validFrom));
+      if (overlaps) result.push(other);
+    }
+    return result;
+  }
+
   record(scope: Scope, input: ClaimInput, actor: Actor): RecordResult {
     return this.transaction(() => {
       input = { ...input };
@@ -546,7 +626,7 @@ export class MemoryStore {
       const anchor =
         input.anchor ??
         (evidence.length
-          ? this.source(evidence.at(-1)!.sourceKey)!.entryId
+          ? this.requireSource(evidence.at(-1)!.sourceKey, "anchor lookup").entryId
           : scope.entryIds.at(-1));
       if (!anchor) throw new Error("A memory needs a source or current session anchor");
       const time = nowISO();
@@ -589,58 +669,15 @@ export class MemoryStore {
         claim.status = "stale";
       const conflicts: string[] = [];
       const canDispute = actor !== "import" && claim.status === "active";
-      if (claim.subject && claim.predicate && claim.value !== undefined) {
-        const conflictRows = [
-          ...this.all(
-            "SELECT data FROM claims WHERE project_id=? AND status IN ('active','disputed')",
-            scope.projectId,
-          ),
-          ...this.all(
-            "SELECT data FROM claims WHERE visibility='user' AND status IN ('active','disputed')",
-          ),
-        ];
-        // Deduplicate by claim ID
-        const seen = new Map<string, Record<string, unknown>>();
-        for (const row of conflictRows) {
-          const c = parse<Claim>(row)!;
-          if (!seen.has(c.id)) seen.set(c.id, row);
-        }
-        for (const row of [...seen.values()]) {
-          const other = parse<Claim>(row)!;
-          if (
-            !this.inScope(other, {
-              ...scope,
-              includeUser: claim.visibility === "user" || scope.includeUser,
-            }) ||
-            other.hidden ||
-            other.visibility !== claim.visibility ||
-            other.environment !== claim.environment
-          )
-            continue;
-          if (
-            normalize(other.subject ?? "") !== normalize(claim.subject) ||
-            normalize(other.predicate ?? "") !== normalize(claim.predicate)
-          )
-            continue;
-          const overlaps =
-            (!other.validUntil ||
-              !claim.validFrom ||
-              Date.parse(other.validUntil) > Date.parse(claim.validFrom)) &&
-            (!claim.validUntil ||
-              !other.validFrom ||
-              Date.parse(claim.validUntil) > Date.parse(other.validFrom));
-          if (overlaps && other.value !== undefined && !equivalent(other.value, claim.value)) {
-            conflicts.push(other.id);
-            // An untrusted candidate cannot disable an established memory.
-            if (canDispute) {
-              other.status = "disputed";
-              other.revision++;
-              other.updatedAt = time;
-              this.writeClaim(other, "disputed");
-              this.invalidate(other.id);
-              claim.status = "disputed";
-            }
-          }
+      for (const other of this.conflicting(claim, scope)) {
+        conflicts.push(other.id);
+        if (canDispute) {
+          other.status = "disputed";
+          other.revision++;
+          other.updatedAt = time;
+          this.writeClaim(other, "disputed");
+          this.invalidate(other.id);
+          claim.status = "disputed";
         }
       }
       this.writeClaim(claim, "recorded");
@@ -767,57 +804,8 @@ export class MemoryStore {
         claim.status = "active";
         claim.actor = "user";
       }
-      if (
-        ["accept", "promote"].includes(action) &&
-        claim.status === "active" &&
-        claim.subject &&
-        claim.predicate &&
-        claim.value !== undefined
-      ) {
-        const changeConflictRows = [
-          ...this.all(
-            "SELECT data FROM claims WHERE project_id=? AND id<>? AND status IN ('active','disputed')",
-            scope.projectId,
-            claim.id,
-          ),
-          ...this.all(
-            "SELECT data FROM claims WHERE visibility='user' AND id<>? AND status IN ('active','disputed')",
-            claim.id,
-          ),
-        ];
-        const changeSeen = new Map<string, Record<string, unknown>>();
-        for (const row of changeConflictRows) {
-          const c = parse<Claim>(row)!;
-          if (!changeSeen.has(c.id)) changeSeen.set(c.id, row);
-        }
-        for (const row of [...changeSeen.values()]) {
-          const other = parse<Claim>(row)!;
-          if (
-            !this.inScope(other, {
-              ...scope,
-              includeUser: claim.visibility === "user" || scope.includeUser,
-            }) ||
-            other.hidden ||
-            other.visibility !== claim.visibility ||
-            other.environment !== claim.environment
-          )
-            continue;
-          if (
-            normalize(other.subject ?? "") !== normalize(claim.subject) ||
-            normalize(other.predicate ?? "") !== normalize(claim.predicate) ||
-            other.value === undefined ||
-            equivalent(other.value, claim.value)
-          )
-            continue;
-          if (
-            (other.validUntil &&
-              claim.validFrom &&
-              Date.parse(other.validUntil) <= Date.parse(claim.validFrom)) ||
-            (claim.validUntil &&
-              other.validFrom &&
-              Date.parse(claim.validUntil) <= Date.parse(other.validFrom))
-          )
-            continue;
+      if (["accept", "promote"].includes(action) && claim.status === "active") {
+        for (const other of this.conflicting(claim, scope, claim.id)) {
           claim.status = "disputed";
           other.status = "disputed";
           other.revision++;
@@ -834,7 +822,13 @@ export class MemoryStore {
     });
   }
 
-  private usable(claim: Claim, scope: Scope, at = nowISO(), visited = new Set<string>(), all = false): boolean {
+  private usable(
+    claim: Claim,
+    scope: Scope,
+    at = nowISO(),
+    visited = new Set<string>(),
+    all = false,
+  ): boolean {
     if (
       visited.has(claim.id) ||
       !this.inScope(claim, scope, all) ||
@@ -1042,7 +1036,7 @@ export class MemoryStore {
       all ? 1 : 0,
       scope.sessionId,
       Math.min(100, limit),
-    ).map((r) => this.source(String(r.key))!);
+    ).map((r) => this.requireSource(String(r.key), "source search"));
   }
 
   explain(
@@ -1108,7 +1102,7 @@ export class MemoryStore {
       const chunks: Job["chunks"] = [];
       let used = 0;
       for (const row of rows) {
-        const source = this.source(String(row.source_key))!;
+        const source = this.requireSource(String(row.source_key), "job lease");
         const start = Number(row.start);
         let end = Number(row.end);
         const remaining = inputTokens - used - 160;
@@ -1170,8 +1164,7 @@ export class MemoryStore {
   ): Claim[] {
     return this.transaction(() => {
       this.assertJob(job);
-      if (scope.projectId !== job.projectId)
-        throw new Error("Stale job scope");
+      if (scope.projectId !== job.projectId) throw new Error("Stale job scope");
       for (const chunk of job.chunks)
         if (
           !this.get(
@@ -1370,7 +1363,7 @@ export class MemoryStore {
           for (const d of this.invalidate(String(row.claim_id))) ids.add(d);
         }
       for (const key of sourceKeys) {
-        const source = this.source(key)!;
+        const source = this.requireSource(key, "erase");
         this.run("INSERT OR IGNORE INTO erased_sources VALUES(?,?)", key, source.hash);
         this.run(
           "UPDATE sources SET text='',data=?,erased=1 WHERE key=?",

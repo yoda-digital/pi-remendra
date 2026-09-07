@@ -163,8 +163,9 @@ export class MemoryService {
     } catch (error) {
       try {
         this.store.failJob(job, error instanceof Error ? error.message : String(error), usage);
-      } catch {
-        /* Expired reservations recover on next dispatch. */
+      } catch (failError) {
+        const msg = failError instanceof Error ? failError.message : String(failError);
+        console.error("[remendra] embed failJob failed:", msg, "job:", job.id);
       }
       throw error;
     }

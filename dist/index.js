@@ -33,7 +33,10 @@ var MemoryClient = class {
     worker.on("message", (message) => {
       if (message.id === void 0) return;
       const item = this.pending.get(message.id);
-      if (!item) return;
+      if (!item) {
+        console.error("[remendra] late worker response for id", message.id, message.error ? `(error: ${message.error})` : "(success)");
+        return;
+      }
       clearTimeout(item.timer);
       this.pending.delete(message.id);
       if (message.error) item.reject(new Error(message.error));
@@ -85,7 +88,8 @@ var MemoryClient = class {
     if (worker) {
       try {
         await this.call("close", [], 1e3);
-      } catch {
+      } catch (closeError) {
+        console.error("[remendra] close RPC failed:", closeError instanceof Error ? closeError.message : String(closeError));
       } finally {
         await worker.terminate();
       }
@@ -142,6 +146,61 @@ function observerInput(job) {
     }))
   });
 }
+function resolveQuote(source, quote) {
+  const exact = source.indexOf(quote);
+  if (exact >= 0) return { offset: exact, length: quote.length };
+  const normSource = source.replace(/\s+/g, " ");
+  const normQuote = quote.replace(/\s+/g, " ").trim();
+  const normOffset = normSource.indexOf(normQuote);
+  if (normOffset >= 0) {
+    let origPos = 0, normPos = 0;
+    while (normPos < normOffset && origPos < source.length) {
+      if (/\s/.test(source[origPos])) {
+        while (origPos < source.length && /\s/.test(source[origPos])) origPos++;
+        normPos++;
+      } else {
+        origPos++;
+        normPos++;
+      }
+    }
+    const start = origPos;
+    const endNorm = normPos + normQuote.length;
+    let endOrig = origPos;
+    let curNorm = normPos;
+    while (curNorm < endNorm && endOrig < source.length) {
+      if (/\s/.test(source[endOrig])) {
+        while (endOrig < source.length && /\s/.test(source[endOrig])) endOrig++;
+        curNorm++;
+      } else {
+        endOrig++;
+        curNorm++;
+      }
+    }
+    return { offset: start, length: endOrig - start };
+  }
+  const lowerSource = source.toLowerCase().replace(/[`'"''""]/g, "'").replace(/\s+/g, " ");
+  const lowerQuote = quote.toLowerCase().replace(/[`'"''""]/g, "'").replace(/\s+/g, " ").trim();
+  if (lowerQuote.length >= 10) {
+    const lowerOffset = lowerSource.indexOf(lowerQuote);
+    if (lowerOffset >= 0) return { offset: lowerOffset, length: lowerQuote.length };
+  }
+  const words = quote.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    const srcNorm = source.toLowerCase().replace(/[`'"''""]/g, "'");
+    for (let wc = Math.min(words.length, 6); wc >= 2; wc--) {
+      const partial = words.slice(0, wc).join(" ");
+      const partialNorm = partial.toLowerCase().replace(/[`'"''""]/g, "'");
+      const pos = srcNorm.indexOf(partialNorm);
+      if (pos >= 0) {
+        let end = pos + partial.length;
+        while (end < source.length && !/[.!?\n]/.test(source[end])) end++;
+        if (end < source.length && /[.!?]/.test(source[end])) end++;
+        return { offset: pos, length: Math.min(end - pos, quote.length + 50) };
+      }
+    }
+  }
+  return null;
+}
 function parseObservations(text, job) {
   if (Buffer.byteLength(text) > 256 * 1024) throw new Error("Observer response exceeds 256 KiB");
   const body = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -157,76 +216,13 @@ function parseObservations(text, job) {
       const chunk = job.chunks[Number(ref.chunk)];
       if (!chunk) throw new Error("Observer cited an unknown chunk");
       const source = chunk.source.text.slice(chunk.start, chunk.end);
-      let offset = source.indexOf(ref.quote);
-      let quoteLen = ref.quote.length;
-      if (offset >= 0 && source.indexOf(ref.quote, offset + 1) >= 0) ;
-      if (offset < 0) {
-        const normSource = source.replace(/\s+/g, " ");
-        const normQuote = ref.quote.replace(/\s+/g, " ").trim();
-        const normOffset = normSource.indexOf(normQuote);
-        if (normOffset >= 0) {
-          let origPos = 0, normPos = 0;
-          while (normPos < normOffset && origPos < source.length) {
-            if (/\s/.test(source[origPos])) {
-              while (origPos < source.length && /\s/.test(source[origPos])) origPos++;
-              normPos++;
-            } else {
-              origPos++;
-              normPos++;
-            }
-          }
-          offset = origPos;
-          let endNorm = normPos + normQuote.length;
-          let endOrig = origPos;
-          let curNorm = normPos;
-          while (curNorm < endNorm && endOrig < source.length) {
-            if (/\s/.test(source[endOrig])) {
-              while (endOrig < source.length && /\s/.test(source[endOrig])) endOrig++;
-              curNorm++;
-            } else {
-              endOrig++;
-              curNorm++;
-            }
-          }
-          quoteLen = endOrig - offset;
-        }
-      }
-      if (offset < 0) {
-        const lowerSource = source.toLowerCase().replace(/[`'"''""]/g, "'").replace(/\s+/g, " ");
-        const lowerQuote = ref.quote.toLowerCase().replace(/[`'"''""]/g, "'").replace(/\s+/g, " ").trim();
-        if (lowerQuote.length >= 10) {
-          const lowerOffset = lowerSource.indexOf(lowerQuote);
-          if (lowerOffset >= 0) {
-            offset = lowerOffset;
-            quoteLen = lowerQuote.length;
-          }
-        }
-      }
-      if (offset < 0) {
-        const words = ref.quote.split(/\s+/).filter(Boolean);
-        if (words.length >= 2) {
-          for (let wc = Math.min(words.length, 6); wc >= 2; wc--) {
-            const partial = words.slice(0, wc).join(" ");
-            const partialNorm = partial.toLowerCase().replace(/[`'"''""]/g, "'");
-            const srcNorm = source.toLowerCase().replace(/[`'"''""]/g, "'");
-            const pos = srcNorm.indexOf(partialNorm);
-            if (pos >= 0) {
-              offset = pos;
-              let end = pos + partial.length;
-              while (end < source.length && !/[.!?\n]/.test(source[end])) end++;
-              if (end < source.length && /[.!?]/.test(source[end])) end++;
-              quoteLen = Math.min(end - pos, ref.quote.length + 50);
-              break;
-            }
-          }
-        }
-      }
-      if (offset < 0) return null;
+      const match = resolveQuote(source, ref.quote);
+      if (!match) return null;
       return {
         sourceKey: chunk.source.key,
         hash: chunk.source.hash,
-        start: chunk.start + offset,
-        end: chunk.start + offset + quoteLen
+        start: chunk.start + match.offset,
+        end: chunk.start + match.offset + match.length
       };
     }).filter((e) => e !== null);
     if (!evidence.length) return null;
@@ -265,6 +261,8 @@ function observerRequestTokens(job) {
 }
 async function abortable(promise, signal) {
   if (signal.aborted) throw signal.reason ?? new Error("Aborted");
+  promise.catch(() => {
+  });
   let listener = () => {
   };
   try {
@@ -500,6 +498,24 @@ var HELP = `Remendra v2 \u2014 durable memory with source evidence
 Modes in settings: active, shadow (compile without injecting), recall (no background learning).
 User memory is opt-in. All source text remains untrusted data.`;
 var LEGACY_PACKET_TYPES = /* @__PURE__ */ new Set(["remendra.v2.context", "remendra.v2.output"]);
+function extractFromThinking(raw) {
+  for (const key of ["reasoning", "reasoning_content", "thinkingContent"]) {
+    const candidate = raw[key] ?? (jsonObject(raw.content) ? raw.content[key] : void 0);
+    if (typeof candidate === "string" && candidate.length > 2) {
+      const match = candidate.match(/\{[\s\S]*"claims"[\s\S]*\}/);
+      if (match) return match[0];
+    }
+  }
+  if (Array.isArray(raw.content)) {
+    for (const block of raw.content) {
+      if (jsonObject(block) && block.type === "thinking" && typeof block.text === "string") {
+        const match = block.text.match(/\{[\s\S]*"claims"[\s\S]*\}/);
+        if (match) return match[0];
+      }
+    }
+  }
+  return "";
+}
 function workerLocation() {
   const local = new URL("./v2/worker.js", import.meta.url);
   if (existsSync(local)) return local;
@@ -529,18 +545,23 @@ function installV2(pi, providedClient) {
   const passive = process.env.PI_REMENDRA_PASSIVE === "true";
   const show = (ctx, value) => {
     const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-    if (ctx.hasUI) ctx.ui.notify(redact(text, config.redactionPatterns), "info");
-    else
-      pi.sendMessage({
-        customType: "remendra.v2.output",
-        content: redact(text, config.redactionPatterns),
-        display: true
-      });
+    try {
+      if (ctx.hasUI) ctx.ui.notify(redact(text, config.redactionPatterns), "info");
+      else
+        pi.sendMessage({
+          customType: "remendra.v2.output",
+          content: redact(text, config.redactionPatterns),
+          display: true
+        });
+    } catch (showError) {
+      console.error("[remendra] show failed:", showError instanceof Error ? showError.message : String(showError));
+    }
   };
   const status = (ctx, text) => {
     try {
       if (ctx.hasUI) ctx.ui.setStatus("remendra", text);
-    } catch {
+    } catch (statusError) {
+      console.error("[remendra] status update failed:", statusError instanceof Error ? statusError.message : String(statusError));
     }
   };
   const report = (ctx, error) => {
@@ -554,7 +575,8 @@ function installV2(pi, providedClient) {
       lastError = message;
       try {
         if (ctx.hasUI) ctx.ui.notify(`Remendra: ${message}`, "warning");
-      } catch {
+      } catch (notifyError) {
+        console.error("[remendra] error notification failed:", notifyError instanceof Error ? notifyError.message : String(notifyError), "original:", message);
       }
     }
   };
@@ -647,28 +669,7 @@ function installV2(pi, providedClient) {
       throw new Error(result.errorMessage ?? `Observer stopped: ${result.stopReason}`);
     let text = messageText(result.content);
     if (!text.trim()) {
-      const raw = result;
-      for (const key of ["reasoning", "reasoning_content", "thinkingContent"]) {
-        const candidate = raw[key] ?? raw.content?.[key];
-        if (typeof candidate === "string" && candidate.length > 2) {
-          const jsonMatch = candidate.match(/\{[\s\S]*"claims"[\s\S]*\}/);
-          if (jsonMatch) {
-            text = jsonMatch[0];
-            break;
-          }
-        }
-      }
-      if (!text.trim() && Array.isArray(result.content)) {
-        for (const block of result.content) {
-          if (block?.type === "thinking" && typeof block.text === "string") {
-            const jsonMatch = block.text.match(/\{[\s\S]*"claims"[\s\S]*\}/);
-            if (jsonMatch) {
-              text = jsonMatch[0];
-              break;
-            }
-          }
-        }
-      }
+      text = extractFromThinking(result);
       if (!text.trim())
         throw new Error(
           "Observer model returned empty content (possible thinking-mode issue; try a non-thinking model or disable thinking)"
@@ -803,15 +804,9 @@ function installV2(pi, providedClient) {
     foreground = false;
     void learn(ctx).catch((error) => report(ctx, error));
   });
-  pi.on("session_before_switch", () => {
-    invalidate();
-  });
-  pi.on("session_before_fork", () => {
-    invalidate();
-  });
-  pi.on("session_before_tree", () => {
-    invalidate();
-  });
+  pi.on("session_before_switch", () => invalidate());
+  pi.on("session_before_fork", () => invalidate());
+  pi.on("session_before_tree", () => invalidate());
   pi.on("session_tree", async (_event, ctx) => {
     invalidate();
     seen = /* @__PURE__ */ new Set();
@@ -1044,7 +1039,7 @@ function installV2(pi, providedClient) {
           )
         );
       } catch (error) {
-        show(ctx, String(error));
+        show(ctx, `Remendra: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   });
