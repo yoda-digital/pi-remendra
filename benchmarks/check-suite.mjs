@@ -23,8 +23,10 @@ try {
     }
   }
   const dims = result.dimensions;
-  if (!dims.context_density || !dims.retrieval_precision || !dims.compilation_speed_ms) {
+  const speed = dims.compilation_speed_ms || dims.compilation_speed;
+  if (!dims.context_density || !dims.retrieval_precision || !speed) {
     console.error("FAIL: missing dimension in benchmark output");
+    console.error("Found keys:", Object.keys(dims).join(", "));
     process.exit(1);
   }
   console.log("PASS: benchmark suite produced valid output");
