@@ -4,7 +4,33 @@
 
 Evidence-backed memory for Pi: durable decisions, precise corrections, scoped recall, and bounded context. **Version 2.0.0-alpha.2**, built against **Pi 0.85.1** on **Node 24**.
 
-V2 is a new default engine. It uses Pi's public extension lifecycle and native model registry. SQLite storage and transcript search run in a worker. Pi continues to own compaction, retries, tool execution, and foreground generation.
+V2 is the default engine. It uses Pi's public extension lifecycle and native model registry. SQLite storage and transcript search run in a worker. Pi continues to own compaction, retries, tool execution, and foreground generation.
+
+## Benchmark
+
+Remendra ships a reproducible, offline benchmark suite measuring 5 dimensions against a static-injection baseline (methodology-only extensions that dump raw markdown into context with no search, no persistence, no retrieval).
+
+```
+node benchmarks/suite.mjs
+```
+
+| Dimension | Remendra | Static Baseline | Δ |
+|---|:---:|:---:|:---:|
+| Context Density | **100** | 0 | ∞ |
+| Retrieval Precision | **100** | 0 | ∞ |
+| Compilation Speed | **84** | — | p50 81 ms / 1 000 claims |
+| Memory Survival | **46** | 0 | ∞ |
+| Budget Utilization | **97 %** | ~56 % | 1.7× |
+| **Composite** | **85 / 100** | — | **PASS** |
+
+> Context Density: how many project-specific claims fit a 2 400-token budget.
+> Retrieval Precision: fraction of known needles found via FTS5 query.
+> Compilation Speed: p50 warm-compile latency over 1 000 synthetic claims.
+> Memory Survival: project-scoped claims retrievable after a session switch.
+> Budget Utilization: tokens used vs budget allocated.
+> Full methodology in [docs/benchmark-results.md](docs/benchmark-results.md).
+
+The per-claim microbenchmark (`pnpm benchmark:v2`) reports lower-level numbers — p50 27 ms over 1 000 claims in the current build, 10 000 claims in 19 ms median at steady state.
 
 ## Install
 
@@ -150,9 +176,10 @@ pnpm test
 pnpm test:smoke
 pnpm format:check
 pnpm benchmark:v2
+node benchmarks/suite.mjs
 ```
 
-[Engineering notes](docs/V2.md) document the design and limits. [Validation results](docs/VALIDATION-V2.md) distinguish measured behavior from deployment assumptions. The previous engine remains available as `dist/legacy.js` for explicit rollback; its [documentation](docs/LEGACY-README.md) describes v1 behavior.
+[Engineering notes](docs/V2.md) document the design and limits. [Validation results](docs/VALIDATION-V2.md) distinguish measured behavior from deployment assumptions. [Benchmark results](docs/benchmark-results.md) compare Remendra against static-injection baselines across five dimensions. The previous engine remains available as `dist/legacy.js` for explicit rollback; its [documentation](docs/LEGACY-README.md) describes v1 behavior.
 
 This is an installable alpha with tested correctness boundaries. A live-provider soak test and platform validation beyond the recorded environment remain release gates for a stable v2.
 
