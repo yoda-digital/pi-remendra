@@ -14,7 +14,7 @@ try {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
-  const result = JSON.parse(output.trim().split("\n").pop());
+  const result = JSON.parse(output.trim());
   if (result.verdict !== "PASS") {
     console.error("FAIL: benchmark verdict is not PASS:", result.verdict);
     console.error(JSON.stringify(result, null, 2));

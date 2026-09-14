@@ -14,7 +14,7 @@ try {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
-  const result = JSON.parse(output.trim().split("\n").pop());
+  const result = JSON.parse(output.trim());
   const required = ["suite", "dimensions", "composite_score", "verdict"];
   for (const key of required) {
     if (!(key in result)) {
