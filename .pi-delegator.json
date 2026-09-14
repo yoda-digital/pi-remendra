@@ -2,7 +2,7 @@
   "version": 1,
   "checks": {
     "benchmark.runs": {
-      "argv": ["node", "scripts/benchmark-suite.mjs"],
+      "argv": ["node", "benchmarks/suite.mjs"],
       "timeoutSeconds": 120
     },
     "typecheck": {
@@ -18,7 +18,7 @@
       "timeoutSeconds": 60
     },
     "benchmark.improved": {
-      "argv": ["node", "scripts/benchmark-suite.mjs"],
+      "argv": ["node", "benchmarks/suite.mjs"],
       "timeoutSeconds": 120
     }
   },
