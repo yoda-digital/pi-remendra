@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "checks": {
+    "benchmark.runs": {
+      "argv": ["node", "scripts/benchmark-suite.mjs"],
+      "timeoutSeconds": 120
+    },
+    "typecheck": {
+      "argv": ["pnpm", "typecheck"],
+      "timeoutSeconds": 60
+    },
+    "test": {
+      "argv": ["pnpm", "test"],
+      "timeoutSeconds": 120
+    },
+    "build": {
+      "argv": ["pnpm", "build"],
+      "timeoutSeconds": 60
+    },
+    "benchmark.improved": {
+      "argv": ["node", "scripts/benchmark-suite.mjs"],
+      "timeoutSeconds": 120
+    }
+  },
+  "protectedPaths": ["README.md", "LICENSE"]
+}
