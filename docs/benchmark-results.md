@@ -89,10 +89,11 @@ Remendra uses 97% of its token budget for actual project knowledge. Superpowers 
    - Check passed: composite 89, verdict PASS
    - Reviewed, accepted, and published to integration branch
 
-2. **Compiler optimization** (task `optimize`) — both attempts failed:
-   - Attempt 1: Worker time budget exceeded (600s timeout too tight for build+test+benchmark)
-   - Attempt 2: pnpm store pollution in workspace
-   - The optimization (compact JSON, KIND_WEIGHT ranking, shorter preamble) remains as a documented future improvement
+2. **Compiler optimization** (task `optimize`) — **DONE** ✅
+   - Shorter preamble (saves ~20 tokens per packet) and `Sources use [key, start, end] arrays.` format note added to the header
+   - `KIND_WEIGHT` ranking: claims are now ranked by `score × kind weight` (constraint 1.5 … hypothesis 0.7), surfacing high-value records earlier in budget-limited windows
+   - Claim JSON records omit empty fields and use compact `[key, start, end] arrays` for sources, improving per-record token density
+   - Dist rebuilt; v2 test suite passes (64/64)
 
 ## Conclusion
 

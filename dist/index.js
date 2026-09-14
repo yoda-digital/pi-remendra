@@ -34,7 +34,11 @@ var MemoryClient = class {
       if (message.id === void 0) return;
       const item = this.pending.get(message.id);
       if (!item) {
-        console.error("[remendra] late worker response for id", message.id, message.error ? `(error: ${message.error})` : "(success)");
+        console.error(
+          "[remendra] late worker response for id",
+          message.id,
+          message.error ? `(error: ${message.error})` : "(success)"
+        );
         return;
       }
       clearTimeout(item.timer);
@@ -89,7 +93,10 @@ var MemoryClient = class {
       try {
         await this.call("close", [], 1e3);
       } catch (closeError) {
-        console.error("[remendra] close RPC failed:", closeError instanceof Error ? closeError.message : String(closeError));
+        console.error(
+          "[remendra] close RPC failed:",
+          closeError instanceof Error ? closeError.message : String(closeError)
+        );
       } finally {
         await worker.terminate();
       }
@@ -554,14 +561,20 @@ function installV2(pi, providedClient) {
           display: true
         });
     } catch (showError) {
-      console.error("[remendra] show failed:", showError instanceof Error ? showError.message : String(showError));
+      console.error(
+        "[remendra] show failed:",
+        showError instanceof Error ? showError.message : String(showError)
+      );
     }
   };
   const status = (ctx, text) => {
     try {
       if (ctx.hasUI) ctx.ui.setStatus("remendra", text);
     } catch (statusError) {
-      console.error("[remendra] status update failed:", statusError instanceof Error ? statusError.message : String(statusError));
+      console.error(
+        "[remendra] status update failed:",
+        statusError instanceof Error ? statusError.message : String(statusError)
+      );
     }
   };
   const report = (ctx, error) => {
@@ -576,7 +589,12 @@ function installV2(pi, providedClient) {
       try {
         if (ctx.hasUI) ctx.ui.notify(`Remendra: ${message}`, "warning");
       } catch (notifyError) {
-        console.error("[remendra] error notification failed:", notifyError instanceof Error ? notifyError.message : String(notifyError), "original:", message);
+        console.error(
+          "[remendra] error notification failed:",
+          notifyError instanceof Error ? notifyError.message : String(notifyError),
+          "original:",
+          message
+        );
       }
     }
   };
