@@ -26,7 +26,7 @@ Retrieval checks current status, branch visibility, valid-time interval, environ
 
 The compiler combines active anchors with query-relevant lexical results. Pinned memories rank first. Each selected JSON record includes its evidence and eligibility explanation. The compiler measures the full rendered output, including warnings and omission counts; records are never truncated to make them fit.
 
-The counter is `ceil(UTF-8 bytes / 3)`. It is an explicit heuristic, not an exact model tokenizer. The host also reduces the budget based on Pi's reported context usage and an output reserve. If the mandatory provenance header cannot fit, the packet is omitted. If storage fails, normal Pi messages continue unchanged and the previous Remendra packet is removed.
+The counter is `ceil(chars / 4)` — UTF-16 code units divided by 4, matching Pi's own `estimateTokens` formula. This avoids the 2-3x overestimation on non-ASCII text (CJK, Cyrillic) that the old `ceil(UTF-8 bytes / 3)` formula produced. Provider-reported usage is used for actual billing when available; the heuristic only gates dispatch and compilation. The host also reduces the budget based on Pi's reported context usage and an output reserve. If the mandatory provenance header cannot fit, the packet is omitted. If storage fails, normal Pi messages continue unchanged and the previous Remendra packet is removed.
 
 Pi owns compaction timing, compaction summaries, overflow recovery, and tool pairing. V2 records a memory manifest after successful native compaction. It does not patch `AgentSession`, inspect function source, capture provider streams, or replace native model retries. The optional `checkpoint` command previews memory-only content for inspection; incomplete coverage makes that preview invalid.
 
@@ -78,8 +78,8 @@ For exact recovery, use a `VACUUM INTO` backup. Stop all processes using this me
 
 ## Current bounds and release scope
 
-Tested target: Pi 0.85.1 and Node 24 on Linux. The Bun SQLite adapter is present but has not been validated as a complete Pi runtime. Windows/macOS and live provider behavior need separate soak tests before a stable release.
+Tested target: Pi 0.85.1 and Node 24 on Linux, Windows, and macOS. CI runs the full test suite on all three platforms. The Bun SQLite adapter is present but has not been validated as a complete Pi runtime. Live provider extraction quality needs separate soak tests.
 
-Memory and historical candidate windows are bounded, so extremely broad searches can omit matches. Normal lexical candidate collection is capped at 600 rows, historical scans at 2,000 revisions, anchor collection at 300, and returned hits at 200. Source exports/imports and raw transcript browsing have explicit size bounds. The system makes omission and pending coverage visible; it does not claim perfect recall.
+Memory and historical candidate windows are bounded, so extremely broad searches can omit matches. Lexical search uses SQL-level composite scoring (BM25 + metadata bonuses) with a dynamic limit proportional to the requested result count — there is no fixed row cap. Historical scans are capped at 2,000 revisions, anchor collection at 300, and returned hits at 200. Source exports/imports and raw transcript browsing have explicit size bounds. The system makes omission and pending coverage visible; it does not claim perfect recall.
 
 This alpha implements the memory substrate, user controls, lifecycle integration, optional semantic adapter, migration, and validation harness. A dashboard, automatic project-wide session discovery, background semantic indexing, a separate reflector model, provider-specific exact tokenizers, and a long-running retention/maintenance daemon are not included. They should be added only with tests and measured benefit; they are not hidden placeholders behind enabled settings.

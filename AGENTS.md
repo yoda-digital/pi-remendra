@@ -27,7 +27,7 @@ pnpm check          # typecheck + lint + fmt:check
 - Source imports use `.js` extensions; vitest's alias strips them.
 - `tests/` is NOT in tsconfig.json.
 - Tests are pure unit tests with fake agent loops. No LLM or network calls.
-- v2 suite: 73 tests in `tests/v2/`.
+- v2 suite: 124 tests across 10 files in `tests/v2/`.
 
 ## Workflow
 

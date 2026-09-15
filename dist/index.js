@@ -117,7 +117,7 @@ var CLAIM_KINDS = [
 ];
 var hash = (value) => createHash("sha256").update(value).digest("hex");
 var normalize = (text) => text.normalize("NFC").toLocaleLowerCase("und").replace(/\s+/gu, " ").trim();
-var estimateTokens = (text) => Math.ceil(Buffer.byteLength(text, "utf8") / 3);
+var estimateTokens = (text) => Math.ceil(text.length / 4);
 function redact(text, patterns = []) {
   let out = text.replace(
     /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,
@@ -442,7 +442,8 @@ var DEFAULT_CONFIG = {
   useSessionModel: true,
   excludedPaths: [".env", "credentials", "secrets"],
   redactionPatterns: [],
-  recallTokens: 6e3
+  recallTokens: 6e3,
+  autoPromote: "full"
 };
 
 // src/v2/compiler.ts
@@ -588,6 +589,7 @@ function installV2(pi, providedClient) {
   let initializing;
   let foreground = false;
   let closing = false;
+  let settledCount = 0;
   const passive = process.env.PI_REMENDRA_PASSIVE === "true";
   const show = (ctx, value) => {
     const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -884,6 +886,7 @@ function installV2(pi, providedClient) {
   });
   pi.on("agent_settled", (_event, ctx) => {
     foreground = false;
+    settledCount++;
     void learn(ctx).catch((error) => report(ctx, error));
   });
   pi.on("session_before_switch", () => invalidate());
@@ -922,6 +925,19 @@ function installV2(pi, providedClient) {
     try {
       invalidate();
       await learner?.stop();
+      if (config.autoPromote === "full" && settledCount >= 2 && client && scope) {
+        try {
+          const promoted = await client.call("sweepForPromotion", [scope, settledCount]);
+          if (promoted?.length) {
+            console.error(`[remendra] auto-promoted ${promoted.length} memories to project scope`);
+          }
+        } catch (promoError) {
+          console.error(
+            "[remendra] auto-promotion sweep failed:",
+            promoError instanceof Error ? promoError.message : String(promoError)
+          );
+        }
+      }
       await client?.close();
     } catch (shutdownError) {
       console.error(

@@ -15,5 +15,6 @@
   "useSessionModel": true,
   "excludedPaths": [".env", "credentials", "secrets"],
   "redactionPatterns": [],
-  "recallTokens": 6000
+  "recallTokens": 6000,
+  "autoPromote": "full"
 }

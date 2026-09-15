@@ -22,6 +22,7 @@ export const DEFAULT_CONFIG: MemoryConfig = {
   excludedPaths: [".env", "credentials", "secrets"],
   redactionPatterns: [],
   recallTokens: 6000,
+  autoPromote: "full",
 };
 
 export function validateConfig(raw: unknown): MemoryConfig {
@@ -75,6 +76,11 @@ export function validateConfig(raw: unknown): MemoryConfig {
     if (!["active", "shadow", "recall"].includes(String(raw.mode)))
       throw new Error("mode must be active, shadow, or recall");
     config.mode = raw.mode as MemoryConfig["mode"];
+  }
+  if (raw.autoPromote !== undefined) {
+    if (!["off", "user-actions", "full"].includes(String(raw.autoPromote)))
+      throw new Error("autoPromote must be off, user-actions, or full");
+    config.autoPromote = raw.autoPromote as MemoryConfig["autoPromote"];
   }
   for (const key of ["excludedPaths", "redactionPatterns"] as const) {
     if (raw[key] !== undefined) {

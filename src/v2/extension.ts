@@ -98,6 +98,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   let initializing: Promise<void> | undefined;
   let foreground = false;
   let closing = false;
+  let settledCount = 0;
   const passive = process.env.PI_REMENDRA_PASSIVE === "true";
   const show = (ctx: ExtensionContext, value: unknown): void => {
     const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -452,6 +453,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   });
   pi.on("agent_settled", (_event, ctx) => {
     foreground = false;
+    settledCount++;
     void learn(ctx).catch((error) => report(ctx, error));
   });
   pi.on("session_before_switch", () => invalidate());
@@ -490,6 +492,20 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     try {
       invalidate();
       await learner?.stop();
+      // Tier 2: session-end auto-promotion sweep
+      if (config.autoPromote === "full" && settledCount >= 2 && client && scope) {
+        try {
+          const promoted = await client.call("sweepForPromotion", [scope, settledCount]);
+          if (promoted?.length) {
+            console.error(`[remendra] auto-promoted ${promoted.length} memories to project scope`);
+          }
+        } catch (promoError) {
+          console.error(
+            "[remendra] auto-promotion sweep failed:",
+            promoError instanceof Error ? promoError.message : String(promoError),
+          );
+        }
+      }
       await client?.close();
     } catch (shutdownError) {
       console.error(

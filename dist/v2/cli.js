@@ -36,8 +36,8 @@ var terms = (text) => [
     ].map((match) => match[0])
   )
 ].slice(0, 32);
-var estimateTokens = (text) => Math.ceil(Buffer.byteLength(text, "utf8") / 3);
-var COUNTER = "utf8-bytes/3-estimate";
+var estimateTokens = (text) => Math.ceil(text.length / 4);
+var COUNTER = "chars/4-estimate";
 function clipTokens(text, budget) {
   if (estimateTokens(text) <= budget) return text;
   if (budget < 2) return "";
@@ -603,7 +603,7 @@ var MemoryStore = class {
         revision: 1,
         projectId: scope.projectId,
         sessionId: scope.sessionId,
-        visibility: input.visibility ?? "lineage",
+        visibility: input.visibility ?? (actor === "user" ? "project" : "lineage"),
         anchor,
         evidence,
         dependsOn: input.dependsOn ?? [],
@@ -708,7 +708,9 @@ var MemoryStore = class {
       result.claim.supersedes = [old.id];
       result.claim.pinned = old.pinned;
       if (result.claim.status === "disputed") {
-        const disputeResolved = this.conflicting(result.claim, scope, result.claim.id).every((c) => c.id === old.id || old.supersedes?.includes(c.id));
+        const disputeResolved = this.conflicting(result.claim, scope, result.claim.id).every(
+          (c) => c.id === old.id || old.supersedes?.includes(c.id)
+        );
         if (disputeResolved) result.claim.status = "active";
       }
       result.claim.revision++;
@@ -752,6 +754,9 @@ var MemoryStore = class {
           );
         claim.status = "active";
         claim.actor = "user";
+      }
+      if (["accept", "pin"].includes(action) && claim.visibility === "lineage" && claim.status === "active") {
+        claim.visibility = "project";
       }
       if (["accept", "promote"].includes(action) && claim.status === "active") {
         for (const other of this.conflicting(claim, scope, claim.id)) {
@@ -828,19 +833,8 @@ var MemoryStore = class {
     const filter = this.scopeSQL(query.scope, query.mode);
     const limit = Math.max(1, Math.min(200, query.limit ?? 20));
     const words = terms(query.text ?? "");
+    const sqlLimit = Math.min(limit * 3, 500);
     let rows;
-    if (words.length) {
-      const match = words.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
-      rows = this.all(
-        `SELECT c.data,bm25(claim_fts) AS rank FROM claim_fts JOIN claims c ON c.rowid=claim_fts.rowid WHERE claim_fts MATCH ? AND ${filter.sql} ORDER BY rank LIMIT 600`,
-        match,
-        ...filter.args
-      );
-    } else
-      rows = this.all(
-        `SELECT c.data,0 AS rank FROM claims c WHERE ${filter.sql} ORDER BY c.rowid DESC LIMIT 600`,
-        ...filter.args
-      );
     if (query.asOf) {
       if (!safeDate(query.asOf)) throw new Error("asOf requires an ISO timestamp with timezone");
       rows = this.all(
@@ -848,6 +842,46 @@ var MemoryStore = class {
         ...filter.args,
         query.asOf,
         query.asOf
+      );
+    } else if (words.length) {
+      const match = words.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
+      rows = this.all(
+        `WITH candidates AS (
+          SELECT c.data,
+                 -bm25(claim_fts) AS bm25_score,
+                 CASE json_extract(c.data,'$.pinned') WHEN 1 THEN 10 ELSE 0 END AS pin_bonus,
+                 CASE c.kind WHEN 'constraint' THEN 2 WHEN 'decision' THEN 2 WHEN 'commitment' THEN 2 ELSE 0 END AS kind_bonus,
+                 CASE json_extract(c.data,'$.verification') WHEN 'outcome_checked' THEN 1 ELSE 0 END AS verify_bonus
+          FROM claim_fts
+          JOIN claims c ON c.rowid=claim_fts.rowid
+          WHERE claim_fts MATCH ? AND ${filter.sql}
+        )
+        SELECT data, (bm25_score + pin_bonus + kind_bonus + verify_bonus) AS rank
+        FROM candidates
+        ORDER BY pin_bonus DESC, (bm25_score + pin_bonus + kind_bonus + verify_bonus) DESC
+        LIMIT ?`,
+        match,
+        ...filter.args,
+        sqlLimit
+      );
+    } else {
+      rows = this.all(
+        `WITH candidates AS (
+          SELECT c.data,
+                 0 AS bm25_score,
+                 CASE json_extract(c.data,'$.pinned') WHEN 1 THEN 10 ELSE 0 END AS pin_bonus,
+                 CASE c.kind WHEN 'constraint' THEN 2 WHEN 'decision' THEN 2 WHEN 'commitment' THEN 2 ELSE 0 END AS kind_bonus,
+                 CASE json_extract(c.data,'$.verification') WHEN 'outcome_checked' THEN 1 ELSE 0 END AS verify_bonus,
+                 c.rowid AS rw
+          FROM claims c
+          WHERE ${filter.sql}
+        )
+        SELECT data, (bm25_score + pin_bonus + kind_bonus + verify_bonus) AS rank
+        FROM candidates
+        ORDER BY pin_bonus DESC, (bm25_score + pin_bonus + kind_bonus + verify_bonus) DESC, rw DESC
+        LIMIT ?`,
+        ...filter.args,
+        sqlLimit
       );
     }
     const hits = [];
@@ -872,14 +906,10 @@ var MemoryStore = class {
         `scope:${claim.visibility}`,
         `status:${claim.status}`
       ];
-      let score = -Number(row.rank) + (claim.pinned ? 10 : 0) + (["constraint", "decision", "commitment"].includes(claim.kind) ? 2 : 0);
+      let score = Number(row.rank);
       if (query.text && equivalent(claim.text, query.text)) {
         score += 20;
         reasons.push("exact text");
-      }
-      if (claim.verification === "outcome_checked") {
-        score += 1;
-        reasons.push("outcome checked");
       }
       hits.push({ claim, score, reasons });
     }
@@ -1469,6 +1499,32 @@ var MemoryStore = class {
       return job;
     });
   }
+  /** Tier 2: promote eligible lineage claims to project scope at session end. */
+  sweepForPromotion(scope, minSettledTurns) {
+    return this.transaction(() => {
+      if (minSettledTurns < 2) return [];
+      const now = nowISO();
+      const rows = this.all(
+        "SELECT data FROM claims WHERE project_id=? AND session_id=? AND visibility='lineage' AND status='active'",
+        scope.projectId,
+        scope.sessionId
+      );
+      const promoted = [];
+      for (const row of rows) {
+        const claim = parse(row);
+        if (claim.kind === "hypothesis") continue;
+        if (claim.verification === "unverified") continue;
+        if (claim.hidden) continue;
+        if (claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(now)) continue;
+        claim.visibility = "project";
+        claim.revision++;
+        claim.updatedAt = now;
+        this.writeClaim(claim, "auto_promoted");
+        promoted.push(claim.id);
+      }
+      return promoted;
+    });
+  }
   semantic(scope, model, vector, limit = 20) {
     if (!vector.length || vector.length > 8192 || !vector.every(Number.isFinite))
       throw new Error("Invalid query vector");
@@ -1644,7 +1700,8 @@ var DEFAULT_CONFIG = {
   useSessionModel: true,
   excludedPaths: [".env", "credentials", "secrets"],
   redactionPatterns: [],
-  recallTokens: 6e3
+  recallTokens: 6e3,
+  autoPromote: "full"
 };
 function validateConfig(raw) {
   if (!jsonObject(raw)) throw new Error("Memory configuration must be an object");
@@ -1682,6 +1739,11 @@ function validateConfig(raw) {
     if (!["active", "shadow", "recall"].includes(String(raw.mode)))
       throw new Error("mode must be active, shadow, or recall");
     config.mode = raw.mode;
+  }
+  if (raw.autoPromote !== void 0) {
+    if (!["off", "user-actions", "full"].includes(String(raw.autoPromote)))
+      throw new Error("autoPromote must be off, user-actions, or full");
+    config.autoPromote = raw.autoPromote;
   }
   for (const key of ["excludedPaths", "redactionPatterns"]) {
     if (raw[key] !== void 0) {
@@ -2932,6 +2994,9 @@ var MemoryService = class {
       }
       throw error;
     }
+  }
+  sweepForPromotion(scope, minSettledTurns) {
+    return this.store.sweepForPromotion(scope, minSettledTurns);
   }
   close() {
     this.store.close();

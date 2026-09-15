@@ -119,10 +119,13 @@ it("removes obsolete memory after correction and on branch switch", async () => 
   const result = await hooks.get("context")!({ messages: [] }, ctx);
   expect(result.messages[0].content).toContain("Use PostgreSQL instead");
   expect(result.messages[0].content).not.toContain('"text":"Use SQLite"');
+  // Corrected claim is now project-scoped (auto-promoted via user correction).
+  // On branch switch, project-scoped claims remain visible.
   entries = entries.slice(0, 1);
   await hooks.get("session_tree")!({}, ctx);
   const switched = await hooks.get("context")!({ messages: result.messages }, ctx);
-  expect(switched.messages[0].content).not.toContain("Use PostgreSQL instead");
+  expect(switched.messages[0].content).toContain("Use PostgreSQL instead");
+  expect(switched.messages[0].content).not.toContain('"text":"Use SQLite"');
 });
 it("compiles in shadow mode without injecting", async () => {
   await commands.get("remendra")!('settings {"mode":"shadow"}', ctx);
@@ -153,10 +156,11 @@ it("preserves authoritative user and tool messages if storage fails", async () =
   expect(result.messages[0].content).toContain("unavailable");
   expect(result.messages[1]).toEqual(messages[0]);
 });
-it("does not share lineage memories with another session", async () => {
-  await commands.get("remendra")!("remember Session-only decision", ctx);
+it("user /remember creates project-scoped memories visible across sessions", async () => {
+  await commands.get("remendra")!("remember Cross-session decision", ctx);
   sid = "second-session";
   await hooks.get("session_start")!({}, ctx);
   const result = await hooks.get("context")!({ messages: [] }, ctx);
-  expect(result.messages[0].content).not.toContain("Session-only decision");
+  // User-created memories default to project scope (auto-promotion)
+  expect(result.messages[0].content).toContain("Cross-session decision");
 });

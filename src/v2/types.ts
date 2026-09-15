@@ -177,6 +177,7 @@ export interface MemoryConfig {
   excludedPaths: string[];
   redactionPatterns: string[];
   recallTokens: number;
+  autoPromote: "off" | "user-actions" | "full";
   embeddings?: { endpoint: string; model: string; apiKeyEnv?: string; dimensions?: number };
 }
 

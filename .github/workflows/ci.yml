@@ -12,7 +12,11 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
@@ -24,9 +28,12 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm lint
+        if: matrix.os == 'ubuntu-latest'
       - run: pnpm test
       - run: pnpm test:smoke
+        if: matrix.os == 'ubuntu-latest'
       - run: pnpm format:check
+        if: matrix.os == 'ubuntu-latest'
 
   fallow-audit:
     if: github.event_name == 'pull_request'

@@ -50,7 +50,9 @@ The extension hooks into Pi's lifecycle:
 3. **Context compilation.** Before each agent turn, Remendra compiles a memory packet. FTS5 matches the current query against stored claims. Results are ranked by search score and claim-type priority (constraints rank above hypotheses). The packet fits within a measured token budget and includes provenance metadata.
 4. **Corrections.** When you correct a memory, the old claim is superseded, its evidence spans are retired, dependent claims are invalidated recursively, and the replacement is recorded with its own evidence.
 
-Memories default to lineage scope (current session branch). You promote them to project or user scope explicitly. Project memories persist across sessions. User memories persist across projects.
+Memories you create with `/remendra remember` are project-scoped by default. Observer-extracted claims start at lineage scope (current session branch) and are auto-promoted to project scope at session end if they are verified and non-hypothetical. Accepting, pinning, or correcting a lineage claim also promotes it immediately. You can still promote or scope memories manually with `/remendra promote ID project`. User-scoped memories persist across projects when `includeUser` is enabled.
+
+Auto-promotion is configurable: `autoPromote: "full"` (default), `"user-actions"` (only on accept/pin/correct), or `"off"` (old behavior).
 
 ## Configuration
 
@@ -96,15 +98,15 @@ node benchmarks/suite.mjs    # smoke test suite
 
 These are synthetic tests. Real performance depends on corpus size, query complexity, and provider latency. See [docs/benchmark-results.md](docs/benchmark-results.md) for methodology and limitations.
 
-## Known limits
+## Tested on
 
-This is alpha software. The [validation document](docs/validation.md) is the honest accounting of what has been tested and what has not.
+Linux, Windows, macOS · Node 24 · Pi 0.85.1. CI runs the full test suite on all three platforms.
 
-- Token estimation uses `ceil(UTF-8 bytes / 3)`, which overestimates non-ASCII text by 2-3x. The [engineering notes](docs/engineering.md) document the planned fix.
-- Automatically extracted claims default to lineage scope. Cross-session availability requires explicit `/remendra promote ID project`.
-- Lexical search candidates are capped at 600 rows. Omissions are visible in the response.
-- Live-provider extraction quality, Windows/macOS, multi-day workloads, concurrent sessions, and power-loss behavior have not been validated.
-- The v2 test suite is 73 tests across 5 files.
+124 tests across 10 files: store operations, compilation, observer parsing, worker lifecycle, embeddings, cross-platform paths, concurrent SQLite access, sustained growth (2000+ claims), and token estimation accuracy.
+
+The [validation document](docs/validation.md) is the honest accounting of what has been tested and what has not.
+
+**Remaining gaps:** Live-provider extraction quality and multi-day retention have not been soak-tested with real providers. FTS5's `unicode61` tokenizer has limited CJK word segmentation — semantic search or exact ID recall works, but lexical substring search for CJK may miss results.
 
 ## Development
 

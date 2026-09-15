@@ -92,7 +92,7 @@ it("rejects invented evidence, invalid spans, and sources from another branch", 
   expect(store.status(scope).claims).toEqual({});
 });
 it("isolates projects, sessions, branches and opt-in user scope for current and historical reads", () => {
-  let c = remember("Scoped project secret");
+  let c = remember("Scoped project secret", { visibility: "lineage" });
   expect(store.search({ scope: { ...scope, entryIds: [] }, text: "secret" })).toEqual([]);
   expect(store.search({ scope: { ...scope, sessionId: "other" }, text: "secret" })).toEqual([]);
   expect(
@@ -340,7 +340,7 @@ it("imports all distinct legacy records as candidates without fuzzy folding", ()
   expect(store.search({ scope })).toEqual([]);
 });
 it("restores a consistent backup and merges exports only as review candidates", () => {
-  const a = remember("Exported factual memory");
+  const a = remember("Exported factual memory", { visibility: "lineage" });
   const backup = join(dir, "backup.sqlite");
   store.backup(backup);
   const restored = new MemoryStore(backup);
@@ -547,7 +547,7 @@ describe("regression: bug fixes", () => {
   });
 
   it("M4: promote rejects demotion from user to project", () => {
-    let c = remember("User-scoped memory");
+    let c = remember("User-scoped memory", { visibility: "lineage" });
     c = store.change(scope, c.id, c.revision, "promote", "project");
     // After promoting to user, need includeUser scope to access
     const userScope = { ...scope, includeUser: true };

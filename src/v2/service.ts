@@ -170,6 +170,9 @@ export class MemoryService {
       throw error;
     }
   }
+  sweepForPromotion(scope: Scope, minSettledTurns: number) {
+    return this.store.sweepForPromotion(scope, minSettledTurns);
+  }
   close() {
     this.store.close();
   }
@@ -201,6 +204,7 @@ export const RPC_METHODS = [
   "import",
   "importLegacyEntries",
   "embed",
+  "sweepForPromotion",
   "close",
 ] as const;
 export type Method = (typeof RPC_METHODS)[number];

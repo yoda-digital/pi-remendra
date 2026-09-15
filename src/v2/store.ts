@@ -673,7 +673,7 @@ export class MemoryStore {
         revision: 1,
         projectId: scope.projectId,
         sessionId: scope.sessionId,
-        visibility: input.visibility ?? "lineage",
+        visibility: input.visibility ?? (actor === "user" ? "project" : "lineage"),
         anchor,
         evidence,
         dependsOn: input.dependsOn ?? [],
@@ -851,6 +851,14 @@ export class MemoryStore {
         claim.status = "active";
         claim.actor = "user";
       }
+      // Tier 1 auto-promotion: user actions on lineage claims signal project intent
+      if (
+        ["accept", "pin"].includes(action) &&
+        claim.visibility === "lineage" &&
+        claim.status === "active"
+      ) {
+        claim.visibility = "project";
+      }
       if (["accept", "promote"].includes(action) && claim.status === "active") {
         for (const other of this.conflicting(claim, scope, claim.id)) {
           claim.status = "disputed";
@@ -956,29 +964,63 @@ export class MemoryStore {
     const filter = this.scopeSQL(query.scope, query.mode);
     const limit = Math.max(1, Math.min(200, query.limit ?? 20));
     const words = terms(query.text ?? "");
+    // Over-provision 3x to absorb usable() filtering; no arbitrary cap.
+    const sqlLimit = Math.min(limit * 3, 500);
     let rows: Record<string, unknown>[];
-    if (words.length) {
-      const match = words.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
-      rows = this.all(
-        `SELECT c.data,bm25(claim_fts) AS rank FROM claim_fts JOIN claims c ON c.rowid=claim_fts.rowid WHERE claim_fts MATCH ? AND ${filter.sql} ORDER BY rank LIMIT 600`,
-        match,
-        ...filter.args,
-      );
-    } else
-      rows = this.all(
-        `SELECT c.data,0 AS rank FROM claims c WHERE ${filter.sql} ORDER BY c.rowid DESC LIMIT 600`,
-        ...filter.args,
-      );
+
     if (query.asOf) {
+      // Historical path: scan bounded event window (unchanged — rare queries).
       if (!safeDate(query.asOf)) throw new Error("asOf requires an ISO timestamp with timezone");
-      // Historical text may no longer match the current FTS index. Scan a bounded historical window.
       rows = this.all(
         `SELECT e.data,0 AS rank FROM events e JOIN claims c ON c.id=e.claim_id WHERE ${filter.sql} AND julianday(e.at)<=julianday(?) AND e.seq=(SELECT MAX(e2.seq) FROM events e2 WHERE e2.claim_id=e.claim_id AND julianday(e2.at)<=julianday(?)) ORDER BY e.seq DESC LIMIT 2000`,
         ...filter.args,
         query.asOf,
         query.asOf,
       );
+    } else if (words.length) {
+      // FTS path: composite scoring pushed into SQL via CTE.
+      const match = words.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
+      rows = this.all(
+        `WITH candidates AS (
+          SELECT c.data,
+                 -bm25(claim_fts) AS bm25_score,
+                 CASE json_extract(c.data,'$.pinned') WHEN 1 THEN 10 ELSE 0 END AS pin_bonus,
+                 CASE c.kind WHEN 'constraint' THEN 2 WHEN 'decision' THEN 2 WHEN 'commitment' THEN 2 ELSE 0 END AS kind_bonus,
+                 CASE json_extract(c.data,'$.verification') WHEN 'outcome_checked' THEN 1 ELSE 0 END AS verify_bonus
+          FROM claim_fts
+          JOIN claims c ON c.rowid=claim_fts.rowid
+          WHERE claim_fts MATCH ? AND ${filter.sql}
+        )
+        SELECT data, (bm25_score + pin_bonus + kind_bonus + verify_bonus) AS rank
+        FROM candidates
+        ORDER BY pin_bonus DESC, (bm25_score + pin_bonus + kind_bonus + verify_bonus) DESC
+        LIMIT ?`,
+        match,
+        ...filter.args,
+        sqlLimit,
+      );
+    } else {
+      // No query terms: recent memories with metadata scoring.
+      rows = this.all(
+        `WITH candidates AS (
+          SELECT c.data,
+                 0 AS bm25_score,
+                 CASE json_extract(c.data,'$.pinned') WHEN 1 THEN 10 ELSE 0 END AS pin_bonus,
+                 CASE c.kind WHEN 'constraint' THEN 2 WHEN 'decision' THEN 2 WHEN 'commitment' THEN 2 ELSE 0 END AS kind_bonus,
+                 CASE json_extract(c.data,'$.verification') WHEN 'outcome_checked' THEN 1 ELSE 0 END AS verify_bonus,
+                 c.rowid AS rw
+          FROM claims c
+          WHERE ${filter.sql}
+        )
+        SELECT data, (bm25_score + pin_bonus + kind_bonus + verify_bonus) AS rank
+        FROM candidates
+        ORDER BY pin_bonus DESC, (bm25_score + pin_bonus + kind_bonus + verify_bonus) DESC, rw DESC
+        LIMIT ?`,
+        ...filter.args,
+        sqlLimit,
+      );
     }
+
     const hits: SearchHit[] = [];
     for (const row of rows) {
       const claim = parse<Claim>(row)!;
@@ -1011,17 +1053,11 @@ export class MemoryStore {
         `scope:${claim.visibility}`,
         `status:${claim.status}`,
       ];
-      let score =
-        -Number(row.rank) +
-        (claim.pinned ? 10 : 0) +
-        (["constraint", "decision", "commitment"].includes(claim.kind) ? 2 : 0);
+      // SQL pre-scored; add exact-text equivalence bonus in JS (needs NFC normalization).
+      let score = Number(row.rank);
       if (query.text && equivalent(claim.text, query.text)) {
         score += 20;
         reasons.push("exact text");
-      }
-      if (claim.verification === "outcome_checked") {
-        score += 1;
-        reasons.push("outcome checked");
       }
       hits.push({ claim, score, reasons });
     }
@@ -1752,6 +1788,33 @@ export class MemoryStore {
       );
       this.run("UPDATE budgets SET reserved=reserved+? WHERE day=?", reservation, day);
       return job;
+    });
+  }
+
+  /** Tier 2: promote eligible lineage claims to project scope at session end. */
+  sweepForPromotion(scope: Scope, minSettledTurns: number): string[] {
+    return this.transaction(() => {
+      if (minSettledTurns < 2) return [];
+      const now = nowISO();
+      const rows = this.all(
+        "SELECT data FROM claims WHERE project_id=? AND session_id=? AND visibility='lineage' AND status='active'",
+        scope.projectId,
+        scope.sessionId,
+      );
+      const promoted: string[] = [];
+      for (const row of rows) {
+        const claim = parse<Claim>(row)!;
+        if (claim.kind === "hypothesis") continue;
+        if (claim.verification === "unverified") continue;
+        if (claim.hidden) continue;
+        if (claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(now)) continue;
+        claim.visibility = "project";
+        claim.revision++;
+        claim.updatedAt = now;
+        this.writeClaim(claim, "auto_promoted");
+        promoted.push(claim.id);
+      }
+      return promoted;
     });
   }
 
