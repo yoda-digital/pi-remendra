@@ -143,7 +143,11 @@ export function contextAllowance(
   used: number | null | undefined,
   reserve: number,
 ): number {
-  if (!window || window <= 0) return Math.min(configured, 1024);
+  if (!window || window <= 0) {
+    // L5: Log when budget is capped due to unknown context window
+    console.error(`[remendra] context window unknown; memory budget capped to ${Math.min(configured, 1024)} tokens`);
+    return Math.min(configured, 1024);
+  }
   const headroom =
     used === undefined || used === null ? Math.floor(window * 0.04) : window - used - reserve;
   return Math.max(0, Math.min(configured, headroom));

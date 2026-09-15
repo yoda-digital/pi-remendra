@@ -147,7 +147,11 @@ it("preserves authoritative user and tool messages if storage fails", async () =
     { role: "custom", customType: "remendra.v2.output", content: "Legacy output" },
   ];
   const result = await hooks.get("context")!({ messages }, ctx);
-  expect(result.messages).toEqual([messages[0]]);
+  // H2: On failure, a diagnostic note is prepended before the clean messages
+  expect(result.messages.length).toBe(2);
+  expect(result.messages[0].customType).toBe(PACKET_TYPE);
+  expect(result.messages[0].content).toContain("unavailable");
+  expect(result.messages[1]).toEqual(messages[0]);
 });
 it("does not share lineage memories with another session", async () => {
   await commands.get("remendra")!("remember Session-only decision", ctx);

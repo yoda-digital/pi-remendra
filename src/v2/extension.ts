@@ -128,27 +128,29 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       );
     }
   };
+  let errorCount = 0;
   const report = (ctx: ExtensionContext, error: unknown): void => {
     packet = undefined;
+    errorCount++;
     const message = redact(
       error instanceof Error ? error.message : String(error),
       config.redactionPatterns,
     );
-    status(ctx, "◌ memory unavailable");
-    if (message !== lastError) {
-      lastError = message;
-      try {
-        if (ctx.hasUI) ctx.ui.notify(`Remendra: ${message}`, "warning");
-      } catch (notifyError) {
-        // Disposed host or notification failure — fall back to console
-        console.error(
-          "[remendra] error notification failed:",
-          notifyError instanceof Error ? notifyError.message : String(notifyError),
-          "original:",
-          message,
-        );
-      }
+    lastError = message;
+    // H1: Always show errors — don't suppress repeats. Users need to see persistent failures.
+    status(ctx, `◌ memory unavailable (${errorCount} error${errorCount > 1 ? "s" : ""})`);
+    try {
+      if (ctx.hasUI) ctx.ui.notify(`Remendra: ${message}`, "warning");
+    } catch (notifyError) {
+      console.error(
+        "[remendra] error notification failed:",
+        notifyError instanceof Error ? notifyError.message : String(notifyError),
+        "original:",
+        message,
+      );
     }
+    // H3: Log to console for diagnostics — never just swallow
+    console.error(`[remendra] error #${errorCount}:`, message);
   };
   const invalidate = (): void => {
     generation++;
@@ -427,7 +429,15 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       };
     } catch (error) {
       report(ctx, error);
-      return { messages: clean };
+      // H2: Inject a note so the agent knows memory compilation failed
+      const failNote = {
+        role: "custom" as const,
+        customType: PACKET_TYPE,
+        content: "Remendra memory is temporarily unavailable. Recall may still work. Use /remendra doctor for diagnostics.",
+        display: false,
+        timestamp: Date.now(),
+      };
+      return { messages: [failNote, ...clean] };
     }
   });
   pi.on("agent_settled", (_event, ctx) => {
