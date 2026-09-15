@@ -795,6 +795,9 @@ export class MemoryStore {
           );
       } else if (action === "promote") {
         if (!visibility) throw new Error("Promotion requires project or user visibility");
+        const order = ["lineage", "project", "user"];
+        if (order.indexOf(visibility) <= order.indexOf(claim.visibility))
+          throw new Error(`Cannot demote or re-promote: ${claim.visibility} → ${visibility}`);
         claim.visibility = visibility;
       } else if (action === "accept") {
         if (claim.status !== "candidate")
@@ -814,10 +817,15 @@ export class MemoryStore {
           this.invalidate(other.id);
         }
       }
-      claim.revision++;
-      claim.updatedAt = nowISO();
+      // Cosmetic actions (pin/unpin/show/hide) do not bump revision or invalidate dependents.
+      // Only semantic actions (accept, retract, promote) affect claim validity.
+      const cosmetic = ["pin", "unpin", "hide", "show"].includes(action);
+      if (!cosmetic) {
+        claim.revision++;
+        claim.updatedAt = nowISO();
+      }
       this.writeClaim(claim, action);
-      this.invalidate(claim.id);
+      if (!cosmetic) this.invalidate(claim.id);
       return claim;
     });
   }
@@ -832,12 +840,7 @@ export class MemoryStore {
     const pending = visited.get(claim.id);
     if (pending !== undefined) return pending; // true = already usable; false = in-progress (a real cycle)
     visited.set(claim.id, false);
-    if (
-      !this.inScope(claim, scope, all) ||
-      claim.hidden ||
-      claim.status !== "active"
-    )
-      return false;
+    if (!this.inScope(claim, scope, all) || claim.hidden || claim.status !== "active") return false;
     if (
       (claim.validFrom && Date.parse(claim.validFrom) > Date.parse(at)) ||
       (claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(at))
@@ -872,12 +875,7 @@ export class MemoryStore {
     const pending = seen.get(claim.id);
     if (pending !== undefined) return pending; // true = already usable; false = in-progress (a real cycle)
     seen.set(claim.id, false);
-    if (
-      !this.inScope(claim, scope) ||
-      claim.hidden ||
-      claim.status !== "active"
-    )
-      return false;
+    if (!this.inScope(claim, scope) || claim.hidden || claim.status !== "active") return false;
     if (
       (claim.validFrom && Date.parse(claim.validFrom) > Date.parse(at)) ||
       (claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(at))
@@ -1308,6 +1306,9 @@ export class MemoryStore {
         !scope.entryIds.includes(source.entryId)
       )
         throw new Error("Trial needs a current procedure and tool-result evidence in this lineage");
+      if (["retracted", "superseded", "stale"].includes(claim.status))
+        throw new Error("Cannot record trial for a retired procedure");
+      if (!source.text) throw new Error("Trial source has no content");
       if (
         !input.environment ||
         !["success", "failure"].includes(input.outcome) ||

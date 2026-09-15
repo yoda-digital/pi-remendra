@@ -211,8 +211,20 @@ it("supports timezone-aware historical retrieval without leaking a future correc
 });
 it("uses revisions to reject stale writes", () => {
   const a = remember("A current fact");
-  store.change(scope, a.id, a.revision, "pin");
-  expect(() => store.change(scope, a.id, a.revision, "hide")).toThrow("Revision conflict");
+  // Semantic actions (accept, retract, promote) bump revision; cosmetic (pin/hide) do not.
+  // Use a semantic action to test revision conflict.
+  store.change(scope, a.id, a.revision, "retract");
+  expect(() => store.change(scope, a.id, a.revision, "pin")).toThrow("Revision conflict");
+});
+it("cosmetic actions do not bump revision or invalidate dependents", () => {
+  const a = remember("A pinnable fact");
+  const rev = a.revision;
+  store.change(scope, a.id, rev, "pin");
+  const after = store.claim(a.id, scope);
+  expect(after?.pinned).toBe(true);
+  expect(after?.revision).toBe(rev); // revision unchanged
+  store.change(scope, a.id, rev, "unpin"); // same revision still works
+  expect(store.claim(a.id, scope)?.pinned).toBe(false);
 });
 it("disputes incompatible assertions instead of choosing the newest", () => {
   const a = remember("Use port 3000", { subject: "server", predicate: "port", value: "3000" });
@@ -345,7 +357,9 @@ it("filters optional semantic matches by scope and revision", () => {
   store.putVector(scope, a.id, a.revision, "local", [1, 0, 0]);
   expect(store.semantic(scope, "local", [1, 0, 0])[0].claim.id).toBe(a.id);
   // Semantic search uses project-wide scope (mode "all") so cross-session results are visible
-  expect(store.semantic({ ...scope, sessionId: "other" }, "local", [1, 0, 0])[0].claim.id).toBe(a.id);
+  expect(store.semantic({ ...scope, sessionId: "other" }, "local", [1, 0, 0])[0].claim.id).toBe(
+    a.id,
+  );
   // Different project should still return empty
   expect(store.semantic({ ...scope, projectId: "other-project" }, "local", [1, 0, 0])).toEqual([]);
   store.change(scope, a.id, a.revision, "pin");
