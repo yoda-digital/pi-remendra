@@ -1037,7 +1037,8 @@ export class MemoryStore {
     this.setScope(scope);
     const words = terms(text);
     if (!words.length) return [];
-    const match = words.map((t) => `"${t}"`).join(" OR ");
+    // L11: Escape double quotes in FTS5 match (consistent with search() at line ~919)
+    const match = words.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
     return this.all(
       `SELECT s.key FROM source_fts JOIN sources s ON s.rowid=source_fts.rowid WHERE source_fts MATCH ? AND s.project_id=? AND s.erased=0 AND s.replaced=0 AND (?=1 OR (s.session_id=? AND s.entry_id IN (SELECT id FROM active_entries))) ORDER BY bm25(source_fts) LIMIT ?`,
       match,
@@ -1364,7 +1365,7 @@ export class MemoryStore {
     id: string,
     expectedRevision: number,
   ): { claims: number; sources: number; note: string } {
-    return this.transaction(() => {
+    const result = this.transaction(() => {
       const claim = this.claim(id, scope, true);
       if (!claim || claim.revision !== expectedRevision)
         throw new Error("Revision conflict or memory not found");
@@ -1403,6 +1404,15 @@ export class MemoryStore {
         note: "Removed from v2 memory and prevented re-ingestion. Original Pi sessions, backups, and previous exports remain separate.",
       };
     });
+    // M1: Force WAL checkpoint after erase so main DB file reflects the deletion.
+    // Without this, secure_delete only zeroes WAL pages; the main file retains originals.
+    // M2: Temporarily upgrade to synchronous=FULL for the checkpoint to survive power loss.
+    try {
+      this.db.exec("PRAGMA synchronous=FULL");
+      this.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      this.db.exec("PRAGMA synchronous=NORMAL");
+    } catch { /* best-effort — checkpoint failure doesn't invalidate the erase */ }
+    return result;
   }
 
   doctor(): Record<string, unknown> {
