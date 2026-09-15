@@ -36,6 +36,73 @@ node benchmarks/suite.mjs
 
 **Composite: v2 = 92 · v1 = 35 · Δ = +57**
 
+### Score comparison
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#2a78d6"
+---
+xychart-beta
+  title "v2 vs v1 — 7 dimensions (0–100)"
+  x-axis ["Density", "Precision", "Speed", "Survival", "Utilization", "Correction", "Evidence"]
+  y-axis "Score" 0 --> 100
+  bar [100, 100, 100, 48, 98, 100, 100]
+  bar [22, 60, 95, 0, 72, 0, 0]
+```
+
+> Blue = Remendra v2 · Orange = pi-blackhole v1. Speed is the one dimension where v1 is competitive (95 vs 100). Three dimensions score 0 for v1 because the architecture has no implementation — not because we degraded the numbers.
+
+### Architecture comparison
+
+```mermaid
+graph LR
+  subgraph "pi-blackhole v1"
+    A[Session messages] --> B[VCC compile<br/>regex extraction]
+    A --> C[OM workers<br/>Observer → Reflector → Dropper]
+    B --> D[Session ledger<br/>in-memory JSONL]
+    C --> D
+    D --> E[Context injection<br/>chronological dump]
+  end
+
+  subgraph "Remendra v2"
+    F[Session messages] --> G[Source ingestion<br/>SHA-256 hashed spans]
+    G --> H[(SQLite + FTS5<br/>worker thread)]
+    H --> I[Background learner<br/>structured claims + evidence]
+    I --> H
+    H --> J[Context compiler<br/>FTS5 query + kind ranking]
+    J --> K[Bounded packet<br/>provenance + corrections]
+  end
+
+  style D fill:#eb683422,stroke:#eb6834
+  style H fill:#2a78d622,stroke:#2a78d6
+```
+
+> v1 data flow terminates at a session-scoped ledger — nothing survives a session switch. v2 writes every claim and source to a SQLite database with FTS5 indexing, enabling cross-session recall, query-matched compilation, and transactional corrections.
+
+### Correction flow (v2 only — v1 has no equivalent)
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Remendra
+  participant SQLite
+
+  User->>Remendra: /remendra correct ID "new text"
+  Remendra->>SQLite: BEGIN TRANSACTION
+  SQLite-->>Remendra: Load claim + revision
+  Remendra->>SQLite: Retire old claim (status → superseded)
+  Remendra->>SQLite: Invalidate dependents transitively
+  Remendra->>SQLite: Write replacement (inherits evidence chain)
+  Remendra->>SQLite: COMMIT
+  SQLite-->>Remendra: New claim ID + revision
+  Remendra-->>User: Corrected: OLD_ID → NEW_ID
+```
+
+> In v1, a wrong observation stays in the ledger until the Dropper agent prunes it or the session compacts. There is no way to fix it, no dependency tracking, and no guarantee the corrected version will surface over the old one.
+
 ### Honesty notes
 
 - The v1 baseline is simulated from pi-blackhole's documented architecture (in-memory session ledger, regex search, chronological dump). We did not run the legacy binary — we modeled what it *can* do given its design constraints.
