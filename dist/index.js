@@ -187,9 +187,26 @@ function resolveQuote(source, quote) {
   }
   const lowerSource = source.toLowerCase().replace(/[`'"''""]/g, "'").replace(/\s+/g, " ");
   const lowerQuote = quote.toLowerCase().replace(/[`'"''""]/g, "'").replace(/\s+/g, " ").trim();
+  const mapBack = (source2, normOffset2, normLen) => {
+    const map = [];
+    let o = 0;
+    while (o < source2.length) {
+      map.push(o);
+      if (/\s/.test(source2[o])) {
+        while (o < source2.length && /\s/.test(source2[o])) o++;
+      } else o++;
+    }
+    if (normOffset2 >= map.length) return null;
+    const start = map[normOffset2];
+    const end = normOffset2 + normLen < map.length ? map[normOffset2 + normLen] : source2.length;
+    return { offset: start, length: Math.max(1, end - start) };
+  };
   if (lowerQuote.length >= 10) {
     const lowerOffset = lowerSource.indexOf(lowerQuote);
-    if (lowerOffset >= 0) return { offset: lowerOffset, length: lowerQuote.length };
+    if (lowerOffset >= 0) {
+      const mapped = mapBack(source, lowerOffset, lowerQuote.length);
+      if (mapped) return mapped;
+    }
   }
   const words = quote.split(/\s+/).filter(Boolean);
   if (words.length >= 2) {

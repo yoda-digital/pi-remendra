@@ -66,9 +66,31 @@ function resolveQuote(source: string, quote: string): { offset: number; length: 
     .replace(/[`'"''""]/g, "'")
     .replace(/\s+/g, " ")
     .trim();
+  /** Find the original offset corresponding to a normalized offset (1:1 punctuation, collapsed whitespace). */
+  const mapBack = (
+    source: string,
+    normOffset: number,
+    normLen: number,
+  ): { offset: number; length: number } | null => {
+    const map: number[] = [];
+    let o = 0;
+    while (o < source.length) {
+      map.push(o);
+      if (/\s/.test(source[o])) {
+        while (o < source.length && /\s/.test(source[o])) o++;
+      } else o++;
+    }
+    if (normOffset >= map.length) return null;
+    const start = map[normOffset];
+    const end = normOffset + normLen < map.length ? map[normOffset + normLen] : source.length;
+    return { offset: start, length: Math.max(1, end - start) };
+  };
   if (lowerQuote.length >= 10) {
     const lowerOffset = lowerSource.indexOf(lowerQuote);
-    if (lowerOffset >= 0) return { offset: lowerOffset, length: lowerQuote.length };
+    if (lowerOffset >= 0) {
+      const mapped = mapBack(source, lowerOffset, lowerQuote.length);
+      if (mapped) return mapped;
+    }
   }
 
   // Fuzzy fallback 3: match the longest prefix of the quote

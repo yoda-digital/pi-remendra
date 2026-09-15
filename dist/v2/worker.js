@@ -732,14 +732,16 @@ var MemoryStore = class {
       return claim;
     });
   }
-  usable(claim, scope, at = nowISO(), visited = /* @__PURE__ */ new Set(), all = false) {
-    if (visited.has(claim.id) || !this.inScope(claim, scope, all) || claim.hidden || claim.status !== "active")
+  usable(claim, scope, at = nowISO(), visited = /* @__PURE__ */ new Map(), all = false) {
+    const pending = visited.get(claim.id);
+    if (pending !== void 0) return pending;
+    visited.set(claim.id, false);
+    if (!this.inScope(claim, scope, all) || claim.hidden || claim.status !== "active")
       return false;
     if (claim.validFrom && Date.parse(claim.validFrom) > Date.parse(at) || claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(at))
       return false;
     if (claim.environment && claim.environment !== scope.environment) return false;
     if (claim.kind === "procedure" && claim.procedureState !== "promoted") return false;
-    visited.add(claim.id);
     for (const e of claim.evidence)
       if (!this.get(
         "SELECT 1 FROM sources WHERE key=? AND hash=? AND erased=0 AND replaced=0",
@@ -752,16 +754,19 @@ var MemoryStore = class {
       if (!parent || parent.revision !== d.revision || !this.usable(parent, scope, at, visited))
         return false;
     }
+    visited.set(claim.id, true);
     return true;
   }
-  historicalUsable(claim, scope, at, seen = /* @__PURE__ */ new Set()) {
-    if (seen.has(claim.id) || !this.inScope(claim, scope) || claim.hidden || claim.status !== "active")
+  historicalUsable(claim, scope, at, seen = /* @__PURE__ */ new Map()) {
+    const pending = seen.get(claim.id);
+    if (pending !== void 0) return pending;
+    seen.set(claim.id, false);
+    if (!this.inScope(claim, scope) || claim.hidden || claim.status !== "active")
       return false;
     if (claim.validFrom && Date.parse(claim.validFrom) > Date.parse(at) || claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(at))
       return false;
     if (claim.environment && claim.environment !== scope.environment) return false;
     if (claim.kind === "procedure" && claim.procedureState !== "promoted") return false;
-    seen.add(claim.id);
     for (const e of claim.evidence)
       if (!this.get("SELECT 1 FROM sources WHERE key=? AND hash=? AND erased=0", e.sourceKey, e.hash))
         return false;
@@ -776,6 +781,7 @@ var MemoryStore = class {
       if (!parent || parent.revision !== d.revision || !this.historicalUsable(parent, scope, at, seen))
         return false;
     }
+    seen.set(claim.id, true);
     return true;
   }
   search(query) {
