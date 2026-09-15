@@ -155,7 +155,12 @@ export class MemoryStore {
         this.db.exec(`RELEASE ${sp}`);
         return value;
       } catch (error) {
-        try { this.db.exec(`ROLLBACK TO ${sp}`); this.db.exec(`RELEASE ${sp}`); } catch { /* */ }
+        try {
+          this.db.exec(`ROLLBACK TO ${sp}`);
+          this.db.exec(`RELEASE ${sp}`);
+        } catch {
+          /* */
+        }
         throw error;
       }
     }
@@ -167,7 +172,11 @@ export class MemoryStore {
       return value;
     } catch (error) {
       // L12: Guard ROLLBACK — SQLite may have already auto-rolled-back
-      try { this.db.exec("ROLLBACK"); } catch { /* already rolled back */ }
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {
+        /* already rolled back */
+      }
       throw error;
     } finally {
       this.depth--;
@@ -182,7 +191,11 @@ export class MemoryStore {
       this.db.exec("COMMIT");
       return result;
     } catch (error) {
-      try { this.db.exec("ROLLBACK"); } catch { /* L12: already rolled back */ }
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {
+        /* L12: already rolled back */
+      }
       throw error;
     } finally {
       this.depth--;
@@ -783,8 +796,9 @@ export class MemoryStore {
       // M6: If the replacement was disputed with the claim it's superseding, resolve the dispute.
       // The correction IS the resolution — the old claim is now superseded.
       if (result.claim.status === "disputed") {
-        const disputeResolved = this.conflicting(result.claim, scope, result.claim.id)
-          .every((c) => c.id === old.id || old.supersedes?.includes(c.id));
+        const disputeResolved = this.conflicting(result.claim, scope, result.claim.id).every(
+          (c) => c.id === old.id || old.supersedes?.includes(c.id),
+        );
         if (disputeResolved) result.claim.status = "active";
       }
       result.claim.revision++;
@@ -1375,12 +1389,16 @@ export class MemoryStore {
         const recentFailures = Number(
           this.get(
             "SELECT COUNT(*) AS n FROM trials WHERE procedure_id=? AND environment=? AND outcome='failure' AND rowid>COALESCE((SELECT MAX(rowid) FROM trials WHERE procedure_id=? AND environment=? AND outcome='success'),0)",
-            claim.id, input.environment, claim.id, input.environment,
+            claim.id,
+            input.environment,
+            claim.id,
+            input.environment,
           )?.n ?? 0,
         );
-        claim.procedureState = (claim.procedureState === "promoted" && recentFailures < 2)
-          ? "promoted" // keep promoted until 2 consecutive failures
-          : "candidate";
+        claim.procedureState =
+          claim.procedureState === "promoted" && recentFailures < 2
+            ? "promoted" // keep promoted until 2 consecutive failures
+            : "candidate";
       } else {
         claim.procedureState = successes >= 2 ? "promoted" : "trial_supported";
       }
@@ -1450,7 +1468,9 @@ export class MemoryStore {
       this.db.exec("PRAGMA synchronous=FULL");
       this.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       this.db.exec("PRAGMA synchronous=NORMAL");
-    } catch { /* best-effort — checkpoint failure doesn't invalidate the erase */ }
+    } catch {
+      /* best-effort — checkpoint failure doesn't invalidate the erase */
+    }
     return result;
   }
 
@@ -1557,11 +1577,7 @@ export class MemoryStore {
       .split(/\r?\n/)
       .filter(Boolean)
       .map((line) => JSON.parse(line) as unknown);
-    if (
-      !jsonObject(rows[0]) ||
-      !["remendra_export", "blackhole_export"].includes(String(rows[0].type)) ||
-      rows[0].version !== 2
-    )
+    if (!jsonObject(rows[0]) || rows[0].type !== "remendra_export" || rows[0].version !== 2)
       throw new Error("Expected a v2 JSONL export");
     return this.transaction(() => {
       const refs = new Map<string, Source>();

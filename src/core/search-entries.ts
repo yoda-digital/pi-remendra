@@ -1,9 +1,4 @@
-/**
- * Search entries — BM25 + regex search over session history.
- *
- * Upstream: https://github.com/sting8k/pi-vcc (src/core/search-entries.ts)
- * Unmodified.
- */
+/** Search entries — BM25 + regex search over session history. */
 import type { Message } from "@earendil-works/pi-ai";
 import type { RenderedEntry } from "./render-entries";
 import { textOf, toolCallArgsText, isContentBearing } from "./content";

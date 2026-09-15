@@ -15,7 +15,7 @@ The engine source was reconstructed from the audited base and implementation pat
 
 ## Engine provenance and original validation
 
-Base repository: `k0valik/pi-remendra`, commit `270aa0912800b2b7ce64414ef4247be84106d8f8` (0.4.10).
+Base repository: `yoda-digital/pi-remendra`, commit `270aa0912800b2b7ce64414ef4247be84106d8f8` (0.4.10).
 Implementation branch: `feat/remendra-v2`.
 Pi reference source: `earendil-works/pi`, commit `da840b6216578c2a571d0374ac6a2091a83f9d91` (0.85.1).
 Runtime exercised: Linux, Node **24.19.0**, Pi packages **0.85.1**, TypeScript **6.0.3**.

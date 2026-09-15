@@ -1331,7 +1331,7 @@ var MemoryStore = class {
     if (Buffer.byteLength(text) > 20 * 1024 * 1024)
       throw new Error("Import exceeds 20 MiB; split the file");
     const rows = text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-    if (!jsonObject(rows[0]) || !["remendra_export", "blackhole_export"].includes(String(rows[0].type)) || rows[0].version !== 2)
+    if (!jsonObject(rows[0]) || rows[0].type !== "remendra_export" || rows[0].version !== 2)
       throw new Error("Expected a v2 JSONL export");
     return this.transaction(() => {
       const refs = /* @__PURE__ */ new Map();

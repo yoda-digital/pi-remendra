@@ -11,4 +11,7 @@ tmp/
 .pi/subagents/
 .agent/
 
+.pi-delegator.json
+.serena/
+
 *:Zone.Identifier

@@ -63,7 +63,7 @@ Default storage: `~/.pi/agent/pi-remendra/v2/`. Override with `PI_REMENDRA_HOME`
 /remendra settings {"mode":"recall"}            # disable learning entirely
 ```
 
-Full default config: [example-config-v2.json](example-config-v2.json).
+Full default config: [example-config.json](example-config.json).
 
 The daily token budget (default 80 000) limits how many tokens background learning can spend. Use `/remendra budget` to check.
 
@@ -104,7 +104,7 @@ This is alpha software. The [validation document](docs/validation.md) is the hon
 - Automatically extracted claims default to lineage scope. Cross-session availability requires explicit `/remendra promote ID project`.
 - Lexical search candidates are capped at 600 rows. Omissions are visible in the response.
 - Live-provider extraction quality, Windows/macOS, multi-day workloads, concurrent sessions, and power-loss behavior have not been validated.
-- The focused v2 test suite is 64 tests across 5 files. The full repository has 1 573 tests covering both the current engine and the inherited legacy code.
+- The v2 test suite is 73 tests across 5 files.
 
 ## Development
 
