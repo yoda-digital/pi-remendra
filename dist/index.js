@@ -833,7 +833,7 @@ function installV2(pi, providedClient) {
           ctx,
           `\u{1F9E0} Remendra is active. It learns automatically from your sessions.
    ${observerNote}
-   Daily token budget: ${config.dailyTokenBudget.toLocaleString()} tokens (~$${(config.dailyTokenBudget * 3e-6).toFixed(2)}/day at typical rates).
+   Daily token budget: ${config.dailyTokenBudget.toLocaleString()} tokens (adjust with /remendra settings).
    /remendra search <words>  \u2014 find memories
    /remendra remember <text> \u2014 teach it something
    /remendra help            \u2014 all commands`

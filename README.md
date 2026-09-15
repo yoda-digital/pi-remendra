@@ -123,7 +123,7 @@ There are 50+ memory extensions for Pi. Here is an honest comparison with the mo
 | Session history search | `/remendra index-sessions` | No | Yes | No |
 | KV cache stability | Policy-only mode option | Snapshot mechanism | Policy-only mode | N/A |
 | CJK search | FTS5 trigram (3+ chars) | Via qmd | FTS5 trigram | Semantic |
-| Node compatibility | Node 22+ (24 built-in, 22 via better-sqlite3) | Node 18+ | Node 18+ | N/A |
+| Node compatibility | Node 22+ (24 built-in, 22 via better-sqlite3) | Node 22+ | Node 22+ | N/A |
 | Privacy | Fully local, nothing leaves disk | Fully local | Fully local | Cloud by default |
 
 **Where Remendra is stronger:** self-correcting memories (fix one, dependents update automatically), evidence provenance with exact source spans, typed claims with ranking, procedure trial validation, conflict detection, full revision audit trail, comprehensive secret scanning, fully local privacy.

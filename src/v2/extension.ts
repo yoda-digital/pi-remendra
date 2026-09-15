@@ -384,7 +384,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           ctx,
           `🧠 Remendra is active. It learns automatically from your sessions.\n` +
             `   ${observerNote}\n` +
-            `   Daily token budget: ${config.dailyTokenBudget.toLocaleString()} tokens (~$${(config.dailyTokenBudget * 0.000003).toFixed(2)}/day at typical rates).\n` +
+            `   Daily token budget: ${config.dailyTokenBudget.toLocaleString()} tokens (adjust with /remendra settings).\n` +
             `   /remendra search <words>  — find memories\n` +
             `   /remendra remember <text> — teach it something\n` +
             `   /remendra help            — all commands`,
