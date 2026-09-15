@@ -577,10 +577,10 @@ function installV2(pi, providedClient) {
   let projectId = "", sessionId = "", cwd = "", generation = 0, query = "";
   let seen = /* @__PURE__ */ new Set();
   let scope;
-  let packet;
   let lastError = "";
   let initializing;
   let foreground = false;
+  let closing = false;
   const passive = process.env.PI_REMENDRA_PASSIVE === "true";
   const show = (ctx, value) => {
     const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -610,7 +610,6 @@ function installV2(pi, providedClient) {
     }
   };
   const report = (ctx, error) => {
-    packet = void 0;
     const message = redact(
       error instanceof Error ? error.message : String(error),
       config.redactionPatterns
@@ -633,7 +632,6 @@ function installV2(pi, providedClient) {
   const invalidate = () => {
     generation++;
     learner?.cancel("Session, branch, or memory changed");
-    packet = void 0;
   };
   const branch = (ctx) => ctx.sessionManager.getBranch();
   const makeScope = (ctx) => ({
@@ -644,21 +642,25 @@ function installV2(pi, providedClient) {
     environment: process.env.PI_REMENDRA_ENVIRONMENT
   });
   const ensure = async (ctx) => {
+    if (closing) throw new Error("Session is shutting down");
     if (initializing) {
       await initializing;
-      return;
     }
     if (client && projectId && cwd === ctx.cwd && sessionId === ctx.sessionManager.getSessionId())
       return;
     const init = (async () => {
       invalidate();
-      cwd = ctx.cwd;
-      sessionId = ctx.sessionManager.getSessionId();
-      seen = /* @__PURE__ */ new Set();
-      client ??= new MemoryClient(join(directory, "memory.sqlite"), directory, workerLocation());
-      learner ??= new BackgroundLearner(client);
-      config = await client.call("configGet", []);
-      projectId = await client.call("project", [await realpath(ctx.cwd)]);
+      const nextCwd = ctx.cwd;
+      const nextSessionId = ctx.sessionManager.getSessionId();
+      const nextSeen = /* @__PURE__ */ new Set();
+      const nextClient = client ?? new MemoryClient(join(directory, "memory.sqlite"), directory, workerLocation());
+      learner ??= new BackgroundLearner(nextClient);
+      config = await nextClient.call("configGet", []);
+      const nextProjectId = await nextClient.call("project", [await realpath(nextCwd)]);
+      cwd = nextCwd;
+      sessionId = nextSessionId;
+      seen = nextSeen;
+      projectId = nextProjectId;
       scope = makeScope(ctx);
     })();
     initializing = init;
@@ -675,7 +677,7 @@ function installV2(pi, providedClient) {
     const fresh = entries.filter((e) => !seen.has(e.id));
     if (fresh.length && config.enabled && !passive) {
       const inputs = sourceInputs(fresh, config.excludedPaths);
-      if (inputs.length) await client.call("ingest", [scope, inputs], 1e4);
+      if (inputs.length) await client?.call("ingest", [scope, inputs], 1e4);
       for (const entry of fresh) seen.add(entry.id);
     }
     return structuredClone(scope);
@@ -689,12 +691,13 @@ function installV2(pi, providedClient) {
       usage?.tokens,
       config.outputReserve
     );
-    packet = await client.call("compile", [current, query, budget]);
+    const compiled = await client?.call("compile", [current, query, budget]);
+    if (!compiled) throw new Error("Memory client is unavailable");
     status(
       ctx,
-      `\u25C9 ${packet.manifest.claims.length} memories \xB7 ${packet.manifest.tokens} tokens \xB7 ${packet.manifest.gaps} pending${config.mode === "shadow" ? " \xB7 shadow" : ""}`
+      `\u25C9 ${compiled.manifest.claims.length} memories \xB7 ${compiled.manifest.tokens} tokens \xB7 ${compiled.manifest.gaps} pending${config.mode === "shadow" ? " \xB7 shadow" : ""}`
     );
-    return packet;
+    return compiled;
   };
   const completion = (ctx) => async (request) => {
     const models = config.models.map((m) => ctx.modelRegistry.find(m.provider, m.id)).filter((m) => m !== void 0);
@@ -736,10 +739,12 @@ function installV2(pi, providedClient) {
       return "Learning disabled";
     const hostSignal = ctx.signal;
     const current = await refresh(ctx), epoch = generation;
+    if (!client) return "Session closed";
     status(ctx, "\u25CC learning from sources");
     const cancel = () => learner?.cancel("Pi context was disposed");
     hostSignal?.addEventListener("abort", cancel, { once: true });
     try {
+      if (!client || !learner) return "Learning stopped (session ended)";
       const result = await learner.run(
         current,
         structuredClone(config),
@@ -755,6 +760,7 @@ function installV2(pi, providedClient) {
   const userSource = async (ctx, text) => {
     invalidate();
     await learner?.stop();
+    learner?.cancel();
     pi.appendEntry("remendra.v2.user-action", { at: (/* @__PURE__ */ new Date()).toISOString() });
     const current = await refresh(ctx);
     if (!current.entryIds.length) throw new Error("A session anchor is required");
@@ -764,10 +770,11 @@ function installV2(pi, providedClient) {
       throw new Error("Memory needs text or a JSON object with text and kind");
     const sourceText = redact(parsed.text, config.redactionPatterns);
     const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-    const source = await client.call("ingest", [
+    const source = await client?.call("ingest", [
       current,
       [{ entryId, role: "user", text: sourceText, timestamp }]
     ]);
+    if (!source) throw new Error("Memory client is unavailable");
     if (!source.keys[0]) throw new Error("This source was previously erased");
     const digest = hash(
       JSON.stringify(["user", sourceText, timestamp, void 0, void 0, void 0])
@@ -886,12 +893,22 @@ function installV2(pi, providedClient) {
     status(ctx, "\u25CC compaction failed \xB7 memory preserved");
   });
   pi.on("session_shutdown", async () => {
-    invalidate();
-    await learner?.stop();
-    await client?.close();
-    client = void 0;
-    learner = void 0;
-    projectId = "";
+    closing = true;
+    try {
+      invalidate();
+      await learner?.stop();
+      await client?.close();
+    } catch (shutdownError) {
+      console.error(
+        "[remendra] session_shutdown cleanup failed:",
+        shutdownError instanceof Error ? shutdownError.message : String(shutdownError)
+      );
+    } finally {
+      client = void 0;
+      learner = void 0;
+      projectId = "";
+      closing = false;
+    }
   });
   pi.registerTool({
     name: "recall",
@@ -913,11 +930,12 @@ function installV2(pi, providedClient) {
     execute: async (_id, params, signal, _update, ctx) => {
       if (signal?.aborted) throw new Error("Recall cancelled");
       const current = await refresh(ctx);
-      const text = await client.call(
+      const text = await client?.call(
         "recall",
         [current, params, ctx.sessionManager.getSessionFile()],
         3e3
       );
+      if (text === void 0) throw new Error("Memory client is unavailable");
       return {
         content: [{ type: "text", text }],
         details: { projectId: current.projectId, sessionId: current.sessionId }
@@ -927,38 +945,43 @@ function installV2(pi, providedClient) {
   const command = async (args, ctx) => {
     try {
       await ensure(ctx);
+      const mem = client;
+      if (!mem) {
+        show(ctx, "Memory client unavailable");
+        return;
+      }
       const current = await refresh(ctx);
       const [verb = "status", ...words] = args.trim().split(/\s+/);
       const rest = words.join(" ");
       if (!verb || verb === "status" || verb === "budget")
-        show(ctx, await client.call("status", [current]));
+        show(ctx, await mem.call("status", [current]));
       else if (verb === "help") show(ctx, HELP);
       else if (verb === "doctor")
         show(ctx, {
-          ...await client.call("doctor", []),
+          ...await mem.call("doctor", []),
           lastError: lastError || void 0,
           configPath: join(directory, "config.json"),
           packagePath: dirname(fileURLToPath(import.meta.url))
         });
-      else if (verb === "gaps") show(ctx, await client.call("gaps", [current]));
+      else if (verb === "gaps") show(ctx, await mem.call("gaps", [current]));
       else if (verb === "packet") show(ctx, await compile(ctx));
       else if (verb === "checkpoint")
-        show(ctx, await client.call("checkpoint", [current, query, config.summaryTokens]));
+        show(ctx, await mem.call("checkpoint", [current, query, config.summaryTokens]));
       else if (["search", "history", "timeline"].includes(verb))
         show(
           ctx,
-          await client.call("recall", [
+          await mem.call("recall", [
             current,
             { query: rest, mode: verb === "search" ? "memory" : "history" }
           ])
         );
-      else if (verb === "why") show(ctx, await client.call("explain", [current, rest]));
+      else if (verb === "why") show(ctx, await mem.call("explain", [current, rest]));
       else if (verb === "learn") show(ctx, await learn(ctx));
       else if (verb === "embed" || verb === "semantic") {
         if (verb === "semantic" && !rest) throw new Error("Provide a semantic search query");
         show(
           ctx,
-          await client.call("embed", [current, verb === "semantic" ? rest : void 0], 15e3)
+          await mem.call("embed", [current, verb === "semantic" ? rest : void 0], 15e3)
         );
       } else if (verb === "settings") {
         if (!rest)
@@ -969,7 +992,8 @@ function installV2(pi, providedClient) {
         else {
           invalidate();
           await learner?.stop();
-          config = await client.call("configSet", [
+          learner?.cancel();
+          config = await mem.call("configSet", [
             { ...config, ...JSON.parse(rest) }
           ]);
           scope = makeScope(ctx);
@@ -977,9 +1001,9 @@ function installV2(pi, providedClient) {
         }
       } else if (verb === "remember" || verb === "correct") {
         const id = verb === "correct" ? words.shift() : void 0;
-        const old = id ? (await client.call("explain", [current, id])).claim : void 0;
+        const old = id ? (await mem.call("explain", [current, id])).claim : void 0;
         const source = await userSource(ctx, verb === "correct" ? words.join(" ") : rest);
-        const result = old ? await client.call("correct", [
+        const result = old ? await mem.call("correct", [
           source.current,
           old.id,
           old.revision,
@@ -988,8 +1012,8 @@ function installV2(pi, providedClient) {
             kind: old.kind,
             value: source.input.value ?? (old.value !== void 0 ? source.input.text : void 0)
           }
-        ]) : await client.call("record", [source.current, source.input, "user"]);
-        const accepted = result.claim.status === "candidate" && result.claim.kind !== "hypothesis" ? await client.call("change", [
+        ]) : await mem.call("record", [source.current, source.input, "user"]);
+        const accepted = result.claim.status === "candidate" && result.claim.kind !== "hypothesis" ? await mem.call("change", [
           source.current,
           result.claim.id,
           result.claim.revision,
@@ -1009,10 +1033,11 @@ function installV2(pi, providedClient) {
       ].includes(verb)) {
         invalidate();
         await learner?.stop();
+        learner?.cancel();
         const id = words[0];
         if (!id) throw new Error("A memory ID is required");
-        const claim = (await client.call("explain", [current, id])).claim;
-        if (verb === "erase") show(ctx, await client.call("erase", [current, id, claim.revision]));
+        const claim = (await mem.call("explain", [current, id])).claim;
+        if (verb === "erase") show(ctx, await mem.call("erase", [current, id, claim.revision]));
         else {
           const action = verb === "forget" ? "hide" : verb;
           const visibility = words[1];
@@ -1020,7 +1045,7 @@ function installV2(pi, providedClient) {
             throw new Error("Choose project or user scope");
           show(
             ctx,
-            await client.call("change", [
+            await mem.call("change", [
               current,
               id,
               claim.revision,
@@ -1031,35 +1056,36 @@ function installV2(pi, providedClient) {
         }
       } else if (verb === "trial") {
         invalidate();
-        show(ctx, await client.call("trial", [current, JSON.parse(rest)]));
+        show(ctx, await mem.call("trial", [current, JSON.parse(rest)]));
       } else if (verb === "export")
         show(
           ctx,
-          await client.call("export", [current, rest ? resolve(ctx.cwd, rest) : void 0], 15e3)
+          await mem.call("export", [current, rest ? resolve(ctx.cwd, rest) : void 0], 15e3)
         );
       else if (verb === "backup") {
         if (!rest) throw new Error("Provide a new backup file path");
-        show(ctx, await client.call("backup", [resolve(ctx.cwd, rest)], 3e4));
+        show(ctx, await mem.call("backup", [resolve(ctx.cwd, rest)], 3e4));
       } else if (verb === "import" || verb === "migrate") {
         invalidate();
         await learner?.stop();
+        learner?.cancel();
         if (rest)
           show(
             ctx,
-            await client.call(
+            await mem.call(
               "import",
               [current, resolve(ctx.cwd, rest), verb === "migrate"],
               3e4
             )
           );
         else if (verb === "migrate")
-          show(ctx, await client.call("importLegacyEntries", [current, branch(ctx)], 3e4));
+          show(ctx, await mem.call("importLegacyEntries", [current, branch(ctx)], 3e4));
         else throw new Error("Provide the JSONL export path");
       } else if (verb === "link-project") {
         if (!rest)
           throw new Error("Provide the existing project ID from /remendra doctor or status");
         invalidate();
-        projectId = await client.call("project", [await realpath(ctx.cwd), rest]);
+        projectId = await mem.call("project", [await realpath(ctx.cwd), rest]);
         seen = /* @__PURE__ */ new Set();
         show(ctx, `Project linked to ${projectId}`);
       } else show(ctx, HELP);
@@ -1080,14 +1106,13 @@ function installV2(pi, providedClient) {
     handler: async (args, ctx) => {
       try {
         const current = await refresh(ctx);
-        show(
-          ctx,
-          await client.call(
-            "recall",
-            [current, { query: args }, ctx.sessionManager.getSessionFile()],
-            3e3
-          )
+        const text = await client?.call(
+          "recall",
+          [current, { query: args }, ctx.sessionManager.getSessionFile()],
+          3e3
         );
+        if (text === void 0) throw new Error("Memory client is unavailable");
+        show(ctx, text);
       } catch (error) {
         show(ctx, `Remendra: ${error instanceof Error ? error.message : String(error)}`);
       }
