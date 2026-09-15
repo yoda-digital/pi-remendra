@@ -1,20 +1,12 @@
 {
   "name": "pi-remendra",
   "version": "2.0.0-alpha.2",
-  "description": "Remember. Amend. Continue. Evidence-backed memory for Pi with scoped recall and transactional corrections.",
+  "description": "Persistent memory for Pi. Stores structured claims with source evidence, scoped recall, and transactional corrections.",
   "keywords": [
-    "agents",
-    "ai",
-    "cli",
-    "compact",
-    "compaction",
-    "observational-memory",
     "pi",
-    "pi-agent",
-    "pi-coding-agent",
     "pi-extension",
-    "pi-package",
-    "pi-remendra",
+    "pi-agent",
+    "memory",
     "recall",
     "remendra"
   ],
@@ -34,11 +26,10 @@
     "dist/",
     "LICENSE",
     "README.md",
-    "docs/V2.md",
-    "docs/VALIDATION-V2.md",
+    "docs/engineering.md",
+    "docs/validation.md",
     "example-config-v2.json",
-    "scripts/prepare.mjs",
-    "docs/LEGACY-README.md"
+    "scripts/prepare.mjs"
   ],
   "type": "module",
   "main": "./dist/index.js",

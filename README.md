@@ -1,111 +1,14 @@
-# Remendra for Pi
+# Remendra
 
-**Remember. Amend. Continue.**
+Persistent memory for [Pi](https://github.com/AerinWorks/pi). Stores what you tell it, learns from your sessions, and puts the right memories back in context when you need them.
 
-Evidence-backed memory for [Pi](https://github.com/AerinWorks/pi): durable decisions, precise corrections, scoped recall, and bounded context.
+**v2.0.0-alpha.2** · Pi 0.85.1 · Node 24
 
-Built against **Pi 0.85.1** · **Node 24** · **v2.0.0-alpha.2**
+## What it does
 
----
+Remendra watches your Pi sessions, extracts structured memories (facts, decisions, constraints, procedures), and stores them in SQLite with full-text search. When Pi assembles context for the next turn, Remendra injects the memories that match your current query, ranked by relevance and claim type. Memories survive across sessions, branches, and compactions.
 
-## Why Remendra
-
-Pi-blackhole merged deterministic VCC compaction with session-ledger observational memory. Remendra replaces that v1 architecture with a SQLite-backed v2 engine. The legacy engine remains available at `dist/legacy.js` for rollback.
-
-### What changed from pi-blackhole
-
-| | pi-blackhole v1 | Remendra v2 |
-|---|---|---|
-| Storage | In-memory session ledger (JSONL) | SQLite + FTS5 in a worker thread |
-| Persistence | Session-only — lost on switch/branch/compact | Cross-session, cross-branch |
-| Retrieval | Regex + BM25 over live entries | FTS5 full-text search, scoped by lineage/project/user |
-| Compilation | Chronological dump with VCC section headers | Query-matched, kind-priority-ranked, budget-bounded |
-| Corrections | None — wrong observations stay until dropped | Transactional: supersede → invalidate dependents → replace |
-| Evidence | Free-form LLM text | Source spans with SHA-256 content hashes |
-| Scope | Session-only | Lineage (default), project (explicit promotion), user (opt-in) |
-| Procedures | None | 2-trial validation gate per environment |
-| Embeddings | None | Optional OpenAI-compatible semantic search |
-
-### Architecture
-
-```mermaid
-graph LR
-  subgraph "pi-blackhole v1"
-    A[Session messages] --> B[VCC compile<br/>regex extraction]
-    A --> C[OM workers<br/>Observer → Reflector → Dropper]
-    B --> D[Session ledger<br/>in-memory JSONL]
-    C --> D
-    D --> E[Context injection<br/>chronological dump]
-  end
-
-  subgraph "Remendra v2"
-    F[Session messages] --> G[Source ingestion<br/>hashed spans]
-    G --> H[(SQLite + FTS5<br/>worker thread)]
-    H --> I[Background learner<br/>structured claims + evidence]
-    I --> H
-    H --> J[Context compiler<br/>FTS5 query + kind ranking]
-    J --> K[Bounded packet<br/>provenance + corrections]
-  end
-
-  style D fill:#eb683422,stroke:#eb6834
-  style H fill:#2a78d622,stroke:#2a78d6
-```
-
-v1 terminates at a session-scoped ledger — nothing survives a session switch. v2 writes claims and sources to SQLite with FTS5 indexing.
-
-### Correction flow (v2 only)
-
-```mermaid
-sequenceDiagram
-  participant User
-  participant Remendra
-  participant SQLite
-
-  User->>Remendra: /remendra correct ID "new text"
-  Remendra->>SQLite: BEGIN TRANSACTION
-  SQLite-->>Remendra: Load claim + revision
-  Remendra->>SQLite: Retire old claim (status → superseded)
-  Remendra->>SQLite: Invalidate dependents transitively
-  Remendra->>SQLite: Write replacement (inherits evidence chain)
-  Remendra->>SQLite: COMMIT
-  SQLite-->>Remendra: New claim ID + revision
-  Remendra-->>User: Corrected: OLD_ID → NEW_ID
-```
-
-v1 has no correction system. A wrong observation stays in the ledger until it is dropped or the session compacts.
-
-## Smoke tests and performance
-
-A synthetic benchmark suite is included as a development tool:
-
-```
-node benchmarks/suite.mjs    # 5-dimension smoke test
-pnpm benchmark:v2            # per-claim compilation latency
-```
-
-These are smoke tests that verify the engine functions, not competitive benchmarks. The suite seeds synthetic claims into SQLite and measures compilation latency, FTS5 retrieval, cross-session persistence, and budget utilization. It does not run the v1 engine or any competing system.
-
-**Per-claim microbenchmark** (1 000 synthetic claims, warm cache, single process):
-
-```
-p50: 16 ms    p95: 16 ms    database: 2.5 MB
-```
-
-Not a production SLA. Real-world performance depends on corpus size, query complexity, and provider latency for background learning.
-
-## Known limits
-
-This is alpha software. The project's own [validation document](docs/VALIDATION-V2.md) is the honest accounting of what has been tested and what has not.
-
-**Not yet validated:** live-provider extraction quality, Windows/macOS, multi-day workloads, realistic large corpora, concurrent active sessions, power-loss fault testing, billing reconciliation accuracy, rate-limit behavior under sustained load.
-
-**Not exact:** the token counter uses `ceil(UTF-8 bytes / 3)`, a deliberate heuristic that underreports real tokenizer counts by 20–39% median (measured against 698 real sessions). The [token rework plan](work_docs/plan-00-overview.md) documents the path to truthful counting.
-
-**Not exhaustive:** lexical candidates capped at 600, historical scans at 2 000, anchors at 300, returned hits at 200. Omissions are visible in the response; the system does not claim perfect recall.
-
-**Automatic learning defaults to lineage scope.** Newly extracted claims are visible only in the current session lineage. Cross-session availability requires explicit `/remendra promote ID project`. The system does not magically carry all memories into every new session.
-
-**Test coverage:** 1 572 tests across the full repository (97 files). The focused v2 test suite is 64 tests across 5 files. The remaining tests cover the inherited VCC pipeline, OM system, config, commands, and vendored Pi base.
+If a memory is wrong, you correct it. The old version is retired, its dependents are invalidated transitively, and the replacement inherits the evidence chain. This happens in one transaction.
 
 ## Install
 
@@ -113,11 +16,9 @@ This is alpha software. The project's own [validation document](docs/VALIDATION-
 pi install git:github.com/yoda-digital/pi-remendra
 ```
 
-Run `/reload` in Pi, then `/remendra doctor` and `/remendra help`.
+Then `/reload`, `/remendra doctor`, `/remendra help`.
 
-Do not load pi-blackhole and Remendra together. Use `pi list` to find and remove the old package first. The v1 ledger and v2 database are separate; migration is explicit and leaves old files untouched.
-
-For a development checkout:
+Development checkout:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -125,71 +26,99 @@ pnpm build
 pi install /absolute/path/to/pi-remendra
 ```
 
-## What works
+## Usage
 
-- **Durable typed memory** — facts, decisions, constraints, preferences, hypotheses, procedures, and commitments, with revision history and exact source spans.
-- **Corrections that propagate** — replacing a memory retires the old version, invalidates dependent conclusions, and prevents background extraction from reviving retired evidence.
-- **Scope isolation** — current lineage by default, explicit project promotion, and opt-in user memory. Project identity survives a directory move through an explicit link.
-- **Multilingual recall** — Unicode-preserving FTS5 search, exact IDs, source search, historical lookup, original transcript expansion, file drill-down, and touched-file history.
-- **Bounded context** — whole-record selection with provenance, coverage gaps, conflicts, and omission counts. The complete rendered packet is measured before insertion.
-- **Background learning** — source chunks have durable leases; successful claims and coverage commit together. Foreground work cancels extraction. Retry and daily reservation limits apply before dispatch.
-- **Kind-priority ranking** — constraints and decisions rank above facts and hypotheses in context compilation.
-- **Optional semantic search** — index memories at an OpenAI-compatible embedding endpoint. Revision and scope checks apply to every result.
-- **Procedure validation** — candidate procedures need two distinct successful tool-result trials in the same environment before automatic retrieval.
-- **User controls** — inspect, correct, pin, hide, retract, accept, promote, erase, export, import, backup, and diagnose.
-- **Migration** — direct v1 observation/reflection import preserves distinct records, including Cyrillic content and old ID aliases.
-
-## Quick start
-
-```text
-/remendra remember {"kind":"constraint","text":"Never run a production migration without a backup."}
-/remendra search production
+```
+/remendra remember {"kind":"constraint","text":"Always back up before migrating production."}
+/remendra search migration
 /remendra why MEMORY_ID
 /remendra correct MEMORY_ID {"text":"Create and verify a backup before every production migration."}
 /remendra pin MEMORY_ID
 /remendra promote MEMORY_ID project
 ```
 
-## Automatic learning and cost
+Commands: `search`, `history`, `why`, `remember`, `correct`, `pin`, `unpin`, `hide`, `show`, `retract`, `forget`, `erase`, `accept`, `promote`, `trial`, `learn`, `embed`, `semantic`, `gaps`, `budget`, `packet`, `checkpoint`, `doctor`, `settings`, `export`, `backup`, `import`, `migrate`, `link-project`.
 
-Learning runs after `agent_settled`: at most 4 batches per settled run, 2 attempts per batch. Default daily budget: **80 000 memory tokens**. Use `/remendra budget` to inspect.
+The `recall` tool is available to the agent automatically. Modes: `memory`, `history`, `source`, `regex`, `file`, `touched`.
 
-```text
-/remendra settings {"observer":false}     # pause learning, keep recall
-/remendra settings {"mode":"shadow"}      # compile without injecting
-```
+## How it works
 
-## Recall
+The extension hooks into Pi's lifecycle:
 
-Modes: `memory`, `history`, `source`, `regex`, `file`, `touched`.
+1. **Ingestion.** New session entries are converted to source records with SHA-256 content hashes and stored in SQLite.
+2. **Background learning.** After the agent settles, an observer model extracts structured claims from unprocessed source chunks. Each claim carries evidence: exact character spans into the stored source text. At most 4 batches per settled turn, 2 attempts per batch.
+3. **Context compilation.** Before each agent turn, Remendra compiles a memory packet. FTS5 matches the current query against stored claims. Results are ranked by search score and claim-type priority (constraints rank above hypotheses). The packet fits within a measured token budget and includes provenance metadata.
+4. **Corrections.** When you correct a memory, the old claim is superseded, its evidence spans are retired, dependent claims are invalidated recursively, and the replacement is recorded with its own evidence.
 
-```text
-/remendra-recall PostgreSQL
-/remendra-recall MEMORY_ID
-/remendra-recall #12
-/remendra-recall #12:src/config.ts
-```
+Memories default to lineage scope (current session branch). You promote them to project or user scope explicitly. Project memories persist across sessions. User memories persist across projects.
 
 ## Configuration
 
 Default storage: `~/.pi/agent/pi-remendra/v2/`. Override with `PI_REMENDRA_HOME`.
 
-```text
-/remendra settings       # view config
-/remendra gaps           # unprocessed source ranges
-/remendra doctor         # SQLite integrity check
 ```
+/remendra settings                              # view current config
+/remendra settings {"observer":false}           # pause background learning
+/remendra settings {"mode":"shadow"}            # compile without injecting
+/remendra settings {"mode":"recall"}            # disable learning entirely
+```
+
+Full default config: [example-config-v2.json](example-config-v2.json).
+
+The daily token budget (default 80 000) limits how many tokens background learning can spend. Use `/remendra budget` to check.
+
+## Optional semantic search
+
+If you run an OpenAI-compatible embedding endpoint:
+
+```
+/remendra settings {"embeddings":{"endpoint":"http://127.0.0.1:8000/v1/embeddings","model":"YOUR_MODEL"}}
+/remendra embed
+/remendra semantic database configuration
+```
+
+HTTPS required for remote endpoints. Loopback HTTP works. No model is downloaded automatically.
+
+## Performance
+
+Per-claim compilation latency on 1 000 synthetic claims (warm cache, single process):
+
+```
+p50: 16 ms    p95: 16 ms    database: 2.5 MB
+```
+
+Run the benchmarks yourself:
+
+```
+pnpm benchmark:v2            # per-claim microbenchmark
+node benchmarks/suite.mjs    # smoke test suite
+```
+
+These are synthetic tests. Real performance depends on corpus size, query complexity, and provider latency. See [docs/benchmark-results.md](docs/benchmark-results.md) for methodology and limitations.
+
+## Known limits
+
+This is alpha software. The [validation document](docs/validation.md) is the honest accounting of what has been tested and what has not.
+
+- Token estimation uses `ceil(UTF-8 bytes / 3)`, which overestimates non-ASCII text by 2-3x. The [engineering notes](docs/engineering.md) document the planned fix.
+- Automatically extracted claims default to lineage scope. Cross-session availability requires explicit `/remendra promote ID project`.
+- Lexical search candidates are capped at 600 rows. Omissions are visible in the response.
+- Live-provider extraction quality, Windows/macOS, multi-day workloads, concurrent sessions, and power-loss behavior have not been validated.
+- The focused v2 test suite is 64 tests across 5 files. The full repository has 1 573 tests covering both the current engine and the inherited legacy code.
 
 ## Development
 
 ```bash
-pnpm build && pnpm typecheck && pnpm lint && pnpm test
-pnpm benchmark:v2                    # per-claim latency
-node benchmarks/suite.mjs            # smoke test suite
+pnpm build              # tsup → dist/
+pnpm typecheck          # tsc --noEmit
+pnpm lint               # eslint
+pnpm test               # vitest
+pnpm test:smoke         # real Pi SDK smoke
+pnpm benchmark:v2       # per-claim latency
 ```
 
-[Engineering notes](docs/V2.md) · [Validation results](docs/VALIDATION-V2.md) · [Legacy docs](docs/LEGACY-README.md)
+[Engineering notes](docs/engineering.md) · [Validation](docs/validation.md) · [Benchmark methodology](docs/benchmark-results.md)
 
 ## License
 
-MIT. Derived from [Pi Blackhole](https://github.com/k0valik/pi-blackhole). Attribution preserved in changelog and license.
+MIT.
