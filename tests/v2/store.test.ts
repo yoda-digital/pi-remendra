@@ -390,16 +390,28 @@ it("requires two independent successful tool trials before procedure use and rev
   expect(store.search({ scope: { ...scope, environment: "node26" }, text: "packaging" })).toEqual(
     [],
   );
-  const failed = source("Build failed", "trial-fail", { role: "toolResult", isError: true });
+  // M5: A single failure no longer demotes a promoted procedure (hysteresis).
+  // Two consecutive failures are required.
+  const failed1 = source("Build failed 1", "trial-fail-1", { role: "toolResult", isError: true });
   p = store.trial(scope, {
     procedureId: p.id,
     expectedRevision: p.revision,
-    sourceKey: failed.key,
+    sourceKey: failed1.key,
     outcome: "failure",
     environment: "node24",
-    note: "Failure",
+    note: "First failure",
   });
-  expect(p.procedureState).toBe("candidate");
+  expect(p.procedureState).toBe("promoted"); // still promoted after 1 failure
+  const failed2 = source("Build failed 2", "trial-fail-2", { role: "toolResult", isError: true });
+  p = store.trial(scope, {
+    procedureId: p.id,
+    expectedRevision: p.revision,
+    sourceKey: failed2.key,
+    outcome: "failure",
+    environment: "node24",
+    note: "Second failure",
+  });
+  expect(p.procedureState).toBe("candidate"); // demoted after 2 consecutive failures
 });
 
 describe("coverage and budget transactions", () => {

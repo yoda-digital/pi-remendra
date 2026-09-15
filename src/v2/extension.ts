@@ -110,10 +110,18 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           display: true,
         });
     } catch (showError) {
+      // L2: Fallback to sendMessage when UI is disposed — the output is still useful
       console.error(
         "[remendra] show failed:",
         showError instanceof Error ? showError.message : String(showError),
       );
+      try {
+        pi.sendMessage({
+          customType: "remendra.v2.output",
+          content: redact(text, config.redactionPatterns),
+          display: true,
+        });
+      } catch { /* both paths failed — already logged */ }
     }
   };
   const status = (ctx: ExtensionContext, text: string): void => {
@@ -210,7 +218,9 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     return structuredClone(scope);
   };
   const compile = async (ctx: ExtensionContext): Promise<Packet> => {
+    const epoch = generation; // M9: capture before async work
     const current = await refresh(ctx);
+    if (epoch !== generation) throw new Error("Generation changed during compile refresh");
     const usage = ctx.getContextUsage();
     const budget = contextAllowance(
       config.contextTokens,

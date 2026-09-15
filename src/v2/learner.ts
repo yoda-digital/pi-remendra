@@ -127,6 +127,9 @@ export class BackgroundLearner {
             throw new Error("Discarded background result after session or branch change");
           const claims = parseObservations(result.text, job);
           await this.client.call("complete", [job, scope, claims, tokens, result.dollars]);
+          // L13: Re-check after async RPC — generation may have changed during the await
+          if (signal.aborted || !stillCurrent())
+            console.error("[remendra] claims committed but generation changed; may be stale");
           learned += claims.length;
           success = true;
           this.consecutiveFailures = 0;

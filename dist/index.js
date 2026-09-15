@@ -35,9 +35,9 @@ var MemoryClient = class {
       const item = this.pending.get(message.id);
       if (!item) {
         console.error(
-          "[remendra] late worker response for id",
+          "[remendra] late worker response id",
           message.id,
-          message.error ? `(error: ${message.error})` : "(success)"
+          message.error ? `error: ${message.error}` : "success (data may have been written)"
         );
         return;
       }
@@ -69,15 +69,15 @@ var MemoryClient = class {
       const worker = this.start();
       worker.ref();
       const id = ++this.sequence;
-      const timer = setTimeout(
-        () => this.fail(
-          worker,
-          new Error(
-            `Memory ${method} exceeded ${timeoutMs} ms; worker restarted on next request`
-          )
-        ),
-        timeoutMs
-      );
+      const timer = setTimeout(() => {
+        const item = this.pending.get(id);
+        if (item) {
+          clearTimeout(item.timer);
+          this.pending.delete(id);
+          item.reject(new Error(`Memory ${method} exceeded ${timeoutMs} ms`));
+          if (!this.pending.size) worker.unref();
+        }
+      }, timeoutMs);
       this.pending.set(id, { resolve: resolve2, reject, timer });
       try {
         worker.postMessage({ id, method, args });
@@ -210,7 +210,7 @@ function resolveQuote(source, quote) {
   }
   const words = quote.split(/\s+/).filter(Boolean);
   if (words.length >= 2) {
-    const srcNorm = source.toLowerCase().replace(/[`'"''""]/g, "'");
+    const srcNorm = source.toLowerCase().replace(/[`'"''""]/g, "'").replace(/\s+/g, " ");
     for (let wc = Math.min(words.length, 6); wc >= 2; wc--) {
       const partial = words.slice(0, wc).join(" ");
       const partialNorm = partial.toLowerCase().replace(/[`'"''""]/g, "'");
@@ -232,7 +232,8 @@ function parseObservations(text, job) {
   if (!jsonObject(result) || !Array.isArray(result.claims) || result.claims.length > 16)
     throw new Error("Observer must return at most 16 claims");
   return result.claims.map((raw) => {
-    if (!jsonObject(raw) || typeof raw.text !== "string" || !CLAIM_KINDS.includes(raw.kind) || !Array.isArray(raw.evidence) || raw.evidence.length === 0 || raw.evidence.length > 8)
+    if (!jsonObject(raw) || typeof raw.text !== "string" || !raw.text.trim() || // L17: Reject empty/whitespace-only claims
+    !CLAIM_KINDS.includes(raw.kind) || !Array.isArray(raw.evidence) || raw.evidence.length === 0 || raw.evidence.length > 8)
       throw new Error("Malformed observer claim");
     const evidence = raw.evidence.map((ref) => {
       if (!jsonObject(ref) || !Number.isInteger(ref.chunk) || typeof ref.quote !== "string" || ref.quote.length < 3)
@@ -285,7 +286,8 @@ function observerRequestTokens(job) {
 }
 async function abortable(promise, signal) {
   if (signal.aborted) throw signal.reason ?? new Error("Aborted");
-  promise.catch(() => {
+  promise.catch((err) => {
+    console.error("[remendra] suppressed LLM error on abort:", err instanceof Error ? err.message : String(err));
   });
   let listener = () => {
   };
@@ -391,6 +393,8 @@ var BackgroundLearner = class {
             throw new Error("Discarded background result after session or branch change");
           const claims = parseObservations(result.text, job);
           await this.client.call("complete", [job, scope, claims, tokens, result.dollars]);
+          if (signal.aborted || !stillCurrent())
+            console.error("[remendra] claims committed but generation changed; may be stale");
           learned += claims.length;
           success = true;
           this.consecutiveFailures = 0;
@@ -445,7 +449,10 @@ var DEFAULT_CONFIG = {
 var PACKET_TYPE = "remendra.v2.context";
 var SUMMARY_PREFIX = "Remendra v2 memory checkpoint\n";
 function contextAllowance(configured, window, used, reserve) {
-  if (!window || window <= 0) return Math.min(configured, 1024);
+  if (!window || window <= 0) {
+    console.error(`[remendra] context window unknown; memory budget capped to ${Math.min(configured, 1024)} tokens`);
+    return Math.min(configured, 1024);
+  }
   const headroom = used === void 0 || used === null ? Math.floor(window * 0.04) : window - used - reserve;
   return Math.max(0, Math.min(configured, headroom));
 }
@@ -597,6 +604,14 @@ function installV2(pi, providedClient) {
         "[remendra] show failed:",
         showError instanceof Error ? showError.message : String(showError)
       );
+      try {
+        pi.sendMessage({
+          customType: "remendra.v2.output",
+          content: redact(text, config.redactionPatterns),
+          display: true
+        });
+      } catch {
+      }
     }
   };
   const status = (ctx, text) => {
@@ -609,25 +624,26 @@ function installV2(pi, providedClient) {
       );
     }
   };
+  let errorCount = 0;
   const report = (ctx, error) => {
+    errorCount++;
     const message = redact(
       error instanceof Error ? error.message : String(error),
       config.redactionPatterns
     );
-    status(ctx, "\u25CC memory unavailable");
-    if (message !== lastError) {
-      lastError = message;
-      try {
-        if (ctx.hasUI) ctx.ui.notify(`Remendra: ${message}`, "warning");
-      } catch (notifyError) {
-        console.error(
-          "[remendra] error notification failed:",
-          notifyError instanceof Error ? notifyError.message : String(notifyError),
-          "original:",
-          message
-        );
-      }
+    lastError = message;
+    status(ctx, `\u25CC memory unavailable (${errorCount} error${errorCount > 1 ? "s" : ""})`);
+    try {
+      if (ctx.hasUI) ctx.ui.notify(`Remendra: ${message}`, "warning");
+    } catch (notifyError) {
+      console.error(
+        "[remendra] error notification failed:",
+        notifyError instanceof Error ? notifyError.message : String(notifyError),
+        "original:",
+        message
+      );
     }
+    console.error(`[remendra] error #${errorCount}:`, message);
   };
   const invalidate = () => {
     generation++;
@@ -683,7 +699,9 @@ function installV2(pi, providedClient) {
     return structuredClone(scope);
   };
   const compile = async (ctx) => {
+    const epoch = generation;
     const current = await refresh(ctx);
+    if (epoch !== generation) throw new Error("Generation changed during compile refresh");
     const usage = ctx.getContextUsage();
     const budget = contextAllowance(
       config.contextTokens,
@@ -854,7 +872,14 @@ function installV2(pi, providedClient) {
       };
     } catch (error) {
       report(ctx, error);
-      return { messages: clean };
+      const failNote = {
+        role: "custom",
+        customType: PACKET_TYPE,
+        content: "Remendra memory is temporarily unavailable. Recall may still work. Use /remendra doctor for diagnostics.",
+        display: false,
+        timestamp: Date.now()
+      };
+      return { messages: [failNote, ...clean] };
     }
   });
   pi.on("agent_settled", (_event, ctx) => {

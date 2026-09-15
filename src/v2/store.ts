@@ -145,8 +145,20 @@ export class MemoryStore {
   private run(sql: string, ...args: SqlValue[]) {
     return this.statement(sql).run(...args);
   }
+  // M3: Nested calls use SAVEPOINTs for proper isolation instead of skipping
   transaction<T>(fn: () => T): T {
-    if (this.depth) return fn();
+    if (this.depth) {
+      const sp = `sp_${this.depth}`;
+      this.db.exec(`SAVEPOINT ${sp}`);
+      try {
+        const value = fn();
+        this.db.exec(`RELEASE ${sp}`);
+        return value;
+      } catch (error) {
+        try { this.db.exec(`ROLLBACK TO ${sp}`); this.db.exec(`RELEASE ${sp}`); } catch { /* */ }
+        throw error;
+      }
+    }
     this.db.exec("BEGIN IMMEDIATE");
     this.depth++;
     try {
@@ -154,7 +166,8 @@ export class MemoryStore {
       this.db.exec("COMMIT");
       return value;
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      // L12: Guard ROLLBACK — SQLite may have already auto-rolled-back
+      try { this.db.exec("ROLLBACK"); } catch { /* already rolled back */ }
       throw error;
     } finally {
       this.depth--;
@@ -169,7 +182,7 @@ export class MemoryStore {
       this.db.exec("COMMIT");
       return result;
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      try { this.db.exec("ROLLBACK"); } catch { /* L12: already rolled back */ }
       throw error;
     } finally {
       this.depth--;
@@ -202,6 +215,9 @@ export class MemoryStore {
     });
   }
 
+  // L15: Empty entryIds is intentional — it means no lineage entries exist yet (e.g., session start).
+  // Lineage-scoped claims become invisible, which is correct: they require an anchor in active_entries.
+  // Project and user-scoped claims remain visible regardless of entryIds.
   private setScope(scope: Scope): void {
     if (!scope.projectId || !scope.sessionId)
       throw new Error("Project and session scope are required");
@@ -764,6 +780,13 @@ export class MemoryStore {
       );
       result.claim.supersedes = [old.id];
       result.claim.pinned = old.pinned;
+      // M6: If the replacement was disputed with the claim it's superseding, resolve the dispute.
+      // The correction IS the resolution — the old claim is now superseded.
+      if (result.claim.status === "disputed") {
+        const disputeResolved = this.conflicting(result.claim, scope, result.claim.id)
+          .every((c) => c.id === old.id || old.supersedes?.includes(c.id));
+        if (disputeResolved) result.claim.status = "active";
+      }
       result.claim.revision++;
       result.claim.updatedAt = nowISO();
       this.writeClaim(result.claim, "correction");
@@ -1094,7 +1117,8 @@ export class MemoryStore {
       this.recoverJobs(now);
       const day = new Date(now).toISOString().slice(0, 10);
       this.run("INSERT OR IGNORE INTO budgets(day) VALUES(?)", day);
-      const budget = this.get("SELECT spent,reserved FROM budgets WHERE day=?", day)!;
+      const budget = this.get("SELECT spent,reserved FROM budgets WHERE day=?", day);
+      if (!budget) throw new Error(`Budget row missing for day ${day}`);
       if (Number(budget.spent) + Number(budget.reserved) + reservation > dailyLimit)
         return undefined;
       if (
@@ -1237,7 +1261,8 @@ export class MemoryStore {
       (dollars !== undefined && (!Number.isFinite(dollars) || dollars < 0))
     )
       throw new Error("Invalid usage");
-    const row = this.get("SELECT day,reserved FROM jobs WHERE id=?", job.id)!;
+    const row = this.get("SELECT day,reserved FROM jobs WHERE id=?", job.id);
+    if (!row) throw new Error(`Job ${job.id} not found during settlement`);
     this.run(
       "UPDATE budgets SET reserved=MAX(0,reserved-?),spent=spent+?,dollars=dollars+?,unknown_calls=unknown_calls+? WHERE day=?",
       Number(row.reserved),
@@ -1344,16 +1369,30 @@ export class MemoryStore {
           input.environment,
         )?.n ?? 0,
       );
-      claim.procedureState =
-        input.outcome === "failure" ? "candidate" : successes >= 2 ? "promoted" : "trial_supported";
+      // M5: Promoted procedures require 2 consecutive failures to demote (hysteresis).
+      // A single flaky test should not cascade-invalidate an entire claim graph.
+      if (input.outcome === "failure") {
+        const recentFailures = Number(
+          this.get(
+            "SELECT COUNT(*) AS n FROM trials WHERE procedure_id=? AND environment=? AND outcome='failure' AND rowid>COALESCE((SELECT MAX(rowid) FROM trials WHERE procedure_id=? AND environment=? AND outcome='success'),0)",
+            claim.id, input.environment, claim.id, input.environment,
+          )?.n ?? 0,
+        );
+        claim.procedureState = (claim.procedureState === "promoted" && recentFailures < 2)
+          ? "promoted" // keep promoted until 2 consecutive failures
+          : "candidate";
+      } else {
+        claim.procedureState = successes >= 2 ? "promoted" : "trial_supported";
+      }
       claim.environment = input.environment;
       claim.verification = "outcome_checked";
       claim.revision++;
       claim.updatedAt = nowISO();
-      claim.evidence = [
-        ...claim.evidence,
-        { sourceKey: source.key, hash: source.hash, start: 0, end: source.text.length },
-      ];
+      // M7: Don't append trial evidence to the claim's evidence array.
+      // Trial outcomes are already stored in the trials table. Appending evidence
+      // to the claim makes it fragile — if the trial source is later erased,
+      // usable() fails because it checks ALL evidence entries, making the
+      // promoted procedure invisible even though the original evidence is fine.
       this.writeClaim(claim, `trial_${input.outcome}`);
       this.invalidate(claim.id);
       return claim;
@@ -1672,7 +1711,8 @@ export class MemoryStore {
       this.recoverJobs(Date.now());
       const day = nowISO().slice(0, 10);
       this.run("INSERT OR IGNORE INTO budgets(day) VALUES(?)", day);
-      const budget = this.get("SELECT spent,reserved FROM budgets WHERE day=?", day)!;
+      const budget = this.get("SELECT spent,reserved FROM budgets WHERE day=?", day);
+      if (!budget) throw new Error(`Budget row missing for day ${day}`);
       if (Number(budget.spent) + Number(budget.reserved) + reservation > dailyLimit)
         return undefined;
       const job: Job = {

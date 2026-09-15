@@ -82,8 +82,14 @@ function jsonObject(value) {
 var parse = (row, key = "data") => {
   if (!row) return void 0;
   try {
-    return JSON.parse(String(row[key]));
+    const result = JSON.parse(String(row[key]));
+    if (result === null || typeof result !== "object") {
+      const id = String(row.id ?? row.key ?? "(unknown)");
+      throw new Error(`Expected object in ${key} of record ${id}, got ${typeof result}`);
+    }
+    return result;
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Expected object")) throw error;
     const id = String(row.id ?? row.key ?? "(unknown)");
     throw new Error(
       `Corrupted ${key} in record ${id}: ${error instanceof Error ? error.message : String(error)}`
@@ -184,8 +190,24 @@ var MemoryStore = class {
   run(sql, ...args) {
     return this.statement(sql).run(...args);
   }
+  // M3: Nested calls use SAVEPOINTs for proper isolation instead of skipping
   transaction(fn) {
-    if (this.depth) return fn();
+    if (this.depth) {
+      const sp = `sp_${this.depth}`;
+      this.db.exec(`SAVEPOINT ${sp}`);
+      try {
+        const value = fn();
+        this.db.exec(`RELEASE ${sp}`);
+        return value;
+      } catch (error) {
+        try {
+          this.db.exec(`ROLLBACK TO ${sp}`);
+          this.db.exec(`RELEASE ${sp}`);
+        } catch {
+        }
+        throw error;
+      }
+    }
     this.db.exec("BEGIN IMMEDIATE");
     this.depth++;
     try {
@@ -193,7 +215,10 @@ var MemoryStore = class {
       this.db.exec("COMMIT");
       return value;
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {
+      }
       throw error;
     } finally {
       this.depth--;
@@ -208,7 +233,10 @@ var MemoryStore = class {
       this.db.exec("COMMIT");
       return result;
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {
+      }
       throw error;
     } finally {
       this.depth--;
@@ -239,6 +267,9 @@ var MemoryStore = class {
       return id;
     });
   }
+  // L15: Empty entryIds is intentional — it means no lineage entries exist yet (e.g., session start).
+  // Lineage-scoped claims become invisible, which is correct: they require an anchor in active_entries.
+  // Project and user-scoped claims remain visible regardless of entryIds.
   setScope(scope) {
     if (!scope.projectId || !scope.sessionId)
       throw new Error("Project and session scope are required");
@@ -676,6 +707,10 @@ var MemoryStore = class {
       );
       result.claim.supersedes = [old.id];
       result.claim.pinned = old.pinned;
+      if (result.claim.status === "disputed") {
+        const disputeResolved = this.conflicting(result.claim, scope, result.claim.id).every((c) => c.id === old.id || old.supersedes?.includes(c.id));
+        if (disputeResolved) result.claim.status = "active";
+      }
       result.claim.revision++;
       result.claim.updatedAt = nowISO();
       this.writeClaim(result.claim, "correction");
@@ -706,6 +741,9 @@ var MemoryStore = class {
           );
       } else if (action === "promote") {
         if (!visibility) throw new Error("Promotion requires project or user visibility");
+        const order = ["lineage", "project", "user"];
+        if (order.indexOf(visibility) <= order.indexOf(claim.visibility))
+          throw new Error(`Cannot demote or re-promote: ${claim.visibility} \u2192 ${visibility}`);
         claim.visibility = visibility;
       } else if (action === "accept") {
         if (claim.status !== "candidate")
@@ -725,10 +763,13 @@ var MemoryStore = class {
           this.invalidate(other.id);
         }
       }
-      claim.revision++;
-      claim.updatedAt = nowISO();
+      const cosmetic = ["pin", "unpin", "hide", "show"].includes(action);
+      if (!cosmetic) {
+        claim.revision++;
+        claim.updatedAt = nowISO();
+      }
       this.writeClaim(claim, action);
-      this.invalidate(claim.id);
+      if (!cosmetic) this.invalidate(claim.id);
       return claim;
     });
   }
@@ -736,8 +777,7 @@ var MemoryStore = class {
     const pending = visited.get(claim.id);
     if (pending !== void 0) return pending;
     visited.set(claim.id, false);
-    if (!this.inScope(claim, scope, all) || claim.hidden || claim.status !== "active")
-      return false;
+    if (!this.inScope(claim, scope, all) || claim.hidden || claim.status !== "active") return false;
     if (claim.validFrom && Date.parse(claim.validFrom) > Date.parse(at) || claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(at))
       return false;
     if (claim.environment && claim.environment !== scope.environment) return false;
@@ -761,8 +801,7 @@ var MemoryStore = class {
     const pending = seen.get(claim.id);
     if (pending !== void 0) return pending;
     seen.set(claim.id, false);
-    if (!this.inScope(claim, scope) || claim.hidden || claim.status !== "active")
-      return false;
+    if (!this.inScope(claim, scope) || claim.hidden || claim.status !== "active") return false;
     if (claim.validFrom && Date.parse(claim.validFrom) > Date.parse(at) || claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(at))
       return false;
     if (claim.environment && claim.environment !== scope.environment) return false;
@@ -884,7 +923,7 @@ var MemoryStore = class {
     this.setScope(scope);
     const words = terms(text);
     if (!words.length) return [];
-    const match = words.map((t) => `"${t}"`).join(" OR ");
+    const match = words.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
     return this.all(
       `SELECT s.key FROM source_fts JOIN sources s ON s.rowid=source_fts.rowid WHERE source_fts MATCH ? AND s.project_id=? AND s.erased=0 AND s.replaced=0 AND (?=1 OR (s.session_id=? AND s.entry_id IN (SELECT id FROM active_entries))) ORDER BY bm25(source_fts) LIMIT ?`,
       match,
@@ -921,6 +960,7 @@ var MemoryStore = class {
       const day = new Date(now).toISOString().slice(0, 10);
       this.run("INSERT OR IGNORE INTO budgets(day) VALUES(?)", day);
       const budget = this.get("SELECT spent,reserved FROM budgets WHERE day=?", day);
+      if (!budget) throw new Error(`Budget row missing for day ${day}`);
       if (Number(budget.spent) + Number(budget.reserved) + reservation > dailyLimit)
         return void 0;
       if (![inputTokens, reservation, dailyLimit, timeoutMs].every(
@@ -1038,6 +1078,7 @@ var MemoryStore = class {
     if (!Number.isFinite(tokens) || tokens < 0 || dollars !== void 0 && (!Number.isFinite(dollars) || dollars < 0))
       throw new Error("Invalid usage");
     const row = this.get("SELECT day,reserved FROM jobs WHERE id=?", job.id);
+    if (!row) throw new Error(`Job ${job.id} not found during settlement`);
     this.run(
       "UPDATE budgets SET reserved=MAX(0,reserved-?),spent=spent+?,dollars=dollars+?,unknown_calls=unknown_calls+? WHERE day=?",
       Number(row.reserved),
@@ -1102,6 +1143,9 @@ var MemoryStore = class {
       const source = this.source(input.sourceKey);
       if (!claim || claim.kind !== "procedure" || claim.revision !== input.expectedRevision || !source || source.erased || source.role !== "toolResult" || source.projectId !== scope.projectId || source.sessionId !== scope.sessionId || !scope.entryIds.includes(source.entryId))
         throw new Error("Trial needs a current procedure and tool-result evidence in this lineage");
+      if (["retracted", "superseded", "stale"].includes(claim.status))
+        throw new Error("Cannot record trial for a retired procedure");
+      if (!source.text) throw new Error("Trial source has no content");
       if (!input.environment || !["success", "failure"].includes(input.outcome) || !source.text || input.outcome === "success" && source.isError !== false || input.outcome === "failure" && source.isError !== true)
         throw new Error("Trial outcome does not match the tool evidence");
       const inserted = this.run(
@@ -1123,22 +1167,31 @@ var MemoryStore = class {
           input.environment
         )?.n ?? 0
       );
-      claim.procedureState = input.outcome === "failure" ? "candidate" : successes >= 2 ? "promoted" : "trial_supported";
+      if (input.outcome === "failure") {
+        const recentFailures = Number(
+          this.get(
+            "SELECT COUNT(*) AS n FROM trials WHERE procedure_id=? AND environment=? AND outcome='failure' AND rowid>COALESCE((SELECT MAX(rowid) FROM trials WHERE procedure_id=? AND environment=? AND outcome='success'),0)",
+            claim.id,
+            input.environment,
+            claim.id,
+            input.environment
+          )?.n ?? 0
+        );
+        claim.procedureState = claim.procedureState === "promoted" && recentFailures < 2 ? "promoted" : "candidate";
+      } else {
+        claim.procedureState = successes >= 2 ? "promoted" : "trial_supported";
+      }
       claim.environment = input.environment;
       claim.verification = "outcome_checked";
       claim.revision++;
       claim.updatedAt = nowISO();
-      claim.evidence = [
-        ...claim.evidence,
-        { sourceKey: source.key, hash: source.hash, start: 0, end: source.text.length }
-      ];
       this.writeClaim(claim, `trial_${input.outcome}`);
       this.invalidate(claim.id);
       return claim;
     });
   }
   erase(scope, id, expectedRevision) {
-    return this.transaction(() => {
+    const result = this.transaction(() => {
       const claim = this.claim(id, scope, true);
       if (!claim || claim.revision !== expectedRevision)
         throw new Error("Revision conflict or memory not found");
@@ -1176,6 +1229,13 @@ var MemoryStore = class {
         note: "Removed from v2 memory and prevented re-ingestion. Original Pi sessions, backups, and previous exports remain separate."
       };
     });
+    try {
+      this.db.exec("PRAGMA synchronous=FULL");
+      this.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      this.db.exec("PRAGMA synchronous=NORMAL");
+    } catch {
+    }
+    return result;
   }
   doctor() {
     return {
@@ -1309,7 +1369,8 @@ var MemoryStore = class {
       for (const row of rows) {
         if (!jsonObject(row) || row.type !== "claim" || !jsonObject(row.data)) continue;
         const c = row.data;
-        if (!Array.isArray(c.evidence)) throw new Error("Malformed imported claim");
+        if (!c || typeof c.id !== "string" || typeof c.text !== "string" || typeof c.kind !== "string" || !Array.isArray(c.evidence))
+          throw new Error("Malformed imported claim: missing id, text, kind, or evidence");
         if (this.get("SELECT 1 FROM erased_claims WHERE id=?", c.id) || c.evidence.some((e) => erasedRefs.has(e.sourceKey)))
           continue;
         if (c.evidence.some((e) => !refs.has(e.sourceKey)))
@@ -1382,6 +1443,7 @@ var MemoryStore = class {
       const day = nowISO().slice(0, 10);
       this.run("INSERT OR IGNORE INTO budgets(day) VALUES(?)", day);
       const budget = this.get("SELECT spent,reserved FROM budgets WHERE day=?", day);
+      if (!budget) throw new Error(`Budget row missing for day ${day}`);
       if (Number(budget.spent) + Number(budget.reserved) + reservation > dailyLimit)
         return void 0;
       const job = {
@@ -1614,8 +1676,8 @@ function validateConfig(raw) {
       config[key] = value;
     }
   }
-  if (config.contextTokens < 128 || config.summaryTokens < 512 || config.observerInputTokens < 2048 || config.observerOutputTokens < 128 || config.jobTimeoutMs < 1e3 || config.jobTimeoutMs > 12e4 || config.maxAttempts < 1 || config.maxAttempts > 5)
-    throw new Error("Memory limits are outside supported bounds");
+  if (config.contextTokens < 128 || config.summaryTokens < 512 || config.observerInputTokens < 2048 || config.observerOutputTokens < 128 || config.jobTimeoutMs < 1e3 || config.jobTimeoutMs > 12e4 || config.maxAttempts < 1 || config.maxAttempts > 5 || config.dailyTokenBudget < 1e3)
+    throw new Error("Memory limits are outside supported bounds (dailyTokenBudget minimum 1000)");
   if (raw.mode !== void 0) {
     if (!["active", "shadow", "recall"].includes(String(raw.mode)))
       throw new Error("mode must be active, shadow, or recall");
@@ -1713,6 +1775,7 @@ function importLegacy(store, scope, text) {
   for (const value of values) visit(value);
   return store.transaction(() => {
     let imported = 0, duplicates = 0, partialFailures = 0;
+    const failedIds = [];
     for (const { value, type } of candidates) {
       const id = String(value.id), content = String(value.content);
       if (!content.trim() || content.length > 12e3) {
@@ -1767,6 +1830,7 @@ function importLegacy(store, scope, text) {
           }
         } catch (statusError) {
           partialFailures++;
+          failedIds.push(result.claim.id);
           console.error(
             "[remendra] migration status change failed for",
             result.claim.id,
@@ -1778,7 +1842,7 @@ function importLegacy(store, scope, text) {
       if (result.duplicate) duplicates++;
       else imported++;
     }
-    return { imported, duplicates, skipped, partialFailures };
+    return { imported, duplicates, skipped, partialFailures, failedIds };
   });
 }
 
@@ -3012,7 +3076,10 @@ function main(argv) {
       (typeof result === "string" ? result : JSON.stringify(result, null, 2)) + "\n"
     );
   } finally {
-    service.close();
+    try {
+      service.close();
+    } catch {
+    }
   }
 }
 try {

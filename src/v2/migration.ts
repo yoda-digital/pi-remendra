@@ -46,6 +46,7 @@ export function importLegacy(
     let imported = 0,
       duplicates = 0,
       partialFailures = 0;
+    const failedIds: string[] = []; // L8: Track specific IDs with partial failures
     for (const { value, type } of candidates) {
       const id = String(value.id),
         content = String(value.content);
@@ -104,6 +105,7 @@ export function importLegacy(
           }
         } catch (statusError) {
           partialFailures++;
+          failedIds.push(result.claim.id); // L8
           console.error(
             "[remendra] migration status change failed for",
             result.claim.id,
@@ -115,6 +117,6 @@ export function importLegacy(
       if (result.duplicate) duplicates++;
       else imported++;
     }
-    return { imported, duplicates, skipped, partialFailures };
+    return { imported, duplicates, skipped, partialFailures, failedIds };
   });
 }

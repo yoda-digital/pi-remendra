@@ -31,11 +31,11 @@ export class MemoryClient {
       if (message.id === undefined) return;
       const item = this.pending.get(message.id);
       if (!item) {
-        // Late response after timeout — worker completed but we already rejected the caller
+        // L4: Late response after timeout — worker completed but caller already rejected
         console.error(
-          "[remendra] late worker response for id",
+          "[remendra] late worker response id",
           message.id,
-          message.error ? `(error: ${message.error})` : "(success)",
+          message.error ? `error: ${message.error}` : "success (data may have been written)",
         );
         return;
       }
@@ -66,16 +66,18 @@ export class MemoryClient {
       const worker = this.start();
       worker.ref();
       const id = ++this.sequence;
-      const timer = setTimeout(
-        () =>
-          this.fail(
-            worker,
-            new Error(
-              `Memory ${method} exceeded ${timeoutMs} ms; worker restarted on next request`,
-            ),
-          ),
-        timeoutMs,
-      );
+      // H4: Per-call timeout rejects only this caller, not the entire worker.
+      // The worker may still be processing (e.g., slow embedding fetch). Killing
+      // it would reject all concurrent requests, including ones that already succeeded.
+      const timer = setTimeout(() => {
+        const item = this.pending.get(id);
+        if (item) {
+          clearTimeout(item.timer);
+          this.pending.delete(id);
+          item.reject(new Error(`Memory ${method} exceeded ${timeoutMs} ms`));
+          if (!this.pending.size) worker.unref();
+        }
+      }, timeoutMs);
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
       try {
         worker.postMessage({ id, method, args });
