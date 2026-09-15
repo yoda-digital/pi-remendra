@@ -826,11 +826,13 @@ export class MemoryStore {
     claim: Claim,
     scope: Scope,
     at = nowISO(),
-    visited = new Set<string>(),
+    visited = new Map<string, boolean>(),
     all = false,
   ): boolean {
+    const pending = visited.get(claim.id);
+    if (pending !== undefined) return pending; // true = already usable; false = in-progress (a real cycle)
+    visited.set(claim.id, false);
     if (
-      visited.has(claim.id) ||
       !this.inScope(claim, scope, all) ||
       claim.hidden ||
       claim.status !== "active"
@@ -843,7 +845,6 @@ export class MemoryStore {
       return false;
     if (claim.environment && claim.environment !== scope.environment) return false;
     if (claim.kind === "procedure" && claim.procedureState !== "promoted") return false;
-    visited.add(claim.id);
     for (const e of claim.evidence)
       if (
         !this.get(
@@ -858,6 +859,7 @@ export class MemoryStore {
       if (!parent || parent.revision !== d.revision || !this.usable(parent, scope, at, visited))
         return false;
     }
+    visited.set(claim.id, true);
     return true;
   }
 
@@ -865,10 +867,12 @@ export class MemoryStore {
     claim: Claim,
     scope: Scope,
     at: string,
-    seen = new Set<string>(),
+    seen = new Map<string, boolean>(),
   ): boolean {
+    const pending = seen.get(claim.id);
+    if (pending !== undefined) return pending; // true = already usable; false = in-progress (a real cycle)
+    seen.set(claim.id, false);
     if (
-      seen.has(claim.id) ||
       !this.inScope(claim, scope) ||
       claim.hidden ||
       claim.status !== "active"
@@ -881,7 +885,6 @@ export class MemoryStore {
       return false;
     if (claim.environment && claim.environment !== scope.environment) return false;
     if (claim.kind === "procedure" && claim.procedureState !== "promoted") return false;
-    seen.add(claim.id);
     for (const e of claim.evidence)
       if (
         !this.get("SELECT 1 FROM sources WHERE key=? AND hash=? AND erased=0", e.sourceKey, e.hash)
@@ -902,6 +905,7 @@ export class MemoryStore {
       )
         return false;
     }
+    seen.set(claim.id, true);
     return true;
   }
 
