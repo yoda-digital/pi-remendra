@@ -97,7 +97,8 @@ function resolveQuote(source: string, quote: string): { offset: number; length: 
   // Small models often get the start right but truncate or paraphrase the end
   const words = quote.split(/\s+/).filter(Boolean);
   if (words.length >= 2) {
-    const srcNorm = source.toLowerCase().replace(/[`'"''""]/g, "'");
+    // M15: Collapse whitespace in srcNorm so multi-space sources match single-space quotes
+    const srcNorm = source.toLowerCase().replace(/[`'"''""]/g, "'").replace(/\s+/g, " ");
     for (let wc = Math.min(words.length, 6); wc >= 2; wc--) {
       const partial = words.slice(0, wc).join(" ");
       const partialNorm = partial.toLowerCase().replace(/[`'"''""]/g, "'");
@@ -129,6 +130,7 @@ export function parseObservations(text: string, job: Job): ClaimInput[] {
       if (
         !jsonObject(raw) ||
         typeof raw.text !== "string" ||
+        !raw.text.trim() || // L17: Reject empty/whitespace-only claims
         !CLAIM_KINDS.includes(raw.kind as ClaimInput["kind"]) ||
         !Array.isArray(raw.evidence) ||
         raw.evidence.length === 0 ||
@@ -186,6 +188,11 @@ export function parseObservations(text: string, job: Job): ClaimInput[] {
             throw new Error(`Invalid observer ${key}`);
           claim[key] = raw[key];
         }
+      // L16: The hash includes evidence offsets, so the same text extracted from different
+      // chunk boundaries produces a different ID. This means re-extraction can create duplicates.
+      // Changing the hash formula would break all existing claim IDs, so this is documented,
+      // not fixed. The store's equivalent() check catches same-ID collisions but not different-ID
+      // duplicates with the same normalized text.
       claim.id = `memory:${hash(JSON.stringify([job.projectId, job.sessionId, kind, normalize(claim.text), evidence])).slice(0, 40)}`;
       return claim;
     })
@@ -202,7 +209,10 @@ export async function abortable<T>(promise: Promise<T>, signal: AbortSignal): Pr
   // Suppress unhandled rejection from the promise that loses the race.
   // When abort wins, `promise` (the LLM call) eventually rejects too but
   // nobody awaits it — without this, the orphaned rejection crashes the process.
-  promise.catch(() => {});
+  // L7: Log the suppressed error so provider issues are visible in diagnostics
+  promise.catch((err) => {
+    console.error("[remendra] suppressed LLM error on abort:", err instanceof Error ? err.message : String(err));
+  });
   let listener: () => void = () => {};
   try {
     return await Promise.race([

@@ -13,7 +13,14 @@ export const terms = (text: string): string[] =>
     ),
   ].slice(0, 32);
 
-/** Conservative estimate, explicitly not a provider tokenizer. Full rendered packets are measured. */
+/**
+ * Conservative estimate, explicitly not a provider tokenizer. Full rendered packets are measured.
+ * M14: Uses UTF-8 byte count but chunk boundaries use UTF-16 code units (string.length).
+ * Non-ASCII text (CJK, Cyrillic) costs 2-3x more UTF-8 bytes per code unit than ASCII,
+ * so chunks of non-ASCII text appear 2-3x more expensive than they actually are for most
+ * LLM tokenizers. This is a known over-estimation that wastes API calls on non-ASCII
+ * projects. See work_docs/plan-00-overview.md for the token rework roadmap.
+ */
 export const estimateTokens = (text: string): number =>
   Math.ceil(Buffer.byteLength(text, "utf8") / 3);
 export const COUNTER = "utf8-bytes/3-estimate";
