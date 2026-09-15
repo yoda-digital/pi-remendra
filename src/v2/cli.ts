@@ -91,7 +91,8 @@ export function main(argv: string[]): void {
       (typeof result === "string" ? result : JSON.stringify(result, null, 2)) + "\n",
     );
   } finally {
-    service.close();
+    // L10: Nested try/catch so close() error doesn't mask the original error
+    try { service.close(); } catch { /* close failure is secondary */ }
   }
 }
 

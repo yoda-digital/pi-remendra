@@ -79,13 +79,6 @@ export function sourceInputs(
   return inputs;
 }
 
-/** Hash only source-bearing data; metadata edits do not trigger a full re-ingestion. */
-export function sourceFingerprint(source: SourceInput): string {
-  return JSON.stringify([
-    source.text,
-    source.timestamp,
-    source.tool,
-    source.target,
-    source.isError,
-  ]);
-}
+// L18: sourceFingerprint was dead code (exported but never imported).
+// The store's ingest() computes its own digest inline with a different formula
+// (includes role, uses redacted text). Removed to avoid confusion.
