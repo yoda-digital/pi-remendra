@@ -1,6 +1,6 @@
 # Remendra
 
-Persistent memory for [Pi](https://github.com/AerinWorks/pi). Stores what you tell it, learns from your sessions, and puts the right memories back in context when you need them.
+Persistent memory for [Pi](https://github.com/AerinWorks/pi). Learns from your sessions, corrects itself when wrong, and gets smarter over time.
 
 **v2.0.0** · Pi 0.85.1 · Node ≥22
 
@@ -16,7 +16,7 @@ If a memory is wrong, you correct it. Everything that depended on the wrong memo
 pi install git:github.com/yoda-digital/pi-remendra
 ```
 
-Then `/reload`, `/remendra doctor`, `/remendra help`.
+Then `/reload`. Remendra shows setup guidance on first run automatically.
 
 Development checkout:
 
@@ -138,7 +138,7 @@ There are 50+ memory extensions for Pi. Here is an honest comparison with the mo
 
 Linux, Windows, macOS · Node 22+ (Node 24 uses built-in SQLite; Node 22 uses `better-sqlite3`) · Pi 0.85.1. CI runs the full test suite on all three platforms.
 
-124 tests across 10 files: store operations, compilation, observer parsing, worker lifecycle, embeddings, cross-platform paths, concurrent SQLite access, sustained growth (2000+ claims), and token estimation accuracy.
+128 tests across 10 files: store operations, compilation, observer parsing, worker lifecycle, embeddings, cross-platform paths, concurrent SQLite access, sustained growth (2000+ claims), token estimation accuracy, and secret redaction patterns.
 
 The [validation document](docs/validation.md) is the honest accounting of what has been tested and what has not.
 
