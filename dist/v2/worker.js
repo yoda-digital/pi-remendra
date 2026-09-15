@@ -8,11 +8,22 @@ import { createRequire } from 'module';
 var require2 = createRequire(import.meta.url);
 function openDatabase(file) {
   if ("Bun" in globalThis) {
-    const sqlite2 = require2("bun:sqlite");
-    return new sqlite2.Database(file);
+    const sqlite = require2("bun:sqlite");
+    return new sqlite.Database(file);
   }
-  const sqlite = require2("node:sqlite");
-  return new sqlite.DatabaseSync(file, { timeout: 3e3 });
+  try {
+    const sqlite = require2("node:sqlite");
+    return new sqlite.DatabaseSync(file, { timeout: 3e3 });
+  } catch {
+  }
+  try {
+    const BetterSqlite3 = require2("better-sqlite3");
+    return new BetterSqlite3(file, { timeout: 3e3 });
+  } catch {
+    throw new Error(
+      "Remendra requires SQLite. On Node 24+ it works out of the box. On Node 22, install better-sqlite3: pnpm add better-sqlite3"
+    );
+  }
 }
 
 // src/v2/types.ts
@@ -47,7 +58,7 @@ function redact(text, patterns = []) {
   let out = text.replace(
     /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,
     "[REDACTED]"
-  ).replace(
+  ).replace(/\b(?:AKIA[A-Z0-9]{12,})\b/g, "[REDACTED]").replace(/\b(?:sk_(?:live|test)_[A-Za-z0-9]{20,}|rk_(?:live|test)_[A-Za-z0-9]{20,}|pk_(?:live|test)_[A-Za-z0-9]{20,})\b/g, "[REDACTED]").replace(/\b(?:xox[bpsa]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,})\b/g, "[REDACTED]").replace(/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss):\/\/[^\s"',;}{)]+/gi, "[REDACTED_URI]").replace(
     /((?:authorization\s*[:=]\s*(?:bearer\s+)?|(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*)["']?)[^\s"',;}{]+/gi,
     "$1[REDACTED]"
   ).replace(

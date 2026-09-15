@@ -2,13 +2,13 @@
 
 Persistent memory for [Pi](https://github.com/AerinWorks/pi). Stores what you tell it, learns from your sessions, and puts the right memories back in context when you need them.
 
-**v2.0.0-alpha.2** · Pi 0.85.1 · Node 24
+**v2.0.0** · Pi 0.85.1 · Node ≥22
 
 ## What it does
 
-Remendra watches your Pi sessions, extracts structured memories (facts, decisions, constraints, procedures), and stores them in SQLite with full-text search. When Pi assembles context for the next turn, Remendra injects the memories that match your current query, ranked by relevance and claim type. Memories survive across sessions, branches, and compactions.
+Remendra learns automatically from your Pi sessions — no commands needed. It extracts facts, decisions, constraints, and procedures, then puts the right memories back in context when you need them. Memories survive across sessions, branches, and compactions.
 
-If a memory is wrong, you correct it. The old version is retired, its dependents are invalidated transitively, and the replacement inherits the evidence chain. This happens in one transaction.
+If a memory is wrong, you correct it. Everything that depended on the wrong memory gets fixed too — automatically, in one transaction. No stale knowledge accumulating silently.
 
 ## Install
 
@@ -28,20 +28,23 @@ pi install /absolute/path/to/pi-remendra
 
 ## Usage
 
+Remendra works automatically — it learns from every session with no intervention. You can also interact with it directly:
+
 ```
-/remendra remember {"kind":"constraint","text":"Always back up before migrating production."}
-/remendra search migration
-/remendra why MEMORY_ID
-/remendra correct MEMORY_ID {"text":"Create and verify a backup before every production migration."}
-/remendra pin MEMORY_ID
-/remendra promote MEMORY_ID project
+/remendra search migration                 # find what it knows
+/remendra remember Always back up first    # teach it something
+/remendra correct 42 Back up AND verify    # fix a wrong memory
+/remendra why 42                           # see where a memory came from
+/remendra doctor                           # health check
+/remendra settings                         # view configuration
 ```
 
-Commands: `search`, `history`, `why`, `remember`, `correct`, `pin`, `unpin`, `hide`, `show`, `retract`, `forget`, `erase`, `accept`, `promote`, `trial`, `learn`, `embed`, `semantic`, `gaps`, `budget`, `packet`, `checkpoint`, `doctor`, `settings`, `export`, `backup`, `import`, `migrate`, `link-project`, `index-sessions`.
+For typed claims, pass JSON: `/remendra remember {"kind":"constraint","text":"Always back up before migrating production."}`.
 
-The `recall` tool is available to the agent automatically. Modes: `memory`, `history`, `source`, `regex`, `file`, `touched`.
+The `recall` tool is available to the agent automatically. Use `/remendra help all` for the full command reference.
 
-## How it works
+<details>
+<summary><strong>How it works</strong></summary>
 
 The extension hooks into Pi's lifecycle:
 
@@ -53,6 +56,7 @@ The extension hooks into Pi's lifecycle:
 Memories you create with `/remendra remember` are project-scoped by default. Observer-extracted claims start at lineage scope (current session branch) and are auto-promoted to project scope at session end if they are verified and non-hypothetical. Accepting, pinning, or correcting a lineage claim also promotes it immediately. You can still promote or scope memories manually with `/remendra promote ID project`. User-scoped memories persist across projects when `includeUser` is enabled.
 
 Auto-promotion is configurable: `autoPromote: "full"` (default), `"user-actions"` (only on accept/pin/correct), or `"off"` (old behavior).
+</details>
 
 ## Configuration
 
@@ -132,7 +136,7 @@ There are 50+ memory extensions for Pi. Here is an honest comparison with the mo
 
 ## Tested on
 
-Linux, Windows, macOS · Node 24 · Pi 0.85.1. CI runs the full test suite on all three platforms.
+Linux, Windows, macOS · Node 22+ (Node 24 uses built-in SQLite; Node 22 uses `better-sqlite3`) · Pi 0.85.1. CI runs the full test suite on all three platforms.
 
 124 tests across 10 files: store operations, compilation, observer parsing, worker lifecycle, embeddings, cross-platform paths, concurrent SQLite access, sustained growth (2000+ claims), and token estimation accuracy.
 

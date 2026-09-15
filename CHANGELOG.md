@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.0.0] - 2026-09-15
+
+### Changed
+
+- **Stable release.** Dropped alpha label after 124 tests, 3-platform CI, and 47-bug audit.
+- **Help tier split.** `/remendra help` shows 6 essential commands. `/remendra help all` shows the full 30+ command reference. Reduces first-impression complexity.
+- **README rewritten for users.** Usage section leads with plain-text examples. Automatic learning foregrounded. "How it works" collapsed into expandable section.
+- **Node 22 support.** Lowered minimum from Node 24 to Node 22. Node 24 uses built-in `node:sqlite` (zero dependencies). Node 22 uses `better-sqlite3` (optional peer dependency) as fallback.
+- **Package description** updated to be user-facing instead of technical.
+- **Keywords** expanded: added `pi-package` (pi.dev catalog discovery), `persistent`, `context`, `knowledge`, `long-term`, `learning`.
+
+### Added
+
+- **First-run onboarding.** On first session, shows quick-start commands, observer model guidance, and daily token cost estimate. On subsequent sessions, shows brief memory stats in the status bar.
+- **Expanded secret scanning.** `redact()` now catches AWS access keys (`AKIA*`), Stripe keys (`sk_live_`, `sk_test_`, `rk_live_`, `rk_test_`, `pk_live_`, `pk_test_`), Slack tokens (`xoxb-`, `xoxp-`, `xoxs-`, `xapp-`), and database connection URIs (`postgres://`, `mysql://`, `mongodb://`, `redis://`).
+
 ## [2.0.0-alpha.2] - 2026-09-15
 
 ### Fixed

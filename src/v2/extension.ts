@@ -1,5 +1,5 @@
 import { realpath } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
@@ -18,7 +18,17 @@ import { sourceInputs, messageText } from "./sources.js";
 import { hash, jsonObject, redact } from "./text.js";
 import type { ClaimInput, MemoryConfig, Packet, Scope } from "./types.js";
 
-const HELP = `Remendra v2 — durable memory with source evidence
+const HELP_SHORT = `Remendra — persistent memory for Pi
+/remendra                         status and daily budget
+/remendra search <words>          find memories
+/remendra remember <text or JSON> teach it something
+/remendra correct <id> <text>     fix a wrong memory
+/remendra why <id>                see where a memory came from
+/remendra doctor                  health check
+/remendra settings [JSON]         view or merge configuration
+Use /remendra help all for the full command reference.`;
+
+const HELP_FULL = `Remendra — persistent memory for Pi (full reference)
 /remendra                         status and daily budget
 /remendra search <words>          current memories
 /remendra history <words>         include retired and disputed memories
@@ -362,6 +372,36 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     try {
       await refresh(ctx);
       if (config.enabled && !passive) await compile(ctx);
+
+      // First-run onboarding or returning-session stats
+      const markerFile = join(directory, ".first-run-done");
+      if (!existsSync(markerFile)) {
+        mkdirSync(directory, { recursive: true, mode: 0o700 });
+        const observerNote = config.useSessionModel
+          ? "Background learning uses your session model."
+          : "Set a model in settings for background learning, or enable useSessionModel.";
+        show(
+          ctx,
+          `🧠 Remendra is active. It learns automatically from your sessions.\n` +
+            `   ${observerNote}\n` +
+            `   Daily token budget: ${config.dailyTokenBudget.toLocaleString()} tokens (~$${(config.dailyTokenBudget * 0.000003).toFixed(2)}/day at typical rates).\n` +
+            `   /remendra search <words>  — find memories\n` +
+            `   /remendra remember <text> — teach it something\n` +
+            `   /remendra help            — all commands`,
+        );
+        try {
+          writeFileSync(markerFile, new Date().toISOString(), { mode: 0o600 });
+        } catch { /* non-fatal — onboarding repeats next time */ }
+      } else if (client && scope) {
+        // Returning session: show brief stats
+        try {
+          const st = await client.call("status", [scope]);
+          const total = Object.values(st.claims).reduce((a: number, b: number) => a + b, 0);
+          if (total > 0) {
+            status(ctx, `● ${total} memories · ${st.sources} sources`);
+          }
+        } catch { /* non-fatal — stats are informational */ }
+      }
     } catch (error) {
       report(ctx, error);
     }
@@ -589,7 +629,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       const rest = words.join(" ");
       if (!verb || verb === "status" || verb === "budget")
         show(ctx, await mem.call("status", [current]));
-      else if (verb === "help") show(ctx, HELP);
+      else if (verb === "help") show(ctx, rest === "all" ? HELP_FULL : HELP_SHORT);
       else if (verb === "doctor")
         show(ctx, {
           ...(await mem.call("doctor", [])),
@@ -737,7 +777,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         projectId = await mem.call("project", [await realpath(ctx.cwd), rest]);
         seen = new Set();
         show(ctx, `Project linked to ${projectId}`);
-      } else show(ctx, HELP);
+      } else show(ctx, HELP_SHORT);
     } catch (error) {
       show(ctx, `Remendra: ${error instanceof Error ? error.message : String(error)}`);
     }

@@ -90,6 +90,32 @@ describe("redact", () => {
     expect(redact(text, ["MY_SECRET_VALUE"])).not.toContain("MY_SECRET_VALUE");
   });
 
+  it("redacts AWS access keys", () => {
+    const text = "aws_key: AKIAIOSFODNN7EXAMPLE";
+    expect(redact(text)).toContain("[REDACTED]");
+    expect(redact(text)).not.toContain("AKIAIOSFODNN7EXAMPLE");
+  });
+
+  it("redacts Stripe secret keys", () => {
+    expect(redact("sk_live_51OcZLDCMDi12345abcdef")).toContain("[REDACTED]");
+    expect(redact("sk_test_51OcZLDCMDi12345abcdef")).toContain("[REDACTED]");
+    expect(redact("rk_live_51OcZLDCMDi12345abcdef")).toContain("[REDACTED]");
+    expect(redact("pk_live_51OcZLDCMDi12345abcdef")).toContain("[REDACTED]");
+  });
+
+  it("redacts Slack tokens", () => {
+    expect(redact("xoxb-1234-5678-abcdefgh")).toContain("[REDACTED]");
+    expect(redact("xoxp-1234-5678-abcdefgh")).toContain("[REDACTED]");
+    expect(redact("xapp-1234-5678-abcdefgh")).toContain("[REDACTED]");
+  });
+
+  it("redacts database connection URIs", () => {
+    expect(redact("postgres://user:pass@host:5432/db")).toContain("[REDACTED_URI]");
+    expect(redact("mongodb+srv://user:pass@cluster.example.com/db")).toContain("[REDACTED_URI]");
+    expect(redact("redis://default:secret@redis.example.com:6379")).toContain("[REDACTED_URI]");
+    expect(redact("mysql://root:password@localhost/mydb")).toContain("[REDACTED_URI]");
+  });
+
   it("strips ANSI escape sequences", () => {
     const text = "\x1b[31mred text\x1b[0m";
     expect(redact(text)).toBe("red text");

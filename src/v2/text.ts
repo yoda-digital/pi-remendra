@@ -40,14 +40,25 @@ export function clipTokens(text: string, budget: number): string {
 
 export function redact(text: string, patterns: readonly string[] = []): string {
   let out = text
+    // OpenAI keys, GitHub tokens
     .replace(
       /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,
       "[REDACTED]",
     )
+    // AWS access keys (always start with AKIA)
+    .replace(/\b(?:AKIA[A-Z0-9]{12,})\b/g, "[REDACTED]")
+    // Stripe keys (secret, restricted, publishable — live and test)
+    .replace(/\b(?:sk_(?:live|test)_[A-Za-z0-9]{20,}|rk_(?:live|test)_[A-Za-z0-9]{20,}|pk_(?:live|test)_[A-Za-z0-9]{20,})\b/g, "[REDACTED]")
+    // Slack tokens and app tokens
+    .replace(/\b(?:xox[bpsa]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,})\b/g, "[REDACTED]")
+    // Database connection URIs (postgres, mysql, mongodb, redis)
+    .replace(/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss):\/\/[^\s"',;}{)]+/gi, "[REDACTED_URI]")
+    // Auth headers, API keys, passwords, secrets, tokens
     .replace(
       /((?:authorization\s*[:=]\s*(?:bearer\s+)?|(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*)["']?)[^\s"',;}{]+/gi,
       "$1[REDACTED]",
     )
+    // PEM private keys
     .replace(
       /-----BEGIN (?:[A-Z ]+)?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+)?PRIVATE KEY-----/g,
       "[REDACTED PRIVATE KEY]",

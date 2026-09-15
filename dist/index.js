@@ -1,5 +1,5 @@
 import { realpath } from 'fs/promises';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve, join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Type } from 'typebox';
@@ -122,7 +122,7 @@ function redact(text, patterns = []) {
   let out = text.replace(
     /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,
     "[REDACTED]"
-  ).replace(
+  ).replace(/\b(?:AKIA[A-Z0-9]{12,})\b/g, "[REDACTED]").replace(/\b(?:sk_(?:live|test)_[A-Za-z0-9]{20,}|rk_(?:live|test)_[A-Za-z0-9]{20,}|pk_(?:live|test)_[A-Za-z0-9]{20,})\b/g, "[REDACTED]").replace(/\b(?:xox[bpsa]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,})\b/g, "[REDACTED]").replace(/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss):\/\/[^\s"',;}{)]+/gi, "[REDACTED_URI]").replace(
     /((?:authorization\s*[:=]\s*(?:bearer\s+)?|(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*)["']?)[^\s"',;}{]+/gi,
     "$1[REDACTED]"
   ).replace(
@@ -521,7 +521,16 @@ function sourceInputs(entries, excludedPaths = []) {
 }
 
 // src/v2/extension.ts
-var HELP = `Remendra v2 \u2014 durable memory with source evidence
+var HELP_SHORT = `Remendra \u2014 persistent memory for Pi
+/remendra                         status and daily budget
+/remendra search <words>          find memories
+/remendra remember <text or JSON> teach it something
+/remendra correct <id> <text>     fix a wrong memory
+/remendra why <id>                see where a memory came from
+/remendra doctor                  health check
+/remendra settings [JSON]         view or merge configuration
+Use /remendra help all for the full command reference.`;
+var HELP_FULL = `Remendra \u2014 persistent memory for Pi (full reference)
 /remendra                         status and daily budget
 /remendra search <words>          current memories
 /remendra history <words>         include retired and disputed memories
@@ -816,6 +825,33 @@ function installV2(pi, providedClient) {
     try {
       await refresh(ctx);
       if (config.enabled && !passive) await compile(ctx);
+      const markerFile = join(directory, ".first-run-done");
+      if (!existsSync(markerFile)) {
+        mkdirSync(directory, { recursive: true, mode: 448 });
+        const observerNote = config.useSessionModel ? "Background learning uses your session model." : "Set a model in settings for background learning, or enable useSessionModel.";
+        show(
+          ctx,
+          `\u{1F9E0} Remendra is active. It learns automatically from your sessions.
+   ${observerNote}
+   Daily token budget: ${config.dailyTokenBudget.toLocaleString()} tokens (~$${(config.dailyTokenBudget * 3e-6).toFixed(2)}/day at typical rates).
+   /remendra search <words>  \u2014 find memories
+   /remendra remember <text> \u2014 teach it something
+   /remendra help            \u2014 all commands`
+        );
+        try {
+          writeFileSync(markerFile, (/* @__PURE__ */ new Date()).toISOString(), { mode: 384 });
+        } catch {
+        }
+      } else if (client && scope) {
+        try {
+          const st = await client.call("status", [scope]);
+          const total = Object.values(st.claims).reduce((a, b) => a + b, 0);
+          if (total > 0) {
+            status(ctx, `\u25CF ${total} memories \xB7 ${st.sources} sources`);
+          }
+        } catch {
+        }
+      }
     } catch (error) {
       report(ctx, error);
     }
@@ -1013,7 +1049,7 @@ function installV2(pi, providedClient) {
       const rest = words.join(" ");
       if (!verb || verb === "status" || verb === "budget")
         show(ctx, await mem.call("status", [current]));
-      else if (verb === "help") show(ctx, HELP);
+      else if (verb === "help") show(ctx, rest === "all" ? HELP_FULL : HELP_SHORT);
       else if (verb === "doctor")
         show(ctx, {
           ...await mem.call("doctor", []),
@@ -1150,7 +1186,7 @@ function installV2(pi, providedClient) {
         projectId = await mem.call("project", [await realpath(ctx.cwd), rest]);
         seen = /* @__PURE__ */ new Set();
         show(ctx, `Project linked to ${projectId}`);
-      } else show(ctx, HELP);
+      } else show(ctx, HELP_SHORT);
     } catch (error) {
       show(ctx, `Remendra: ${error instanceof Error ? error.message : String(error)}`);
     }
