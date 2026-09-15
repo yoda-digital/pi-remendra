@@ -67,9 +67,10 @@ export function validateConfig(raw: unknown): MemoryConfig {
     config.jobTimeoutMs < 1000 ||
     config.jobTimeoutMs > 120000 ||
     config.maxAttempts < 1 ||
-    config.maxAttempts > 5
+    config.maxAttempts > 5 ||
+    config.dailyTokenBudget < 1000
   )
-    throw new Error("Memory limits are outside supported bounds");
+    throw new Error("Memory limits are outside supported bounds (dailyTokenBudget minimum 1000)");
   if (raw.mode !== undefined) {
     if (!["active", "shadow", "recall"].includes(String(raw.mode)))
       throw new Error("mode must be active, shadow, or recall");

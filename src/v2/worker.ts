@@ -12,6 +12,9 @@ async function dispatch(request: { id: number; method: string; args: unknown[] }
       !Array.isArray(request.args)
     )
       throw new Error("Unknown memory operation");
+    // C4: Validate actor at RPC boundary — reject "system" from external callers
+    if (request.method === "record" && request.args[2] === "system")
+      throw new Error("Actor 'system' is not allowed via RPC");
     const method = service[request.method as keyof MemoryService] as (
       ...args: unknown[]
     ) => unknown;
@@ -45,8 +48,12 @@ port.on("message", (request: { id: number; method: string; args: unknown[] }) =>
           id: request.id,
           error: `Worker dispatch failed: ${error instanceof Error ? error.message : String(error)}`,
         });
-      } catch {
-        /* port is dead; client timeout will recover */
+      } catch (portError) {
+        // L6: Log port-death error instead of swallowing silently
+        console.error(
+          "[remendra] worker port dead:",
+          portError instanceof Error ? portError.message : String(portError),
+        );
       }
     });
 });

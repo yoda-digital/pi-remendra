@@ -31,11 +31,18 @@ import {
   terms,
 } from "./text.js";
 
+/** C5: Parse with structural validation — throws meaningful error on corrupt or missing data. */
 const parse = <T>(row: Record<string, unknown> | undefined, key = "data"): T | undefined => {
   if (!row) return undefined;
   try {
-    return JSON.parse(String(row[key])) as T;
+    const result = JSON.parse(String(row[key])) as T;
+    if (result === null || typeof result !== "object") {
+      const id = String(row.id ?? row.key ?? "(unknown)");
+      throw new Error(`Expected object in ${key} of record ${id}, got ${typeof result}`);
+    }
+    return result;
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Expected object")) throw error;
     const id = String(row.id ?? row.key ?? "(unknown)");
     throw new Error(
       `Corrupted ${key} in record ${id}: ${error instanceof Error ? error.message : String(error)}`,
@@ -1551,7 +1558,15 @@ export class MemoryStore {
       for (const row of rows) {
         if (!jsonObject(row) || row.type !== "claim" || !jsonObject(row.data)) continue;
         const c = row.data as unknown as Claim;
-        if (!Array.isArray(c.evidence)) throw new Error("Malformed imported claim");
+        // H7: Validate imported claim has required fields
+        if (
+          !c ||
+          typeof c.id !== "string" ||
+          typeof c.text !== "string" ||
+          typeof c.kind !== "string" ||
+          !Array.isArray(c.evidence)
+        )
+          throw new Error("Malformed imported claim: missing id, text, kind, or evidence");
         if (
           this.get("SELECT 1 FROM erased_claims WHERE id=?", c.id) ||
           c.evidence.some((e) => erasedRefs.has(e.sourceKey))
