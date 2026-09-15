@@ -38,6 +38,7 @@ const HELP = `Remendra v2 — durable memory with source evidence
 /remendra export|backup <path>    create a new file; never overwrite
 /remendra import <path>           v2 JSONL, imported as candidates
 /remendra migrate [path]          import v1 records as candidates
+/remendra index-sessions [dir]     index past Pi sessions for search
 /remendra link-project <id>       explicitly link a moved project directory
 /remendra-recall <query>          memory search, ID, #N or #N:path
 Modes in settings: active, shadow (compile without injecting), recall (no background learning).
@@ -406,6 +407,27 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     if (passive || !config.enabled || config.mode === "recall") return { messages: clean };
     try {
       const epoch = generation;
+
+      // Policy mode: inject a cache-stable policy statement instead of the full packet.
+      // The fixed string never changes between turns, preserving the KV cache prefix
+      // on local runtimes (llama.cpp, vLLM, MLX). The agent uses the recall tool on demand.
+      if (config.contextMode === "policy") {
+        const policyText =
+          "Remendra memory is active. Use the recall tool or /remendra search to access stored memories, corrections, and evidence. Do not assume memory is empty — search before concluding something is unknown.";
+        return {
+          messages: [
+            {
+              role: "custom" as const,
+              customType: PACKET_TYPE,
+              content: policyText,
+              display: false,
+              timestamp: Date.now(),
+            },
+            ...clean,
+          ],
+        };
+      }
+
       const current = await compile(ctx);
       if (
         epoch !== generation ||
@@ -704,6 +726,10 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         else if (verb === "migrate")
           show(ctx, await mem.call("importLegacyEntries", [current, branch(ctx)], 30000));
         else throw new Error("Provide the JSONL export path");
+      } else if (verb === "index-sessions") {
+        const dir = rest ? resolve(ctx.cwd, rest) : join(getAgentDir(), "sessions");
+        status(ctx, `◌ indexing sessions from ${dir}`);
+        show(ctx, await mem.call("indexSessions", [current, dir], 60000));
       } else if (verb === "link-project") {
         if (!rest)
           throw new Error("Provide the existing project ID from /remendra doctor or status");

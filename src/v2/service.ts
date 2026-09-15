@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { MemoryStore } from "./store.js";
 import { compilePacket, compileCheckpoint } from "./compiler.js";
 import { loadConfig, saveConfig } from "./config.js";
@@ -173,6 +174,102 @@ export class MemoryService {
   sweepForPromotion(scope: Scope, minSettledTurns: number) {
     return this.store.sweepForPromotion(scope, minSettledTurns);
   }
+  indexSessions(scope: Scope, directory: string): { files: number; sources: number; skipped: number } {
+    let files = 0,
+      sources = 0,
+      skipped = 0;
+    const scanDir = (dir: string) => {
+      let entries: string[];
+      try {
+        entries = readdirSync(dir);
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const full = join(dir, entry);
+        try {
+          const stat = statSync(full);
+          if (stat.isDirectory()) {
+            scanDir(full);
+            continue;
+          }
+          if (!entry.endsWith(".jsonl") || stat.size > 64 * 1024 * 1024) {
+            skipped++;
+            continue;
+          }
+        } catch {
+          skipped++;
+          continue;
+        }
+        try {
+          const content = readFileSync(full, "utf8");
+          const lines = content.split("\n").filter(Boolean);
+          const sessionSources: SourceInput[] = [];
+          for (const line of lines) {
+            try {
+              const parsed: unknown = JSON.parse(line);
+              if (typeof parsed !== "object" || parsed === null) continue;
+              const rec = parsed as Record<string, unknown>;
+              if (!rec.type || !rec.id) continue;
+              let text = "";
+              let role: SourceInput["role"] = "user";
+              const msg = rec.message as Record<string, unknown> | undefined;
+              if (rec.type === "user" && msg?.content) {
+                text =
+                  typeof msg.content === "string"
+                    ? msg.content
+                    : Array.isArray(msg.content)
+                      ? (msg.content as Array<Record<string, unknown>>)
+                          .filter((b) => b.type === "text")
+                          .map((b) => String(b.text ?? ""))
+                          .join("\n")
+                      : "";
+                role = "user";
+              } else if (rec.type === "assistant" && msg?.content) {
+                text = Array.isArray(msg.content)
+                  ? (msg.content as Array<Record<string, unknown>>)
+                      .filter((b) => b.type === "text")
+                      .map((b) => String(b.text ?? ""))
+                      .join("\n")
+                  : String(msg.content);
+                role = "assistant";
+              } else if (rec.type === "tool_result") {
+                text =
+                  typeof rec.content === "string"
+                    ? rec.content
+                    : JSON.stringify(rec.content ?? "");
+                role = "toolResult";
+              } else continue;
+              if (!text.trim() || text.length < 10) continue;
+              sessionSources.push({
+                entryId: String(rec.id),
+                role,
+                text: text.slice(0, 50000),
+                timestamp:
+                  typeof rec.timestamp === "string" ? rec.timestamp : new Date().toISOString(),
+              });
+            } catch {
+              /* skip malformed lines */
+            }
+          }
+          if (sessionSources.length) {
+            const result = this.store.ingest(
+              scope,
+              sessionSources,
+              this.config.redactionPatterns,
+              this.config.excludedPaths,
+            );
+            sources += result.keys.filter(Boolean).length;
+            files++;
+          }
+        } catch {
+          skipped++;
+        }
+      }
+    };
+    scanDir(directory);
+    return { files, sources, skipped };
+  }
   close() {
     this.store.close();
   }
@@ -205,6 +302,7 @@ export const RPC_METHODS = [
   "importLegacyEntries",
   "embed",
   "sweepForPromotion",
+  "indexSessions",
   "close",
 ] as const;
 export type Method = (typeof RPC_METHODS)[number];

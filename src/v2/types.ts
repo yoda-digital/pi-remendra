@@ -1,5 +1,5 @@
 /** Versioned, serializable contracts shared by the host and storage worker. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const CLAIM_KINDS = [
   "fact",
   "decision",
@@ -178,6 +178,7 @@ export interface MemoryConfig {
   redactionPatterns: string[];
   recallTokens: number;
   autoPromote: "off" | "user-actions" | "full";
+  contextMode: "packet" | "policy";
   embeddings?: { endpoint: string; model: string; apiKeyEnv?: string; dimensions?: number };
 }
 

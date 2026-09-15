@@ -37,7 +37,7 @@ pi install /absolute/path/to/pi-remendra
 /remendra promote MEMORY_ID project
 ```
 
-Commands: `search`, `history`, `why`, `remember`, `correct`, `pin`, `unpin`, `hide`, `show`, `retract`, `forget`, `erase`, `accept`, `promote`, `trial`, `learn`, `embed`, `semantic`, `gaps`, `budget`, `packet`, `checkpoint`, `doctor`, `settings`, `export`, `backup`, `import`, `migrate`, `link-project`.
+Commands: `search`, `history`, `why`, `remember`, `correct`, `pin`, `unpin`, `hide`, `show`, `retract`, `forget`, `erase`, `accept`, `promote`, `trial`, `learn`, `embed`, `semantic`, `gaps`, `budget`, `packet`, `checkpoint`, `doctor`, `settings`, `export`, `backup`, `import`, `migrate`, `link-project`, `index-sessions`.
 
 The `recall` tool is available to the agent automatically. Modes: `memory`, `history`, `source`, `regex`, `file`, `touched`.
 
@@ -63,6 +63,8 @@ Default storage: `~/.pi/agent/pi-remendra/v2/`. Override with `PI_REMENDRA_HOME`
 /remendra settings {"observer":false}           # pause background learning
 /remendra settings {"mode":"shadow"}            # compile without injecting
 /remendra settings {"mode":"recall"}            # disable learning entirely
+/remendra settings {"contextMode":"policy"}     # cache-stable injection (KV-friendly)
+/remendra index-sessions                        # index all past Pi sessions for search
 ```
 
 Full default config: [example-config.json](example-config.json).
@@ -98,6 +100,36 @@ node benchmarks/suite.mjs    # smoke test suite
 
 These are synthetic tests. Real performance depends on corpus size, query complexity, and provider latency. See [docs/benchmark-results.md](docs/benchmark-results.md) for methodology and limitations.
 
+## How Remendra compares
+
+There are 50+ memory extensions for Pi. Here is an honest comparison with the most popular ones.
+
+| Feature | Remendra | pi-memory | pi-hermes-memory | pi-memory-mem0 |
+|---------|----------|-----------|-----------------|---------------|
+| Monthly installs | git-only | 39K | 28K | 32K |
+| Storage | SQLite + FTS5 | Markdown files | Markdown + SQLite | Mem0 backend |
+| Search | FTS5 trigram + optional embeddings | qmd keyword/semantic/hybrid | FTS5 trigram + session search | Mem0 semantic |
+| Background learning | Observer extracts typed claims | Exit summaries | Background review every 10 turns | Passive every-turn capture |
+| Corrections | Transactional: supersede + invalidate dependents recursively | Overwrite | Category-based | Overwrite |
+| Evidence provenance | Exact character spans into source text | None | None | None |
+| Typed claims | 7 types with ranking weights | None | 6 categories | None |
+| Procedure validation | 2-trial per-environment verification | None | SKILL.md export | None |
+| Conflict detection | Subject/predicate dispute flagging | None | None | None |
+| Revision history | Full audit trail | None | None | None |
+| Session history search | `/remendra index-sessions` | No | Yes | No |
+| KV cache stability | Policy-only mode option | Snapshot mechanism | Policy-only mode | N/A |
+| CJK search | FTS5 trigram (3+ chars) | Via qmd | FTS5 trigram | Semantic |
+| Privacy | Fully local, nothing leaves disk | Fully local | Fully local | Cloud by default |
+| Complexity | 4,500 lines, 17 modules | 600 lines, 1 file | Large, multi-file | Backend-dependent |
+
+**Where Remendra is stronger:** correction propagation with dependency invalidation, evidence provenance with exact source spans, typed claims with ranking, procedure trial validation, conflict detection, revision audit trail, privacy.
+
+**Where others are stronger:** pi-memory is simpler and human-editable (plain markdown). pi-hermes-memory has secret scanning and skill export. pi-memory-mem0 has zero-effort semantic capture with no configuration.
+
+**Pick Remendra when** you manage long-lived projects across many sessions and care about correction integrity — when you fix a wrong memory, everything that depended on it gets invalidated automatically. You want full provenance: every memory traces back to exact character offsets in the original conversation.
+
+**Pick something else when** you want the simplest possible setup (pi-memory), cloud-backed semantic search (pi-memory-mem0), or bulk session indexing with native skill export (pi-hermes-memory).
+
 ## Tested on
 
 Linux, Windows, macOS · Node 24 · Pi 0.85.1. CI runs the full test suite on all three platforms.
@@ -106,7 +138,7 @@ Linux, Windows, macOS · Node 24 · Pi 0.85.1. CI runs the full test suite on al
 
 The [validation document](docs/validation.md) is the honest accounting of what has been tested and what has not.
 
-**Remaining gaps:** Live-provider extraction quality and multi-day retention have not been soak-tested with real providers. FTS5's `unicode61` tokenizer has limited CJK word segmentation — semantic search or exact ID recall works, but lexical substring search for CJK may miss results.
+**Remaining gaps:** live-provider extraction quality and multi-day retention have not been soak-tested with real providers.
 
 ## Development
 

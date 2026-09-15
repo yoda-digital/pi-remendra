@@ -23,6 +23,7 @@ export const DEFAULT_CONFIG: MemoryConfig = {
   redactionPatterns: [],
   recallTokens: 6000,
   autoPromote: "full",
+  contextMode: "packet",
 };
 
 export function validateConfig(raw: unknown): MemoryConfig {
@@ -81,6 +82,11 @@ export function validateConfig(raw: unknown): MemoryConfig {
     if (!["off", "user-actions", "full"].includes(String(raw.autoPromote)))
       throw new Error("autoPromote must be off, user-actions, or full");
     config.autoPromote = raw.autoPromote as MemoryConfig["autoPromote"];
+  }
+  if (raw.contextMode !== undefined) {
+    if (!["packet", "policy"].includes(String(raw.contextMode)))
+      throw new Error("contextMode must be packet or policy");
+    config.contextMode = raw.contextMode as MemoryConfig["contextMode"];
   }
   for (const key of ["excludedPaths", "redactionPatterns"] as const) {
     if (raw[key] !== undefined) {

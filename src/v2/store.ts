@@ -70,11 +70,23 @@ export class MemoryStore {
           `Memory schema ${version} is newer than supported ${SCHEMA_VERSION}; upgrade pi-remendra`,
         );
       }
-      // Future: add incremental migrations here (e.g., version 2→3)
-      this.db.close();
-      throw new Error(
-        `Memory schema ${version} requires migration to ${SCHEMA_VERSION}; no migration path available yet`,
-      );
+      if (version === 2) {
+        // v2→v3: Migrate FTS5 from unicode61 to trigram tokenizer for CJK support
+        this.db.exec(`
+          DROP TRIGGER IF EXISTS source_ai;
+          DROP TRIGGER IF EXISTS source_au;
+          DROP TRIGGER IF EXISTS claim_ai;
+          DROP TRIGGER IF EXISTS claim_au;
+          DROP TRIGGER IF EXISTS claim_ad;
+          DROP TABLE IF EXISTS source_fts;
+          DROP TABLE IF EXISTS claim_fts;
+        `);
+      } else {
+        this.db.close();
+        throw new Error(
+          `Memory schema ${version} requires migration to ${SCHEMA_VERSION}; no migration path available yet`,
+        );
+      }
     }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -87,7 +99,7 @@ export class MemoryStore {
         erased INTEGER NOT NULL DEFAULT 0, replaced INTEGER NOT NULL DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS source_scope ON sources(project_id,session_id,entry_id);
-      CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(text,content='sources',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');
+      CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(text,content='sources',content_rowid='rowid',tokenize='trigram');
       CREATE TRIGGER IF NOT EXISTS source_ai AFTER INSERT ON sources BEGIN INSERT INTO source_fts(rowid,text) VALUES(new.rowid,new.text); END;
       CREATE TRIGGER IF NOT EXISTS source_au AFTER UPDATE OF text ON sources BEGIN INSERT INTO source_fts(source_fts,rowid,text) VALUES('delete',old.rowid,old.text); INSERT INTO source_fts(rowid,text) VALUES(new.rowid,new.text); END;
       CREATE TABLE IF NOT EXISTS chunks(
@@ -102,7 +114,7 @@ export class MemoryStore {
         revision INTEGER NOT NULL,data TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS claim_scope ON claims(project_id,visibility,status,session_id);
-      CREATE VIRTUAL TABLE IF NOT EXISTS claim_fts USING fts5(search,content='claims',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');
+      CREATE VIRTUAL TABLE IF NOT EXISTS claim_fts USING fts5(search,content='claims',content_rowid='rowid',tokenize='trigram');
       CREATE TRIGGER IF NOT EXISTS claim_ai AFTER INSERT ON claims BEGIN INSERT INTO claim_fts(rowid,search) VALUES(new.rowid,new.search); END;
       CREATE TRIGGER IF NOT EXISTS claim_au AFTER UPDATE OF search ON claims BEGIN INSERT INTO claim_fts(claim_fts,rowid,search) VALUES('delete',old.rowid,old.search); INSERT INTO claim_fts(rowid,search) VALUES(new.rowid,new.search); END;
       CREATE TRIGGER IF NOT EXISTS claim_ad AFTER DELETE ON claims BEGIN INSERT INTO claim_fts(claim_fts,rowid,search) VALUES('delete',old.rowid,old.search); END;
@@ -124,6 +136,11 @@ export class MemoryStore {
       CREATE TEMP TABLE IF NOT EXISTS active_entries(id TEXT PRIMARY KEY);
       PRAGMA user_version=${SCHEMA_VERSION};
     `);
+    if (version === 2) {
+      // Repopulate FTS indices after tokenizer change (v2→v3 migration)
+      this.db.exec("INSERT INTO source_fts(source_fts) VALUES('rebuild')");
+      this.db.exec("INSERT INTO claim_fts(claim_fts) VALUES('rebuild')");
+    }
     if (file !== ":memory:" && existsSync(file)) chmodSync(file, 0o600);
   }
 
@@ -963,7 +980,9 @@ export class MemoryStore {
     this.setScope(query.scope);
     const filter = this.scopeSQL(query.scope, query.mode);
     const limit = Math.max(1, Math.min(200, query.limit ?? 20));
-    const words = terms(query.text ?? "");
+    // Trigram tokenizer requires ≥3-char queries; shorter falls to no-FTS path.
+    const queryText = (query.text ?? "").trim();
+    const canFTS = queryText.length >= 3;
     // Over-provision 3x to absorb usable() filtering; no arbitrary cap.
     const sqlLimit = Math.min(limit * 3, 500);
     let rows: Record<string, unknown>[];
@@ -977,9 +996,9 @@ export class MemoryStore {
         query.asOf,
         query.asOf,
       );
-    } else if (words.length) {
-      // FTS path: composite scoring pushed into SQL via CTE.
-      const match = words.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
+    } else if (canFTS) {
+      // FTS trigram path: substring matching with composite scoring via CTE.
+      const match = `"${queryText.replace(/"/g, '""')}"`;
       rows = this.all(
         `WITH candidates AS (
           SELECT c.data,
@@ -1034,22 +1053,15 @@ export class MemoryStore {
         )
           continue;
         if (current && !this.historicalUsable(claim, query.scope, query.asOf)) continue;
-        if (
-          words.length &&
-          !words.some((t) =>
-            terms(
-              [claim.text, claim.subject, claim.value, ...(claim.cues ?? [])].join(" "),
-            ).includes(t),
-          )
-        )
-          continue;
+        // With trigram FTS5, substring matching is done in SQL; no JS-side word filter needed.
       } else if (
         !this.inScope(claim, query.scope, query.mode === "all") ||
         (current && !this.usable(claim, query.scope))
       )
         continue;
+      const hasQuery = !!(query.text && query.text.trim().length >= 3);
       const reasons = [
-        words.length ? "lexical match" : "recent memory",
+        hasQuery ? "lexical match" : "recent memory",
         `scope:${claim.visibility}`,
         `status:${claim.status}`,
       ];
@@ -1108,12 +1120,11 @@ export class MemoryStore {
 
   sourceSearch(scope: Scope, text: string, all = false, limit = 20): Source[] {
     this.setScope(scope);
-    const words = terms(text);
-    if (!words.length) return [];
-    // L11: Escape double quotes in FTS5 match (consistent with search() at line ~919)
-    const match = words.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
+    const queryText = text.trim();
+    if (queryText.length < 3) return []; // Trigram tokenizer requires ≥3-char queries
+    const match = `"${queryText.replace(/"/g, '""')}"`;
     return this.all(
-      `SELECT s.key FROM source_fts JOIN sources s ON s.rowid=source_fts.rowid WHERE source_fts MATCH ? AND s.project_id=? AND s.erased=0 AND s.replaced=0 AND (?=1 OR (s.session_id=? AND s.entry_id IN (SELECT id FROM active_entries))) ORDER BY bm25(source_fts) LIMIT ?`,
+      `SELECT s.key FROM source_fts JOIN sources s ON s.rowid=source_fts.rowid WHERE source_fts MATCH ? AND s.project_id=? AND s.erased=0 AND s.replaced=0 AND (?=1 OR (s.session_id=? AND s.entry_id IN (SELECT id FROM active_entries))) ORDER BY rank LIMIT ?`,
       match,
       scope.projectId,
       all ? 1 : 0,

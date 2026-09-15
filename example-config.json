@@ -16,5 +16,6 @@
   "excludedPaths": [".env", "credentials", "secrets"],
   "redactionPatterns": [],
   "recallTokens": 6000,
-  "autoPromote": "full"
+  "autoPromote": "full",
+  "contextMode": "packet"
 }

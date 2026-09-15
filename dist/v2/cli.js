@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { realpathSync, readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync, renameSync, statSync } from 'fs';
+import { realpathSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, existsSync, chmodSync, renameSync } from 'fs';
 import { homedir } from 'os';
 import { resolve, join, dirname } from 'path';
 import { randomUUID, createHash } from 'crypto';
@@ -16,7 +16,7 @@ function openDatabase(file) {
 }
 
 // src/v2/types.ts
-var SCHEMA_VERSION = 2;
+var SCHEMA_VERSION = 3;
 var CLAIM_KINDS = [
   "fact",
   "decision",
@@ -28,14 +28,6 @@ var CLAIM_KINDS = [
 ];
 var hash = (value) => createHash("sha256").update(value).digest("hex");
 var normalize = (text) => text.normalize("NFC").toLocaleLowerCase("und").replace(/\s+/gu, " ").trim();
-var terms = (text) => [
-  ...new Set(
-    [
-      ...normalize(text).matchAll(/[\p{L}\p{N}_]+/gu),
-      ...normalize(text.replace(/([a-z])([A-Z])/g, "$1 $2")).matchAll(/[\p{L}\p{N}_]+/gu)
-    ].map((match) => match[0])
-  )
-].slice(0, 32);
 var estimateTokens = (text) => Math.ceil(text.length / 4);
 var COUNTER = "chars/4-estimate";
 function clipTokens(text, budget) {
@@ -113,10 +105,22 @@ var MemoryStore = class {
           `Memory schema ${version} is newer than supported ${SCHEMA_VERSION}; upgrade pi-remendra`
         );
       }
-      this.db.close();
-      throw new Error(
-        `Memory schema ${version} requires migration to ${SCHEMA_VERSION}; no migration path available yet`
-      );
+      if (version === 2) {
+        this.db.exec(`
+          DROP TRIGGER IF EXISTS source_ai;
+          DROP TRIGGER IF EXISTS source_au;
+          DROP TRIGGER IF EXISTS claim_ai;
+          DROP TRIGGER IF EXISTS claim_au;
+          DROP TRIGGER IF EXISTS claim_ad;
+          DROP TABLE IF EXISTS source_fts;
+          DROP TABLE IF EXISTS claim_fts;
+        `);
+      } else {
+        this.db.close();
+        throw new Error(
+          `Memory schema ${version} requires migration to ${SCHEMA_VERSION}; no migration path available yet`
+        );
+      }
     }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -129,7 +133,7 @@ var MemoryStore = class {
         erased INTEGER NOT NULL DEFAULT 0, replaced INTEGER NOT NULL DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS source_scope ON sources(project_id,session_id,entry_id);
-      CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(text,content='sources',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');
+      CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(text,content='sources',content_rowid='rowid',tokenize='trigram');
       CREATE TRIGGER IF NOT EXISTS source_ai AFTER INSERT ON sources BEGIN INSERT INTO source_fts(rowid,text) VALUES(new.rowid,new.text); END;
       CREATE TRIGGER IF NOT EXISTS source_au AFTER UPDATE OF text ON sources BEGIN INSERT INTO source_fts(source_fts,rowid,text) VALUES('delete',old.rowid,old.text); INSERT INTO source_fts(rowid,text) VALUES(new.rowid,new.text); END;
       CREATE TABLE IF NOT EXISTS chunks(
@@ -144,7 +148,7 @@ var MemoryStore = class {
         revision INTEGER NOT NULL,data TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS claim_scope ON claims(project_id,visibility,status,session_id);
-      CREATE VIRTUAL TABLE IF NOT EXISTS claim_fts USING fts5(search,content='claims',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');
+      CREATE VIRTUAL TABLE IF NOT EXISTS claim_fts USING fts5(search,content='claims',content_rowid='rowid',tokenize='trigram');
       CREATE TRIGGER IF NOT EXISTS claim_ai AFTER INSERT ON claims BEGIN INSERT INTO claim_fts(rowid,search) VALUES(new.rowid,new.search); END;
       CREATE TRIGGER IF NOT EXISTS claim_au AFTER UPDATE OF search ON claims BEGIN INSERT INTO claim_fts(claim_fts,rowid,search) VALUES('delete',old.rowid,old.search); INSERT INTO claim_fts(rowid,search) VALUES(new.rowid,new.search); END;
       CREATE TRIGGER IF NOT EXISTS claim_ad AFTER DELETE ON claims BEGIN INSERT INTO claim_fts(claim_fts,rowid,search) VALUES('delete',old.rowid,old.search); END;
@@ -166,6 +170,10 @@ var MemoryStore = class {
       CREATE TEMP TABLE IF NOT EXISTS active_entries(id TEXT PRIMARY KEY);
       PRAGMA user_version=${SCHEMA_VERSION};
     `);
+    if (version === 2) {
+      this.db.exec("INSERT INTO source_fts(source_fts) VALUES('rebuild')");
+      this.db.exec("INSERT INTO claim_fts(claim_fts) VALUES('rebuild')");
+    }
     if (file !== ":memory:" && existsSync(file)) chmodSync(file, 384);
   }
   file;
@@ -832,7 +840,8 @@ var MemoryStore = class {
     this.setScope(query.scope);
     const filter = this.scopeSQL(query.scope, query.mode);
     const limit = Math.max(1, Math.min(200, query.limit ?? 20));
-    const words = terms(query.text ?? "");
+    const queryText = (query.text ?? "").trim();
+    const canFTS = queryText.length >= 3;
     const sqlLimit = Math.min(limit * 3, 500);
     let rows;
     if (query.asOf) {
@@ -843,8 +852,8 @@ var MemoryStore = class {
         query.asOf,
         query.asOf
       );
-    } else if (words.length) {
-      const match = words.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
+    } else if (canFTS) {
+      const match = `"${queryText.replace(/"/g, '""')}"`;
       rows = this.all(
         `WITH candidates AS (
           SELECT c.data,
@@ -893,16 +902,11 @@ var MemoryStore = class {
         if (!this.inScope(claim, query.scope, query.mode === "all") || claim.hidden || current && claim.status !== "active")
           continue;
         if (current && !this.historicalUsable(claim, query.scope, query.asOf)) continue;
-        if (words.length && !words.some(
-          (t) => terms(
-            [claim.text, claim.subject, claim.value, ...claim.cues ?? []].join(" ")
-          ).includes(t)
-        ))
-          continue;
       } else if (!this.inScope(claim, query.scope, query.mode === "all") || current && !this.usable(claim, query.scope))
         continue;
+      const hasQuery = !!(query.text && query.text.trim().length >= 3);
       const reasons = [
-        words.length ? "lexical match" : "recent memory",
+        hasQuery ? "lexical match" : "recent memory",
         `scope:${claim.visibility}`,
         `status:${claim.status}`
       ];
@@ -951,11 +955,11 @@ var MemoryStore = class {
   }
   sourceSearch(scope, text, all = false, limit = 20) {
     this.setScope(scope);
-    const words = terms(text);
-    if (!words.length) return [];
-    const match = words.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
+    const queryText = text.trim();
+    if (queryText.length < 3) return [];
+    const match = `"${queryText.replace(/"/g, '""')}"`;
     return this.all(
-      `SELECT s.key FROM source_fts JOIN sources s ON s.rowid=source_fts.rowid WHERE source_fts MATCH ? AND s.project_id=? AND s.erased=0 AND s.replaced=0 AND (?=1 OR (s.session_id=? AND s.entry_id IN (SELECT id FROM active_entries))) ORDER BY bm25(source_fts) LIMIT ?`,
+      `SELECT s.key FROM source_fts JOIN sources s ON s.rowid=source_fts.rowid WHERE source_fts MATCH ? AND s.project_id=? AND s.erased=0 AND s.replaced=0 AND (?=1 OR (s.session_id=? AND s.entry_id IN (SELECT id FROM active_entries))) ORDER BY rank LIMIT ?`,
       match,
       scope.projectId,
       all ? 1 : 0,
@@ -1701,7 +1705,8 @@ var DEFAULT_CONFIG = {
   excludedPaths: [".env", "credentials", "secrets"],
   redactionPatterns: [],
   recallTokens: 6e3,
-  autoPromote: "full"
+  autoPromote: "full",
+  contextMode: "packet"
 };
 function validateConfig(raw) {
   if (!jsonObject(raw)) throw new Error("Memory configuration must be an object");
@@ -1744,6 +1749,11 @@ function validateConfig(raw) {
     if (!["off", "user-actions", "full"].includes(String(raw.autoPromote)))
       throw new Error("autoPromote must be off, user-actions, or full");
     config.autoPromote = raw.autoPromote;
+  }
+  if (raw.contextMode !== void 0) {
+    if (!["packet", "policy"].includes(String(raw.contextMode)))
+      throw new Error("contextMode must be packet or policy");
+    config.contextMode = raw.contextMode;
   }
   for (const key of ["excludedPaths", "redactionPatterns"]) {
     if (raw[key] !== void 0) {
@@ -2997,6 +3007,82 @@ var MemoryService = class {
   }
   sweepForPromotion(scope, minSettledTurns) {
     return this.store.sweepForPromotion(scope, minSettledTurns);
+  }
+  indexSessions(scope, directory) {
+    let files = 0, sources = 0, skipped = 0;
+    const scanDir = (dir) => {
+      let entries;
+      try {
+        entries = readdirSync(dir);
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const full = join(dir, entry);
+        try {
+          const stat = statSync(full);
+          if (stat.isDirectory()) {
+            scanDir(full);
+            continue;
+          }
+          if (!entry.endsWith(".jsonl") || stat.size > 64 * 1024 * 1024) {
+            skipped++;
+            continue;
+          }
+        } catch {
+          skipped++;
+          continue;
+        }
+        try {
+          const content = readFileSync(full, "utf8");
+          const lines = content.split("\n").filter(Boolean);
+          const sessionSources = [];
+          for (const line of lines) {
+            try {
+              const parsed = JSON.parse(line);
+              if (typeof parsed !== "object" || parsed === null) continue;
+              const rec = parsed;
+              if (!rec.type || !rec.id) continue;
+              let text = "";
+              let role = "user";
+              const msg = rec.message;
+              if (rec.type === "user" && msg?.content) {
+                text = typeof msg.content === "string" ? msg.content : Array.isArray(msg.content) ? msg.content.filter((b) => b.type === "text").map((b) => String(b.text ?? "")).join("\n") : "";
+                role = "user";
+              } else if (rec.type === "assistant" && msg?.content) {
+                text = Array.isArray(msg.content) ? msg.content.filter((b) => b.type === "text").map((b) => String(b.text ?? "")).join("\n") : String(msg.content);
+                role = "assistant";
+              } else if (rec.type === "tool_result") {
+                text = typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content ?? "");
+                role = "toolResult";
+              } else continue;
+              if (!text.trim() || text.length < 10) continue;
+              sessionSources.push({
+                entryId: String(rec.id),
+                role,
+                text: text.slice(0, 5e4),
+                timestamp: typeof rec.timestamp === "string" ? rec.timestamp : (/* @__PURE__ */ new Date()).toISOString()
+              });
+            } catch {
+            }
+          }
+          if (sessionSources.length) {
+            const result = this.store.ingest(
+              scope,
+              sessionSources,
+              this.config.redactionPatterns,
+              this.config.excludedPaths
+            );
+            sources += result.keys.filter(Boolean).length;
+            files++;
+          }
+        } catch {
+          skipped++;
+        }
+      }
+    };
+    scanDir(directory);
+    return { files, sources, skipped };
   }
   close() {
     this.store.close();
