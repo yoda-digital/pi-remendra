@@ -1224,6 +1224,7 @@ export class MemoryStore {
       throw new Error("Job lease expired or no longer owned");
   }
   private settleJob(job: Job, tokens: number, dollars: number | undefined, state: string): void {
+    if (tokens === undefined || tokens === null) tokens = 0;
     if (
       !Number.isFinite(tokens) ||
       tokens < 0 ||

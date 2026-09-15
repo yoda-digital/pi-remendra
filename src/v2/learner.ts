@@ -27,12 +27,22 @@ export type Complete = (request: {
 export class BackgroundLearner {
   private controller?: AbortController;
   private running?: Promise<string>;
+  private consecutiveFailures = 0;
   constructor(readonly client: MemoryClient) {}
   cancel(reason = "Foreground work has priority"): void {
     this.controller?.abort(new Error(reason));
   }
   idle(): boolean {
     return !this.running;
+  }
+  /** Record a failed batch; escalate to a warning after 3 consecutive failures. */
+  private failed(result: string): string {
+    this.consecutiveFailures += 1;
+    if (this.consecutiveFailures >= 3)
+      console.error(
+        `[remendra] learning degraded: ${this.consecutiveFailures} consecutive failed batches: ${result}`,
+      );
+    return `${result} (${this.consecutiveFailures} consecutive failures)`;
   }
   async stop(): Promise<void> {
     this.cancel();
@@ -111,13 +121,15 @@ export class BackgroundLearner {
             }),
             combined,
           );
-          usage = result.tokens;
+          const tokens = result.tokens ?? 0;
+          usage = tokens;
           if (signal.aborted || !stillCurrent())
             throw new Error("Discarded background result after session or branch change");
           const claims = parseObservations(result.text, job);
-          await this.client.call("complete", [job, scope, claims, result.tokens, result.dollars]);
+          await this.client.call("complete", [job, scope, claims, tokens, result.dollars]);
           learned += claims.length;
           success = true;
+          this.consecutiveFailures = 0;
           break;
         } catch (error) {
           const reason = redact(error instanceof Error ? error.message : String(error));
@@ -129,16 +141,22 @@ export class BackgroundLearner {
               attempt + 1 < config.maxAttempts && !signal.aborted ? 0 : 30000,
             ]);
           } catch (failError) {
-            // Log the failJob error — budget reservation will leak until recoverJobs sweeps it
+            // Log the failJob error. If the failJob RPC itself fails, the budget
+            // reservation leaks, but recoverJobs() called from lease() sweeps expired
+            // leases (releasing the reservation and re-queueing the chunks), so the
+            // leak is temporary and the job never wedges. No further recovery needed here.
             const msg = failError instanceof Error ? failError.message : String(failError);
             console.error("[remendra] failJob failed:", msg, "job:", job.id);
           }
           if (signal.aborted || !stillCurrent())
-            return `Learning paused; ${learned} memories committed`;
-          if (attempt + 1 >= config.maxAttempts) return `Learning deferred: ${reason}`;
+            return this.failed(`Learning paused; ${learned} memories committed`);
+          if (attempt + 1 >= config.maxAttempts) return this.failed(`Learning deferred: ${reason}`);
         }
       }
-      if (!success) break;
+      if (!success) {
+        this.failed(`batch ${batch + 1} failed`);
+        break;
+      }
     }
     return `Learned ${learned} memories`;
   }
