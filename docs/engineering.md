@@ -2,7 +2,7 @@
 
 ## Architecture
 
-`index.ts` exports `src/v2/extension.ts`. The built host entry is small and uses public Pi 0.85.1 APIs. `legacy.ts` preserves the original 0.4.10 entry; it is not loaded by default.
+`index.ts` exports `src/v2/extension.ts`. The built host entry is small and uses public Pi 0.85.1 APIs.
 
 The host reads Pi's existing active-branch entries and ingests newly encountered immutable IDs. It does not rescan session files on every context request. Source conversion excludes chain-of-thought and binary attachments. Tool calls and results remain in Pi's original order; the context hook only inserts one custom memory message at the front and removes older Remendra packets.
 

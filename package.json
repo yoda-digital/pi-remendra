@@ -33,8 +33,7 @@
     "README.md",
     "docs/engineering.md",
     "docs/validation.md",
-    "example-config-v2.json",
-    "scripts/prepare.mjs"
+    "example-config.json"
   ],
   "type": "module",
   "main": "./dist/index.js",
