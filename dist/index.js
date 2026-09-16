@@ -825,6 +825,10 @@ function installV2(pi, providedClient) {
     try {
       await refresh(ctx);
       if (config.enabled && !passive) await compile(ctx);
+    } catch (error) {
+      report(ctx, error);
+    }
+    try {
       const markerFile = join(directory, ".first-run-done");
       if (!existsSync(markerFile)) {
         mkdirSync(directory, { recursive: true, mode: 448 });
@@ -852,8 +856,7 @@ function installV2(pi, providedClient) {
         } catch {
         }
       }
-    } catch (error) {
-      report(ctx, error);
+    } catch {
     }
   });
   pi.on("before_agent_start", async (event, ctx) => {

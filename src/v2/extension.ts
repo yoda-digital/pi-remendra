@@ -372,8 +372,12 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     try {
       await refresh(ctx);
       if (config.enabled && !passive) await compile(ctx);
+    } catch (error) {
+      report(ctx, error);
+    }
 
-      // First-run onboarding or returning-session stats
+    // First-run onboarding or returning-session stats (independent of compile success)
+    try {
       const markerFile = join(directory, ".first-run-done");
       if (!existsSync(markerFile)) {
         mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -402,9 +406,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           }
         } catch { /* non-fatal — stats are informational */ }
       }
-    } catch (error) {
-      report(ctx, error);
-    }
+    } catch { /* onboarding is never critical */ }
   });
   pi.on("before_agent_start", async (event, ctx) => {
     learner?.cancel();
