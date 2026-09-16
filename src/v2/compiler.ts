@@ -54,8 +54,7 @@ function compileSnapshot(
   const candidates = [...merged.values()].sort(
     (a, b) =>
       Number(b.claim.pinned) - Number(a.claim.pinned) ||
-      (b.score * (KIND_WEIGHT[b.claim.kind] ?? 1)) -
-        (a.score * (KIND_WEIGHT[a.claim.kind] ?? 1)) ||
+      b.score * (KIND_WEIGHT[b.claim.kind] ?? 1) - a.score * (KIND_WEIGHT[a.claim.kind] ?? 1) ||
       a.claim.id.localeCompare(b.claim.id),
   );
   const cautions = store.cautions(scope).map((claim) => ({ claim }));
@@ -145,7 +144,9 @@ export function contextAllowance(
 ): number {
   if (!window || window <= 0) {
     // L5: Log when budget is capped due to unknown context window
-    console.error(`[remendra] context window unknown; memory budget capped to ${Math.min(configured, 1024)} tokens`);
+    console.error(
+      `[remendra] context window unknown; memory budget capped to ${Math.min(configured, 1024)} tokens`,
+    );
     return Math.min(configured, 1024);
   }
   const headroom =

@@ -48,11 +48,17 @@ export function redact(text: string, patterns: readonly string[] = []): string {
     // AWS access keys (always start with AKIA)
     .replace(/\b(?:AKIA[A-Z0-9]{12,})\b/g, "[REDACTED]")
     // Stripe keys (secret, restricted, publishable — live and test)
-    .replace(/\b(?:sk_(?:live|test)_[A-Za-z0-9]{20,}|rk_(?:live|test)_[A-Za-z0-9]{20,}|pk_(?:live|test)_[A-Za-z0-9]{20,})\b/g, "[REDACTED]")
+    .replace(
+      /\b(?:sk_(?:live|test)_[A-Za-z0-9]{20,}|rk_(?:live|test)_[A-Za-z0-9]{20,}|pk_(?:live|test)_[A-Za-z0-9]{20,})\b/g,
+      "[REDACTED]",
+    )
     // Slack tokens and app tokens
     .replace(/\b(?:xox[bpsa]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,})\b/g, "[REDACTED]")
     // Database connection URIs (postgres, mysql, mongodb, redis)
-    .replace(/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss):\/\/[^\s"',;}{)]+/gi, "[REDACTED_URI]")
+    .replace(
+      /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss):\/\/[^\s"',;}{)]+/gi,
+      "[REDACTED_URI]",
+    )
     // Auth headers, API keys, passwords, secrets, tokens
     .replace(
       /((?:authorization\s*[:=]\s*(?:bearer\s+)?|(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*)["']?)[^\s"',;}{]+/gi,

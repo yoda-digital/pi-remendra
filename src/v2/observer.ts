@@ -98,7 +98,10 @@ function resolveQuote(source: string, quote: string): { offset: number; length: 
   const words = quote.split(/\s+/).filter(Boolean);
   if (words.length >= 2) {
     // M15: Collapse whitespace in srcNorm so multi-space sources match single-space quotes
-    const srcNorm = source.toLowerCase().replace(/[`'"''""]/g, "'").replace(/\s+/g, " ");
+    const srcNorm = source
+      .toLowerCase()
+      .replace(/[`'"''""]/g, "'")
+      .replace(/\s+/g, " ");
     for (let wc = Math.min(words.length, 6); wc >= 2; wc--) {
       const partial = words.slice(0, wc).join(" ");
       const partialNorm = partial.toLowerCase().replace(/[`'"''""]/g, "'");
@@ -211,7 +214,10 @@ export async function abortable<T>(promise: Promise<T>, signal: AbortSignal): Pr
   // nobody awaits it — without this, the orphaned rejection crashes the process.
   // L7: Log the suppressed error so provider issues are visible in diagnostics
   promise.catch((err) => {
-    console.error("[remendra] suppressed LLM error on abort:", err instanceof Error ? err.message : String(err));
+    console.error(
+      "[remendra] suppressed LLM error on abort:",
+      err instanceof Error ? err.message : String(err),
+    );
   });
   let listener: () => void = () => {};
   try {

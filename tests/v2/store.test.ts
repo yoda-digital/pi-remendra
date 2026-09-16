@@ -533,7 +533,11 @@ describe("regression: bug fixes", () => {
     let p = remember("Build before deploy", { kind: "procedure" });
     store.change(scope, p.id, p.revision, "retract");
     p = store.claim(p.id, scope, true)!;
-    const s = source("Build ok", "trial-retract", { role: "toolResult", tool: "bash", isError: false });
+    const s = source("Build ok", "trial-retract", {
+      role: "toolResult",
+      tool: "bash",
+      isError: false,
+    });
     expect(() =>
       store.trial(scope, {
         procedureId: p.id,
@@ -552,25 +556,35 @@ describe("regression: bug fixes", () => {
     // After promoting to user, need includeUser scope to access
     const userScope = { ...scope, includeUser: true };
     c = store.change(userScope, c.id, c.revision, "promote", "user");
-    expect(() =>
-      store.change(userScope, c.id, c.revision, "promote", "project"),
-    ).toThrow("demote");
+    expect(() => store.change(userScope, c.id, c.revision, "promote", "project")).toThrow("demote");
   });
 
   it("M5: promoted procedure survives one failure (hysteresis)", () => {
     let p = remember("Run tests", { kind: "procedure" });
     for (let i = 0; i < 2; i++) {
-      const s = source(`Success ${i}`, `trial-hyst-s${i}`, { role: "toolResult", tool: "bash", isError: false });
+      const s = source(`Success ${i}`, `trial-hyst-s${i}`, {
+        role: "toolResult",
+        tool: "bash",
+        isError: false,
+      });
       p = store.trial(scope, {
-        procedureId: p.id, expectedRevision: p.revision,
-        sourceKey: s.key, outcome: "success", environment: "node24", note: "ok",
+        procedureId: p.id,
+        expectedRevision: p.revision,
+        sourceKey: s.key,
+        outcome: "success",
+        environment: "node24",
+        note: "ok",
       });
     }
     expect(p.procedureState).toBe("promoted");
     const f1 = source("Fail 1", "trial-hyst-f1", { role: "toolResult", isError: true });
     p = store.trial(scope, {
-      procedureId: p.id, expectedRevision: p.revision,
-      sourceKey: f1.key, outcome: "failure", environment: "node24", note: "flaky",
+      procedureId: p.id,
+      expectedRevision: p.revision,
+      sourceKey: f1.key,
+      outcome: "failure",
+      environment: "node24",
+      note: "flaky",
     });
     expect(p.procedureState).toBe("promoted"); // survives 1 failure
   });
@@ -580,12 +594,23 @@ describe("regression: bug fixes", () => {
     // Create a source that has been excluded (empty text)
     scope.entryIds.push("empty-entry");
     const ingested = store.ingest(scope, [
-      { entryId: "empty-entry", text: "", role: "toolResult", timestamp: "2026-09-06T12:00:00Z", tool: "bash", isError: false },
+      {
+        entryId: "empty-entry",
+        text: "",
+        role: "toolResult",
+        timestamp: "2026-09-06T12:00:00Z",
+        tool: "bash",
+        isError: false,
+      },
     ]);
     expect(() =>
       store.trial(scope, {
-        procedureId: p.id, expectedRevision: p.revision,
-        sourceKey: ingested.keys[0], outcome: "success", environment: "test", note: "empty",
+        procedureId: p.id,
+        expectedRevision: p.revision,
+        sourceKey: ingested.keys[0],
+        outcome: "success",
+        environment: "test",
+        note: "empty",
       }),
     ).toThrow();
   });
@@ -614,20 +639,23 @@ describe("regression: bug fixes", () => {
     remember("A claim to export");
     const validExport = store.exportData(scope);
     // Corrupt the export by removing the text field from claim data
-    const corrupted = validExport.split("\n").map((line) => {
-      if (!line.trim()) return line;
-      try {
-        const row = JSON.parse(line);
-        if (row.type === "claim" && row.data) {
-          const data = { ...row.data };
-          delete data.text;
-          return JSON.stringify({ ...row, data });
+    const corrupted = validExport
+      .split("\n")
+      .map((line) => {
+        if (!line.trim()) return line;
+        try {
+          const row = JSON.parse(line);
+          if (row.type === "claim" && row.data) {
+            const data = { ...row.data };
+            delete data.text;
+            return JSON.stringify({ ...row, data });
+          }
+          return line;
+        } catch {
+          return line;
         }
-        return line;
-      } catch {
-        return line;
-      }
-    }).join("\n");
+      })
+      .join("\n");
     // Import into a second store to avoid dedup with existing claims
     const dir2 = mkdtempSync(join(tmpdir(), "remendra-import-"));
     const store2 = new MemoryStore(join(dir2, "memory.sqlite"));

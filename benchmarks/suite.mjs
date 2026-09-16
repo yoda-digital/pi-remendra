@@ -36,10 +36,7 @@ try {
   const s1 = { projectId, sessionId: "s1", entryIds: ["e1"] };
   const text = "Smoke test source record.";
   const timestamp = "2026-09-06T00:00:00Z";
-  const ingested = await call("ingest", [
-    s1,
-    [{ entryId: "e1", text, timestamp, role: "user" }],
-  ]);
+  const ingested = await call("ingest", [s1, [{ entryId: "e1", text, timestamp, role: "user" }]]);
   const evidence = [
     {
       sourceKey: ingested.keys[0],
@@ -54,7 +51,10 @@ try {
   for (let i = 0; i < 500; i++)
     await record({ id: `bench-c-${String(i).padStart(6, "0")}`, text: `project fact ${i}` });
   for (let i = 0; i < 5; i++)
-    await record({ id: `bench-n-${String(i).padStart(6, "0")}`, text: `NEEDLE_${i} unique marker` });
+    await record({
+      id: `bench-n-${String(i).padStart(6, "0")}`,
+      text: `NEEDLE_${i} unique marker`,
+    });
   for (let i = 0; i < 500; i++)
     await record({ id: `bench-s-${String(i).padStart(6, "0")}`, text: `speed record ${i}` });
   const survivalIds = [];
@@ -110,13 +110,10 @@ try {
           persistence: {
             survived,
             outOf: 50,
-            note: survived < 50
-              ? "budget-limited, not data loss"
-              : "all fit",
+            note: survived < 50 ? "budget-limited, not data loss" : "all fit",
           },
         },
-        pass:
-          needlesFound === 5 && p50 < 500 && claimsInBudget > 0 && survived > 0,
+        pass: needlesFound === 5 && p50 < 500 && claimsInBudget > 0 && survived > 0,
       },
       null,
       2,

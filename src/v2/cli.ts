@@ -92,7 +92,11 @@ export function main(argv: string[]): void {
     );
   } finally {
     // L10: Nested try/catch so close() error doesn't mask the original error
-    try { service.close(); } catch { /* close failure is secondary */ }
+    try {
+      service.close();
+    } catch {
+      /* close failure is secondary */
+    }
   }
 }
 

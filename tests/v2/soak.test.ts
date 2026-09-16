@@ -52,7 +52,9 @@ describe("soak: sustained growth", { timeout: 120_000 }, () => {
           {
             text: `Session ${session} claim ${i}: ${topic} requires careful consideration`,
             kind: (["fact", "decision", "constraint", "preference"] as const)[i % 4],
-            evidence: [{ sourceKey: s.key, hash: s.hash, start: 0, end: Math.min(50, s.text.length) }],
+            evidence: [
+              { sourceKey: s.key, hash: s.hash, start: 0, end: Math.min(50, s.text.length) },
+            ],
           },
           "observer",
         );
@@ -115,7 +117,12 @@ describe("soak: sustained growth", { timeout: 120_000 }, () => {
     const entryId = "e1";
     scope.entryIds.push(entryId);
     const result = store.ingest(scope, [
-      { entryId, role: "user", text: "database configuration source text", timestamp: new Date().toISOString() },
+      {
+        entryId,
+        role: "user",
+        text: "database configuration source text",
+        timestamp: new Date().toISOString(),
+      },
     ]);
     const s = store.source(result.keys[0])!;
 

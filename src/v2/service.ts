@@ -174,7 +174,10 @@ export class MemoryService {
   sweepForPromotion(scope: Scope, minSettledTurns: number) {
     return this.store.sweepForPromotion(scope, minSettledTurns);
   }
-  indexSessions(scope: Scope, directory: string): { files: number; sources: number; skipped: number } {
+  indexSessions(
+    scope: Scope,
+    directory: string,
+  ): { files: number; sources: number; skipped: number } {
     let files = 0,
       sources = 0,
       skipped = 0;
@@ -235,9 +238,7 @@ export class MemoryService {
                 role = "assistant";
               } else if (rec.type === "tool_result") {
                 text =
-                  typeof rec.content === "string"
-                    ? rec.content
-                    : JSON.stringify(rec.content ?? "");
+                  typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content ?? "");
                 role = "toolResult";
               } else continue;
               if (!text.trim() || text.length < 10) continue;

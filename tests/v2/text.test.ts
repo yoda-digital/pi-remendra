@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { estimateTokens, clipTokens, redact, equivalent, safeDate, hash, COUNTER } from "../../src/v2/text.js";
+import {
+  estimateTokens,
+  clipTokens,
+  redact,
+  equivalent,
+  safeDate,
+  hash,
+  COUNTER,
+} from "../../src/v2/text.js";
 
 describe("estimateTokens", () => {
   it("reports chars/4-estimate counter", () => {
