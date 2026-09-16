@@ -1046,6 +1046,12 @@ function installV2(pi, providedClient) {
   });
   const command = async (args, ctx) => {
     try {
+      const [verb = "status", ...words] = args.trim().split(/\s+/);
+      const rest = words.join(" ");
+      if (verb === "help") {
+        show(ctx, rest === "all" ? HELP_FULL : HELP_SHORT);
+        return;
+      }
       await ensure(ctx);
       const mem = client;
       if (!mem) {
@@ -1053,11 +1059,8 @@ function installV2(pi, providedClient) {
         return;
       }
       const current = await refresh(ctx);
-      const [verb = "status", ...words] = args.trim().split(/\s+/);
-      const rest = words.join(" ");
       if (!verb || verb === "status" || verb === "budget")
         show(ctx, await mem.call("status", [current]));
-      else if (verb === "help") show(ctx, rest === "all" ? HELP_FULL : HELP_SHORT);
       else if (verb === "doctor")
         show(ctx, {
           ...await mem.call("doctor", []),

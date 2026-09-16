@@ -628,6 +628,14 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
 
   const command = async (args: string, ctx: ExtensionContext): Promise<void> => {
     try {
+      // Help doesn't need the memory client — handle it before ensure()
+      const [verb = "status", ...words] = args.trim().split(/\s+/);
+      const rest = words.join(" ");
+      if (verb === "help") {
+        show(ctx, rest === "all" ? HELP_FULL : HELP_SHORT);
+        return;
+      }
+
       await ensure(ctx);
       const mem = client;
       if (!mem) {
@@ -635,11 +643,8 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         return;
       }
       const current = await refresh(ctx);
-      const [verb = "status", ...words] = args.trim().split(/\s+/);
-      const rest = words.join(" ");
       if (!verb || verb === "status" || verb === "budget")
         show(ctx, await mem.call("status", [current]));
-      else if (verb === "help") show(ctx, rest === "all" ? HELP_FULL : HELP_SHORT);
       else if (verb === "doctor")
         show(ctx, {
           ...(await mem.call("doctor", [])),
