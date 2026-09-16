@@ -13,18 +13,26 @@ If a memory is wrong, you correct it. Everything that depended on the wrong memo
 ## Install
 
 ```bash
+pi install @yoda.digital/pi-remendra
+```
+
+Remendra shows setup guidance on first run automatically.
+
+<details>
+<summary>Alternative install methods</summary>
+
+From git (latest development):
+```bash
 pi install git:github.com/yoda-digital/pi-remendra
 ```
 
-Then `/reload`. Remendra shows setup guidance on first run automatically.
-
-Development checkout:
-
+From a local checkout:
 ```bash
 pnpm install --frozen-lockfile
 pnpm build
 pi install /absolute/path/to/pi-remendra
 ```
+</details>
 
 ## Usage
 

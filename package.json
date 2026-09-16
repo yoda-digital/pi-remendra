@@ -1,5 +1,5 @@
 {
-  "name": "pi-remendra",
+  "name": "@yoda.digital/pi-remendra",
   "version": "2.0.0",
   "description": "Persistent memory for Pi — remembers what matters, forgets what's wrong.",
   "keywords": [
@@ -25,7 +25,7 @@
     "url": "git+https://github.com/yoda-digital/pi-remendra.git"
   },
   "bin": {
-    "remendra-memory": "./dist/v2/cli.js"
+    "remendra-memory": "dist/v2/cli.js"
   },
   "files": [
     "dist/",
@@ -97,6 +97,9 @@
     "semi": true,
     "singleQuote": false,
     "trailingComma": "all"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "engines": {
     "node": ">=22.0.0"
