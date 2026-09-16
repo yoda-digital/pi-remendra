@@ -826,7 +826,12 @@ function installV2(pi, providedClient) {
       await refresh(ctx);
       if (config.enabled && !passive) await compile(ctx);
     } catch (error) {
-      report(ctx, error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("Generation changed")) {
+        console.error("[remendra] startup compile skipped (generation changed \u2014 will retry on next turn)");
+      } else {
+        report(ctx, error);
+      }
     }
     try {
       const markerFile = join(directory, ".first-run-done");

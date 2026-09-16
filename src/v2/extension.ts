@@ -373,7 +373,15 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       await refresh(ctx);
       if (config.enabled && !passive) await compile(ctx);
     } catch (error) {
-      report(ctx, error);
+      // "Generation changed during compile refresh" is expected at startup — other
+      // Pi lifecycle events (before_agent_start) fire concurrently and bump the
+      // generation counter. This self-resolves on the next turn. Don't alarm the user.
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("Generation changed")) {
+        console.error("[remendra] startup compile skipped (generation changed — will retry on next turn)");
+      } else {
+        report(ctx, error);
+      }
     }
 
     // First-run onboarding or returning-session stats (independent of compile success)
