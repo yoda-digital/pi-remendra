@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, rmSync } from "node:fs";
 import { MemoryStore } from "../../src/v2/store.js";
-import type { Scope, Source } from "../../src/v2/types.js";
+import type { Scope } from "../../src/v2/types.js";
 
 const dirs: string[] = [];
 function tempDb(): string {

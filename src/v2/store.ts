@@ -28,7 +28,6 @@ import {
   normalize,
   redact,
   safeDate,
-  terms,
 } from "./text.js";
 
 /** C5: Parse with structural validation — throws meaningful error on corrupt or missing data. */

@@ -104,7 +104,6 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     query = "";
   let seen = new Set<string>();
   let scope: Scope | undefined;
-  let packet: Packet | undefined;
   let lastError = "";
   let initializing: Promise<void> | undefined;
   let foreground = false;
@@ -133,7 +132,9 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           content: redact(text, config.redactionPatterns),
           display: true,
         });
-      } catch { /* both paths failed — already logged */ }
+      } catch {
+        /* both paths failed — already logged */
+      }
     }
   };
   const status = (ctx: ExtensionContext, text: string): void => {
@@ -150,7 +151,6 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   };
   let errorCount = 0;
   const report = (ctx: ExtensionContext, error: unknown): void => {
-    packet = undefined;
     errorCount++;
     const message = redact(
       error instanceof Error ? error.message : String(error),
@@ -175,7 +175,6 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   const invalidate = (): void => {
     generation++;
     learner?.cancel("Session, branch, or memory changed");
-    packet = undefined;
   };
   const branch = (ctx: ExtensionContext): SessionEntry[] => ctx.sessionManager.getBranch();
   const makeScope = (ctx: ExtensionContext): Scope => ({
@@ -199,8 +198,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       const nextSessionId = ctx.sessionManager.getSessionId();
       const nextSeen = new Set<string>();
       const nextClient =
-        client ??
-        new MemoryClient(join(directory, "memory.sqlite"), directory, workerLocation());
+        client ?? new MemoryClient(join(directory, "memory.sqlite"), directory, workerLocation());
       learner ??= new BackgroundLearner(nextClient);
       config = await nextClient.call("configGet", []);
       const nextProjectId = await nextClient.call("project", [await realpath(nextCwd)]);
@@ -243,7 +241,6 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     );
     const compiled = await client?.call("compile", [current, query, budget]);
     if (!compiled) throw new Error("Memory client is unavailable");
-    packet = compiled;
     status(
       ctx,
       `◉ ${compiled.manifest.claims.length} memories · ${compiled.manifest.tokens} tokens · ${compiled.manifest.gaps} pending${config.mode === "shadow" ? " · shadow" : ""}`,
@@ -379,7 +376,9 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       // generation counter. This self-resolves on the next turn. Don't alarm the user.
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes("Generation changed")) {
-        console.error("[remendra] startup compile skipped (generation changed — will retry on next turn)");
+        console.error(
+          "[remendra] startup compile skipped (generation changed — will retry on next turn)",
+        );
       } else {
         report(ctx, error);
       }
@@ -404,7 +403,9 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         );
         try {
           writeFileSync(markerFile, new Date().toISOString(), { mode: 0o600 });
-        } catch { /* non-fatal — onboarding repeats next time */ }
+        } catch {
+          /* non-fatal — onboarding repeats next time */
+        }
       } else if (client && scope) {
         // Returning session: show brief stats
         try {
@@ -413,9 +414,13 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           if (total > 0) {
             status(ctx, `● ${total} memories · ${st.sources} sources`);
           }
-        } catch { /* non-fatal — stats are informational */ }
+        } catch {
+          /* non-fatal — stats are informational */
+        }
       }
-    } catch { /* onboarding is never critical */ }
+    } catch {
+      /* onboarding is never critical */
+    }
   });
   pi.on("before_agent_start", async (event, ctx) => {
     learner?.cancel();
@@ -517,7 +522,8 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       const failNote = {
         role: "custom" as const,
         customType: PACKET_TYPE,
-        content: "Remendra memory is temporarily unavailable. Recall may still work. Use /remendra doctor for diagnostics.",
+        content:
+          "Remendra memory is temporarily unavailable. Recall may still work. Use /remendra doctor for diagnostics.",
         display: false,
         timestamp: Date.now(),
       };
@@ -683,9 +689,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           invalidate();
           await learner?.stop();
           learner?.cancel();
-          config = await mem.call("configSet", [
-            { ...config, ...(JSON.parse(rest) as object) },
-          ]);
+          config = await mem.call("configSet", [{ ...config, ...(JSON.parse(rest) as object) }]);
           scope = makeScope(ctx);
           show(ctx, "Memory settings saved.");
         }
@@ -773,11 +777,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         if (rest)
           show(
             ctx,
-            await mem.call(
-              "import",
-              [current, resolve(ctx.cwd, rest), verb === "migrate"],
-              30000,
-            ),
+            await mem.call("import", [current, resolve(ctx.cwd, rest), verb === "migrate"], 30000),
           );
         else if (verb === "migrate")
           show(ctx, await mem.call("importLegacyEntries", [current, branch(ctx)], 30000));
