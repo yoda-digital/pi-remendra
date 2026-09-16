@@ -1,6 +1,6 @@
 {
   "name": "@yoda.digital/pi-remendra",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Persistent memory for Pi — remembers what matters, forgets what's wrong.",
   "keywords": [
     "pi",
