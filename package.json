@@ -108,6 +108,7 @@
   "pi": {
     "extensions": [
       "./dist/index.js"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/yoda-digital/pi-remendra/main/docs/preview.png"
   }
 }
