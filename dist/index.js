@@ -686,6 +686,7 @@ function installV2(pi, providedClient) {
       learner ??= new BackgroundLearner(nextClient);
       config = await nextClient.call("configGet", []);
       const nextProjectId = await nextClient.call("project", [await realpath(nextCwd)]);
+      client = nextClient;
       cwd = nextCwd;
       sessionId = nextSessionId;
       seen = nextSeen;

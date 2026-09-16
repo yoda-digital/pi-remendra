@@ -204,6 +204,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       learner ??= new BackgroundLearner(nextClient);
       config = await nextClient.call("configGet", []);
       const nextProjectId = await nextClient.call("project", [await realpath(nextCwd)]);
+      client = nextClient;
       cwd = nextCwd;
       sessionId = nextSessionId;
       seen = nextSeen;
