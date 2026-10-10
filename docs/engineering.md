@@ -2,7 +2,7 @@
 
 ## Architecture
 
-`index.ts` exports `src/v2/extension.ts`. The built host entry is small and uses public Pi 0.85.1 APIs.
+`index.ts` exports `src/v2/extension.ts`. The built host entry is small and uses public Pi 1.1 APIs.
 
 The host reads Pi's existing active-branch entries and ingests newly encountered immutable IDs. It does not rescan session files on every context request. Source conversion excludes chain-of-thought and binary attachments. Tool calls and results remain in Pi's original order; the context hook only inserts one custom memory message at the front and removes older Remendra packets.
 
@@ -78,7 +78,7 @@ For exact recovery, use a `VACUUM INTO` backup. Stop all processes using this me
 
 ## Current bounds and release scope
 
-Tested target: Pi 0.85.1 and Node 24 on Linux, Windows, and macOS. CI runs the full test suite on all three platforms. The Bun SQLite adapter is present but has not been validated as a complete Pi runtime. Live provider extraction quality needs separate soak tests.
+Tested target: Pi 1.1.0 and Node 24 on Linux, Windows, and macOS. CI runs the full test suite on all three platforms. The Bun SQLite adapter is present but has not been validated as a complete Pi runtime. Live provider extraction quality needs separate soak tests.
 
 Memory and historical candidate windows are bounded, so extremely broad searches can omit matches. Lexical search uses SQL-level composite scoring (BM25 + metadata bonuses) with a dynamic limit proportional to the requested result count — there is no fixed row cap. Historical scans are capped at 2,000 revisions, anchor collection at 300, and returned hits at 200. Source exports/imports and raw transcript browsing have explicit size bounds. The system makes omission and pending coverage visible; it does not claim perfect recall.
 

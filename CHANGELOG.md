@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.1.0] - 2026-10-10
+
+Bug-fix release for Pi 1.1, from an audit of a real installation (66% of background jobs failing, crashes on exit).
+
+### Fixed
+
+- **Pi no longer crashes when background learning is cancelled.** If a cancellation (new prompt, `/tree`, compaction, quitting) landed while a job was being leased, the model call started with an already-aborted signal and its rejection was never observed, so Node terminated Pi ("Session, branch, or memory changed", "Native compaction has priority").
+- **Cancelled jobs no longer drain the daily budget.** A job cancelled before the call was sent costs nothing; one cancelled mid-call costs its input estimate, not the full 8,400-token reservation.
+- **Search finds memories for natural questions.** The whole query was matched as one exact phrase, so "where do we deploy the api?" found nothing and context packets fell back to anchors only. Queries now match any meaningful term (stop words removed), ranked by bm25; short queries filter by substring; `asOf` history applies the query.
+- **A stuck storage worker restarts** instead of making every later memory call time out until Pi restarts.
+- **`/remendra index-sessions` reads real Pi session files** (it parsed a format Pi does not write and indexed nothing), and only indexes sessions of the current project.
+- **Search index corruption** ("database disk image is malformed") when erasing a memory whose source had been replaced.
+- **Observer output:** more than 16 claims or one malformed claim no longer discards the whole batch.
+- **Excluded paths** also apply to tool arguments such as `bash` commands (`cat .env`).
+- **Regex recall** is used only in `regex` mode or for `/pattern/` queries; questions containing `?` or `.` are word searches.
+- Pi 1.x `system` entries no longer appear as empty assistant rows in recall.
+- `peerDependencies` use `"*"` (Pi provides its own packages).
+
+### Changed
+
+- **The memory packet is placed right before the latest prompt** instead of at the front of the conversation, so the provider's prompt cache keeps everything earlier. Local models no longer re-read the whole conversation on every prompt.
+- **Pi context edits are respected:** a message you remove or rewrite stops feeding memory.
+- **No background learning in `pi -p` / JSON runs**, which exit as soon as the agent settles; their sources are learned in the next interactive session or with `/remendra learn`.
+- **Untrusted projects say why nothing is learned** (status line and `/remendra learn`).
+- **Diagnostics go to `remendra.log`**, never the terminal, where they drew over Pi's screen. `/remendra doctor` shows the path.
+- Developed and tested against Pi 1.1.0.
+
 ## [2.0.0] - 2026-09-15
 
 ### Changed

@@ -2,7 +2,7 @@
 
 ## Remendra v2
 
-The default entry exports `src/v2/extension.ts`; the package loads `dist/index.js`. Public identifiers: `/remendra`, `remendra-memory`, `PI_REMENDRA_*`, `~/.pi/agent/pi-remendra/v2/`. Uses Pi 0.85.1 hooks, the native model registry, and a SQLite worker. Defaults in `src/v2/config.ts`; contracts in `src/v2/types.ts`. Node 24.
+The default entry exports `src/v2/extension.ts`; the package loads `dist/index.js`. Public identifiers: `/remendra`, `remendra-memory`, `PI_REMENDRA_*`, `~/.pi/agent/pi-remendra/v2/`. Uses Pi 1.1 hooks, the native model registry, and a SQLite worker. Defaults in `src/v2/config.ts`; contracts in `src/v2/types.ts`. Node 24.
 
 `dist/` is committed because Pi installs Git packages without devDependencies. Rebuild and commit after source changes.
 
@@ -27,7 +27,8 @@ pnpm check          # typecheck + lint + fmt:check
 - Source imports use `.js` extensions; vitest's alias strips them.
 - `tests/` is NOT in tsconfig.json.
 - Tests are pure unit tests with fake agent loops. No LLM or network calls.
-- v2 suite: 124 tests across 10 files in `tests/v2/`.
+- v2 suite: 152 tests across 11 files in `tests/v2/`.
+- Diagnostics go through `log()` (src/v2/log.ts) to `remendra.log`; never `console.*` (Pi does not capture it, so it draws over the TUI).
 
 ## Workflow
 

@@ -3,7 +3,7 @@
 Persistent memory extension for Pi. Stores structured claims with source evidence in SQLite, provides FTS5 recall, and injects query-matched context into each agent turn.
 
 Version: 2.0.0-alpha.2
-Runtime: Pi 0.85.1, Node 24
+Runtime: Pi 1.1, Node 24
 Storage: SQLite + FTS5 in a worker thread
 License: MIT
 

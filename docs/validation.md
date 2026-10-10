@@ -4,7 +4,7 @@ Version: **2.0.0**. Last validated: **2026-09-15**.
 
 ## Current test coverage
 
-- **128 tests across 10 files**, CI on Ubuntu, Windows, and macOS.
+- **152 tests across 11 files**, CI on Ubuntu, Windows, and macOS.
 - Build, TypeScript type checking, ESLint, and formatting checks pass.
 - Native Pi SDK smoke tests pass in foreground-only and background-observer modes.
 - Node 24 (built-in `node:sqlite`) and Node 22 (`better-sqlite3` fallback) are both supported.

@@ -1,8 +1,8 @@
 # Remendra
 
-Persistent memory for [Pi](https://github.com/AerinWorks/pi). Learns from your sessions, corrects itself when wrong, and gets smarter over time.
+Persistent memory for [Pi](https://github.com/earendil-works/pi). Learns from your sessions, corrects itself when wrong, and gets smarter over time.
 
-**v2.0.0** · Pi 0.85.1 · Node ≥22
+**v2.1.0** · Pi 1.1 · Node ≥22
 
 ## What it does
 
@@ -68,7 +68,7 @@ Auto-promotion is configurable: `autoPromote: "full"` (default), `"user-actions"
 
 ## Configuration
 
-Default storage: `~/.pi/agent/pi-remendra/v2/`. Override with `PI_REMENDRA_HOME`.
+Default storage: `~/.pi/agent/pi-remendra/v2/`. Override with `PI_REMENDRA_HOME`. Diagnostics are written to `remendra.log` in the same folder (rotated at 1 MB), never to the terminal; `/remendra doctor` shows the path.
 
 ```
 /remendra settings                              # view current config
@@ -144,9 +144,9 @@ There are 50+ memory extensions for Pi. Here is an honest comparison with the mo
 
 ## Tested on
 
-Linux, Windows, macOS · Node 22+ (Node 24 uses built-in SQLite; Node 22 uses `better-sqlite3`) · Pi 0.85.1. CI runs the full test suite on all three platforms.
+Linux, Windows, macOS · Node 22+ (Node 24 uses built-in SQLite; Node 22 uses `better-sqlite3`) · Pi 1.1. CI runs the full test suite on all three platforms.
 
-128 tests across 10 files: store operations, compilation, observer parsing, worker lifecycle, embeddings, cross-platform paths, concurrent SQLite access, sustained growth (2000+ claims), token estimation accuracy, and secret redaction patterns.
+152 tests across 11 files: store operations, compilation, observer parsing, worker lifecycle, embeddings, cross-platform paths, concurrent SQLite access, sustained growth (2000+ claims), token estimation accuracy, and secret redaction patterns.
 
 The [validation document](docs/validation.md) is the honest accounting of what has been tested and what has not.
 
