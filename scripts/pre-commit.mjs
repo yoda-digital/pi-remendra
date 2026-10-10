@@ -28,5 +28,7 @@ run("pnpm", ["exec", "lint-staged"]);
 const after = stagedFiles();
 const modified = after.filter((f) => before.includes(f));
 if (modified.length > 0) {
-  run("git", ["add", "--", ...modified]);
+  // -u: these paths are all in the index already, and the committed dist/ build is
+  // gitignored, so a plain `git add` refuses it.
+  run("git", ["add", "-u", "--", ...modified]);
 }

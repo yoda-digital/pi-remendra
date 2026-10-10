@@ -88,10 +88,14 @@
     }
   },
   "lint-staged": {
-    "*.{ts,js,mjs,cjs}": [
+    "*.{ts,mjs,cjs}": [
       "eslint --fix"
     ],
-    "*.{ts,js,mjs,cjs,json,jsonc}": [
+    "*.{ts,mjs,cjs,json,jsonc}": [
+      "oxfmt"
+    ],
+    "!(dist)/**/*.js": [
+      "eslint --fix",
       "oxfmt"
     ]
   },
