@@ -9,6 +9,7 @@ import {
   parseObservations,
 } from "./observer.js";
 import { estimateTokens, redact } from "./text.js";
+import { log } from "./log.js";
 
 export interface Completion {
   text: string;
@@ -39,7 +40,7 @@ export class BackgroundLearner {
   private failed(result: string): string {
     this.consecutiveFailures += 1;
     if (this.consecutiveFailures >= 3)
-      console.error(
+      log(
         `[remendra] learning degraded: ${this.consecutiveFailures} consecutive failed batches: ${result}`,
       );
     return `${result} (${this.consecutiveFailures} consecutive failures)`;
@@ -104,11 +105,17 @@ export class BackgroundLearner {
           return learned
             ? `Learned ${learned} memories; queue or budget exhausted`
             : "No eligible work or daily budget exhausted";
+        // What a failed attempt costs the daily budget: nothing if the provider was never
+        // called; the request's input if we cancelled it ourselves; the full reservation
+        // (undefined) when the call timed out or failed without reporting usage.
         let usage: number | undefined = 0;
         try {
           if (observerRequestTokens(job) > config.observerInputTokens)
             throw new Error("Serialized observer input exceeds its configured budget");
           const combined = AbortSignal.any([signal, AbortSignal.timeout(config.jobTimeoutMs)]);
+          // Cancellation can land while the lease RPC is in flight: never start a call that is
+          // already cancelled (its rejection would have nowhere to go).
+          if (combined.aborted) throw combined.reason ?? new Error("Aborted");
           usage = undefined;
           const result = await abortable(
             complete({
@@ -129,13 +136,14 @@ export class BackgroundLearner {
           await this.client.call("complete", [job, scope, claims, tokens, result.dollars]);
           // L13: Re-check after async RPC — generation may have changed during the await
           if (signal.aborted || !stillCurrent())
-            console.error("[remendra] claims committed but generation changed; may be stale");
+            log("[remendra] claims committed but generation changed; may be stale");
           learned += claims.length;
           success = true;
           this.consecutiveFailures = 0;
           break;
         } catch (error) {
           const reason = redact(error instanceof Error ? error.message : String(error));
+          if (usage === undefined && signal.aborted) usage = observerRequestTokens(job);
           try {
             await this.client.call("fail", [
               job,
@@ -149,7 +157,7 @@ export class BackgroundLearner {
             // leases (releasing the reservation and re-queueing the chunks), so the
             // leak is temporary and the job never wedges. No further recovery needed here.
             const msg = failError instanceof Error ? failError.message : String(failError);
-            console.error("[remendra] failJob failed:", msg, "job:", job.id);
+            log("[remendra] failJob failed:", msg, "job:", job.id);
           }
           if (signal.aborted || !stillCurrent())
             return this.failed(`Learning paused; ${learned} memories committed`);

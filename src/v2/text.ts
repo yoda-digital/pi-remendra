@@ -95,3 +95,129 @@ export function equivalent(a: string, b: string): boolean {
 export function jsonObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+
+/** Words too common to search for (English). */
+export const STOPWORDS: ReadonlySet<string> = new Set([
+  "and",
+  "or",
+  "but",
+  "if",
+  "we",
+  "our",
+  "you",
+  "your",
+  "they",
+  "them",
+  "me",
+  "my",
+  // English
+  "the",
+  "a",
+  "an",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "have",
+  "has",
+  "had",
+  "do",
+  "does",
+  "did",
+  "will",
+  "would",
+  "could",
+  "should",
+  "may",
+  "might",
+  "can",
+  "shall",
+  "of",
+  "in",
+  "to",
+  "for",
+  "with",
+  "on",
+  "at",
+  "from",
+  "by",
+  "as",
+  "into",
+  "through",
+  "during",
+  "before",
+  "after",
+  "above",
+  "below",
+  "between",
+  "out",
+  "off",
+  "over",
+  "under",
+  "again",
+  "further",
+  "then",
+  "once",
+  "here",
+  "there",
+  "when",
+  "where",
+  "why",
+  "how",
+  "all",
+  "both",
+  "each",
+  "few",
+  "more",
+  "most",
+  "other",
+  "some",
+  "such",
+  "no",
+  "nor",
+  "not",
+  "only",
+  "own",
+  "same",
+  "so",
+  "than",
+  "too",
+  "very",
+  "just",
+  "about",
+  "it",
+  "its",
+  "that",
+  "this",
+  "what",
+  "which",
+  "who",
+  "whom",
+  "these",
+  "those",
+]);
+
+const quoteFts = (s: string): string => `"${s.replace(/"/g, '""')}"`;
+
+/**
+ * FTS5 MATCH expression for a free-text query on the trigram index: any of the
+ * query's meaningful terms (3+ characters, not stop words), so "where do we deploy
+ * the api" finds claims about deploying or the API instead of requiring that exact
+ * sentence. bm25 ranks claims matching more terms higher. Falls back to the whole
+ * query as one phrase when no term qualifies (short CJK words, all stop words).
+ * Returns undefined when nothing is searchable (under 3 characters in total).
+ */
+export function ftsMatch(text: string): string | undefined {
+  const query = text.trim();
+  const words = terms(query).filter((w) => [...w].length >= 3 && !STOPWORDS.has(w));
+  if (words.length) return words.slice(0, 16).map(quoteFts).join(" OR ");
+  return [...query].length >= 3 ? quoteFts(query) : undefined;
+}
+
+/** Terms used to filter results in JS where SQL full-text search cannot (history, short queries). */
+export function textFilterTerms(text: string): string[] {
+  return terms(text.trim()).filter((w) => !STOPWORDS.has(w));
+}

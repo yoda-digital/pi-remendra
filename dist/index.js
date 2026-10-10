@@ -1,5 +1,5 @@
 import { realpath } from 'fs/promises';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, statSync, renameSync, appendFileSync } from 'fs';
 import { resolve, join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Type } from 'typebox';
@@ -8,9 +8,68 @@ import { Worker } from 'worker_threads';
 import { randomUUID, createHash } from 'crypto';
 
 // src/v2/extension.ts
+var hash = (value) => createHash("sha256").update(value).digest("hex");
+var normalize = (text) => text.normalize("NFC").toLocaleLowerCase("und").replace(/\s+/gu, " ").trim();
+var estimateTokens = (text) => Math.ceil(text.length / 4);
+function redact(text, patterns = []) {
+  let out = text.replace(
+    /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,
+    "[REDACTED]"
+  ).replace(/\b(?:AKIA[A-Z0-9]{12,})\b/g, "[REDACTED]").replace(
+    /\b(?:sk_(?:live|test)_[A-Za-z0-9]{20,}|rk_(?:live|test)_[A-Za-z0-9]{20,}|pk_(?:live|test)_[A-Za-z0-9]{20,})\b/g,
+    "[REDACTED]"
+  ).replace(/\b(?:xox[bpsa]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,})\b/g, "[REDACTED]").replace(
+    /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss):\/\/[^\s"',;}{)]+/gi,
+    "[REDACTED_URI]"
+  ).replace(
+    /((?:authorization\s*[:=]\s*(?:bearer\s+)?|(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*)["']?)[^\s"',;}{]+/gi,
+    "$1[REDACTED]"
+  ).replace(
+    /-----BEGIN (?:[A-Z ]+)?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+)?PRIVATE KEY-----/g,
+    "[REDACTED PRIVATE KEY]"
+  );
+  for (const literal of patterns) {
+    if (literal) out = out.split(literal).join("[REDACTED]");
+  }
+  return out.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "");
+}
+function jsonObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+// src/v2/log.ts
+var file;
+var MAX_BYTES = 1e6;
+function setLogFile(path) {
+  file = path;
+  if (path)
+    try {
+      mkdirSync(dirname(path), { recursive: true, mode: 448 });
+    } catch {
+    }
+}
+function log(...parts) {
+  const text = parts.map((p) => p instanceof Error ? p.message : typeof p === "string" ? p : JSON.stringify(p)).join(" ");
+  const line = `${(/* @__PURE__ */ new Date()).toISOString()} ${redact(text)}
+`;
+  if (!file) {
+    process.stderr.write(line);
+    return;
+  }
+  try {
+    try {
+      if (statSync(file).size > MAX_BYTES) renameSync(file, `${file}.1`);
+    } catch {
+    }
+    appendFileSync(file, line, { mode: 384 });
+  } catch {
+  }
+}
+
+// src/v2/client.ts
 var MemoryClient = class {
-  constructor(file, directory, workerURL = new URL("./v2/worker.js", import.meta.url)) {
-    this.file = file;
+  constructor(file2, directory, workerURL = new URL("./v2/worker.js", import.meta.url)) {
+    this.file = file2;
     this.directory = directory;
     this.workerURL = workerURL;
   }
@@ -34,7 +93,7 @@ var MemoryClient = class {
       if (message.id === void 0) return;
       const item = this.pending.get(message.id);
       if (!item) {
-        console.error(
+        log(
           "[remendra] late worker response id",
           message.id,
           message.error ? `error: ${message.error}` : "success (data may have been written)"
@@ -71,12 +130,19 @@ var MemoryClient = class {
       const id = ++this.sequence;
       const timer = setTimeout(() => {
         const item = this.pending.get(id);
-        if (item) {
-          clearTimeout(item.timer);
-          this.pending.delete(id);
-          item.reject(new Error(`Memory ${method} exceeded ${timeoutMs} ms`));
-          if (!this.pending.size) worker.unref();
+        if (!item) return;
+        const executing = Math.min(...this.pending.keys()) === id;
+        if (executing && this.worker === worker) {
+          this.fail(
+            worker,
+            new Error(`Memory ${method} exceeded ${timeoutMs} ms; worker restarted`)
+          );
+          return;
         }
+        clearTimeout(item.timer);
+        this.pending.delete(id);
+        item.reject(new Error(`Memory ${method} exceeded ${timeoutMs} ms`));
+        if (!this.pending.size) worker.unref();
       }, timeoutMs);
       this.pending.set(id, { resolve: resolve2, reject, timer });
       try {
@@ -93,7 +159,7 @@ var MemoryClient = class {
       try {
         await this.call("close", [], 1e3);
       } catch (closeError) {
-        console.error(
+        log(
           "[remendra] close RPC failed:",
           closeError instanceof Error ? closeError.message : String(closeError)
         );
@@ -115,28 +181,6 @@ var CLAIM_KINDS = [
   "procedure",
   "commitment"
 ];
-var hash = (value) => createHash("sha256").update(value).digest("hex");
-var normalize = (text) => text.normalize("NFC").toLocaleLowerCase("und").replace(/\s+/gu, " ").trim();
-var estimateTokens = (text) => Math.ceil(text.length / 4);
-function redact(text, patterns = []) {
-  let out = text.replace(
-    /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,
-    "[REDACTED]"
-  ).replace(/\b(?:AKIA[A-Z0-9]{12,})\b/g, "[REDACTED]").replace(/\b(?:sk_(?:live|test)_[A-Za-z0-9]{20,}|rk_(?:live|test)_[A-Za-z0-9]{20,}|pk_(?:live|test)_[A-Za-z0-9]{20,})\b/g, "[REDACTED]").replace(/\b(?:xox[bpsa]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,})\b/g, "[REDACTED]").replace(/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss):\/\/[^\s"',;}{)]+/gi, "[REDACTED_URI]").replace(
-    /((?:authorization\s*[:=]\s*(?:bearer\s+)?|(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*)["']?)[^\s"',;}{]+/gi,
-    "$1[REDACTED]"
-  ).replace(
-    /-----BEGIN (?:[A-Z ]+)?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+)?PRIVATE KEY-----/g,
-    "[REDACTED PRIVATE KEY]"
-  );
-  for (const literal of patterns) {
-    if (literal) out = out.split(literal).join("[REDACTED]");
-  }
-  return out.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "");
-}
-function jsonObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 // src/v2/observer.ts
 var OBSERVER_PROMPT = `/no_think
@@ -225,70 +269,83 @@ function resolveQuote(source, quote) {
   }
   return null;
 }
+var MAX_OBSERVER_CLAIMS = 16;
 function parseObservations(text, job) {
   if (Buffer.byteLength(text) > 256 * 1024) throw new Error("Observer response exceeds 256 KiB");
   const body = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const result = JSON.parse(body);
-  if (!jsonObject(result) || !Array.isArray(result.claims) || result.claims.length > 16)
-    throw new Error("Observer must return at most 16 claims");
-  return result.claims.map((raw) => {
-    if (!jsonObject(raw) || typeof raw.text !== "string" || !raw.text.trim() || // L17: Reject empty/whitespace-only claims
-    !CLAIM_KINDS.includes(raw.kind) || !Array.isArray(raw.evidence) || raw.evidence.length === 0 || raw.evidence.length > 8)
-      throw new Error("Malformed observer claim");
-    const evidence = raw.evidence.map((ref) => {
-      if (!jsonObject(ref) || !Number.isInteger(ref.chunk) || typeof ref.quote !== "string" || ref.quote.length < 3)
-        throw new Error("Observer evidence needs a chunk and exact quote");
-      const chunk = job.chunks[Number(ref.chunk)];
-      if (!chunk) throw new Error("Observer cited an unknown chunk");
-      const source = chunk.source.text.slice(chunk.start, chunk.end);
-      const match = resolveQuote(source, ref.quote);
-      if (!match) return null;
-      return {
-        sourceKey: chunk.source.key,
-        hash: chunk.source.hash,
-        start: chunk.start + match.offset,
-        end: chunk.start + match.offset + match.length
-      };
-    }).filter((e) => e !== null);
-    if (!evidence.length) return null;
-    const onlyInferred = evidence.every(
-      (e) => job.chunks.some(
-        (c) => c.source.key === e.sourceKey && ["assistant", "branch_summary"].includes(c.source.role)
-      )
-    );
-    const kind = onlyInferred && raw.kind !== "procedure" ? "hypothesis" : raw.kind;
-    const claim = { text: raw.text, kind, evidence };
-    for (const key of [
-      "subject",
-      "predicate",
-      "value",
-      "rationale",
-      "validFrom",
-      "validUntil",
-      "environment"
-    ])
-      if (raw[key] !== void 0) {
-        if (typeof raw[key] !== "string") throw new Error(`Invalid observer ${key}`);
-        claim[key] = raw[key];
-      }
-    for (const key of ["conditions", "cues", "alternatives"])
-      if (raw[key] !== void 0) {
-        if (!Array.isArray(raw[key]) || !raw[key].every((v) => typeof v === "string"))
-          throw new Error(`Invalid observer ${key}`);
-        claim[key] = raw[key];
-      }
-    claim.id = `memory:${hash(JSON.stringify([job.projectId, job.sessionId, kind, normalize(claim.text), evidence])).slice(0, 40)}`;
-    return claim;
+  const list = Array.isArray(result) ? result : jsonObject(result) ? result.claims : void 0;
+  if (!Array.isArray(list)) throw new Error('Observer must return {"claims": [...]}');
+  return list.slice(0, MAX_OBSERVER_CLAIMS).map((raw) => {
+    try {
+      return parseClaim(raw, job);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("unknown chunk")) throw error;
+      return null;
+    }
   }).filter((c) => c !== null);
+}
+function parseClaim(raw, job) {
+  if (!jsonObject(raw) || typeof raw.text !== "string" || !raw.text.trim() || // L17: Reject empty/whitespace-only claims
+  !CLAIM_KINDS.includes(raw.kind) || !Array.isArray(raw.evidence) || raw.evidence.length === 0 || raw.evidence.length > 8)
+    throw new Error("Malformed observer claim");
+  const evidence = raw.evidence.map((ref) => {
+    if (!jsonObject(ref) || !Number.isInteger(ref.chunk) || typeof ref.quote !== "string" || ref.quote.length < 3)
+      throw new Error("Observer evidence needs a chunk and exact quote");
+    const chunk = job.chunks[Number(ref.chunk)];
+    if (!chunk) throw new Error("Observer cited an unknown chunk");
+    const source = chunk.source.text.slice(chunk.start, chunk.end);
+    const match = resolveQuote(source, ref.quote);
+    if (!match) return null;
+    return {
+      sourceKey: chunk.source.key,
+      hash: chunk.source.hash,
+      start: chunk.start + match.offset,
+      end: chunk.start + match.offset + match.length
+    };
+  }).filter((e) => e !== null);
+  if (!evidence.length) return null;
+  const onlyInferred = evidence.every(
+    (e) => job.chunks.some(
+      (c) => c.source.key === e.sourceKey && ["assistant", "branch_summary"].includes(c.source.role)
+    )
+  );
+  const kind = onlyInferred && raw.kind !== "procedure" ? "hypothesis" : raw.kind;
+  const claim = { text: raw.text, kind, evidence };
+  for (const key of [
+    "subject",
+    "predicate",
+    "value",
+    "rationale",
+    "validFrom",
+    "validUntil",
+    "environment"
+  ])
+    if (raw[key] !== void 0) {
+      if (typeof raw[key] !== "string") throw new Error(`Invalid observer ${key}`);
+      claim[key] = raw[key];
+    }
+  for (const key of ["conditions", "cues", "alternatives"])
+    if (raw[key] !== void 0) {
+      if (!Array.isArray(raw[key]) || !raw[key].every((v) => typeof v === "string"))
+        throw new Error(`Invalid observer ${key}`);
+      claim[key] = raw[key];
+    }
+  claim.id = `memory:${hash(JSON.stringify([job.projectId, job.sessionId, kind, normalize(claim.text), evidence])).slice(0, 40)}`;
+  return claim;
 }
 function observerRequestTokens(job) {
   return estimateTokens(OBSERVER_PROMPT) + estimateTokens(observerInput(job)) + 256;
 }
 async function abortable(promise, signal) {
-  if (signal.aborted) throw signal.reason ?? new Error("Aborted");
   promise.catch((err) => {
-    console.error("[remendra] suppressed LLM error on abort:", err instanceof Error ? err.message : String(err));
+    if (signal.aborted) return;
+    log(
+      "[remendra] suppressed LLM error on abort:",
+      err instanceof Error ? err.message : String(err)
+    );
   });
+  if (signal.aborted) throw signal.reason ?? new Error("Aborted");
   let listener = () => {
   };
   try {
@@ -323,7 +380,7 @@ var BackgroundLearner = class {
   failed(result) {
     this.consecutiveFailures += 1;
     if (this.consecutiveFailures >= 3)
-      console.error(
+      log(
         `[remendra] learning degraded: ${this.consecutiveFailures} consecutive failed batches: ${result}`
       );
     return `${result} (${this.consecutiveFailures} consecutive failures)`;
@@ -375,6 +432,7 @@ var BackgroundLearner = class {
           if (observerRequestTokens(job) > config.observerInputTokens)
             throw new Error("Serialized observer input exceeds its configured budget");
           const combined = AbortSignal.any([signal, AbortSignal.timeout(config.jobTimeoutMs)]);
+          if (combined.aborted) throw combined.reason ?? new Error("Aborted");
           usage = void 0;
           const result = await abortable(
             complete({
@@ -394,13 +452,14 @@ var BackgroundLearner = class {
           const claims = parseObservations(result.text, job);
           await this.client.call("complete", [job, scope, claims, tokens, result.dollars]);
           if (signal.aborted || !stillCurrent())
-            console.error("[remendra] claims committed but generation changed; may be stale");
+            log("[remendra] claims committed but generation changed; may be stale");
           learned += claims.length;
           success = true;
           this.consecutiveFailures = 0;
           break;
         } catch (error) {
           const reason = redact(error instanceof Error ? error.message : String(error));
+          if (usage === void 0 && signal.aborted) usage = observerRequestTokens(job);
           try {
             await this.client.call("fail", [
               job,
@@ -410,7 +469,7 @@ var BackgroundLearner = class {
             ]);
           } catch (failError) {
             const msg = failError instanceof Error ? failError.message : String(failError);
-            console.error("[remendra] failJob failed:", msg, "job:", job.id);
+            log("[remendra] failJob failed:", msg, "job:", job.id);
           }
           if (signal.aborted || !stillCurrent())
             return this.failed(`Learning paused; ${learned} memories committed`);
@@ -450,9 +509,15 @@ var DEFAULT_CONFIG = {
 // src/v2/compiler.ts
 var PACKET_TYPE = "remendra.v2.context";
 var SUMMARY_PREFIX = "Remendra v2 memory checkpoint\n";
+var loggedUnknownWindow = false;
 function contextAllowance(configured, window, used, reserve) {
   if (!window || window <= 0) {
-    console.error(`[remendra] context window unknown; memory budget capped to ${Math.min(configured, 1024)} tokens`);
+    if (!loggedUnknownWindow) {
+      loggedUnknownWindow = true;
+      log(
+        `[remendra] context window unknown; memory budget capped to ${Math.min(configured, 1024)} tokens`
+      );
+    }
     return Math.min(configured, 1024);
   }
   const headroom = used === void 0 || used === null ? Math.floor(window * 0.04) : window - used - reserve;
@@ -472,7 +537,22 @@ function messageText(value) {
     return [];
   }).join("\n");
 }
-function sourceInputs(entries, excludedPaths = []) {
+function argumentStrings(args) {
+  return Object.values(args ?? {}).flatMap(
+    (v) => typeof v === "string" ? [v] : Array.isArray(v) ? v.filter((x) => typeof x === "string") : []
+  );
+}
+function contextEdits(entries) {
+  const edits = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    const e = entry;
+    if (e.type !== "context_edit" || typeof e.targetId !== "string") continue;
+    const r = e.replacement;
+    edits.set(e.targetId, r && typeof r === "object" ? { content: r.content } : null);
+  }
+  return edits;
+}
+function sourceInputs(entries, excludedPaths = [], edits = /* @__PURE__ */ new Map()) {
   const inputs = [];
   const calls = /* @__PURE__ */ new Map();
   let episodeId;
@@ -496,11 +576,15 @@ function sourceInputs(entries, excludedPaths = []) {
       for (const block of m.content) {
         if (block.type !== "toolCall") continue;
         const args = block.arguments;
-        const target = typeof args.path === "string" ? args.path : typeof args.file_path === "string" ? args.file_path : void 0;
-        calls.set(block.id, { name: block.name, target });
+        const pathTarget = typeof args.path === "string" ? args.path : typeof args.file_path === "string" ? args.file_path : void 0;
+        const sensitive = argumentStrings(args).find(
+          (v) => excludedPaths.some((p) => v.includes(p))
+        );
+        calls.set(block.id, { name: block.name, target: sensitive ?? pathTarget });
       }
     const call = m.role === "toolResult" ? calls.get(m.toolCallId) : void 0;
-    const content = m.role === "assistant" ? m.content.map((block) => {
+    const edit = edits.get(entry.id);
+    const content = edit === null ? "" : edit ? edit.content : m.role === "assistant" ? m.content.map((block) => {
       if (block.type !== "toolCall") return block;
       const target = calls.get(block.id)?.target;
       return target && excludedPaths.some((path) => target.includes(path)) ? { type: "text", text: `Tool call ${block.name}: [sensitive path excluded]` } : block;
@@ -555,6 +639,7 @@ var HELP_FULL = `Remendra \u2014 persistent memory for Pi (full reference)
 /remendra-recall <query>          memory search, ID, #N or #N:path
 Modes in settings: active, shadow (compile without injecting), recall (no background learning).
 User memory is opt-in. All source text remains untrusted data.`;
+var LEARN_DELAY_MS = 1e3;
 var LEGACY_PACKET_TYPES = /* @__PURE__ */ new Set(["remendra.v2.context", "remendra.v2.output"]);
 function extractFromThinking(raw) {
   for (const key of ["reasoning", "reasoning_content", "thinkingContent"]) {
@@ -574,6 +659,15 @@ function extractFromThinking(raw) {
   }
   return "";
 }
+function insertBeforeLastUser(messages, packet) {
+  let at = 0;
+  for (let i = messages.length - 1; i >= 0; i--)
+    if (messages[i].role === "user") {
+      at = i;
+      break;
+    }
+  return [...messages.slice(0, at), packet, ...messages.slice(at)];
+}
 function workerLocation() {
   const local = new URL("./v2/worker.js", import.meta.url);
   if (existsSync(local)) return local;
@@ -590,6 +684,7 @@ function installV2(pi, providedClient) {
   const directory = resolve(
     process.env.PI_REMENDRA_HOME ?? join(getAgentDir(), "pi-remendra", "v2")
   );
+  setLogFile(join(directory, "remendra.log"));
   let client = providedClient;
   let learner;
   let config = structuredClone(DEFAULT_CONFIG);
@@ -601,6 +696,11 @@ function installV2(pi, providedClient) {
   let foreground = false;
   let closing = false;
   let settledCount = 0;
+  let learnTimer;
+  const cancelScheduledLearning = () => {
+    if (learnTimer) clearTimeout(learnTimer);
+    learnTimer = void 0;
+  };
   const passive = process.env.PI_REMENDRA_PASSIVE === "true";
   const show = (ctx, value) => {
     const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -613,7 +713,7 @@ function installV2(pi, providedClient) {
           display: true
         });
     } catch (showError) {
-      console.error(
+      log(
         "[remendra] show failed:",
         showError instanceof Error ? showError.message : String(showError)
       );
@@ -631,7 +731,7 @@ function installV2(pi, providedClient) {
     try {
       if (ctx.hasUI) ctx.ui.setStatus("remendra", text);
     } catch (statusError) {
-      console.error(
+      log(
         "[remendra] status update failed:",
         statusError instanceof Error ? statusError.message : String(statusError)
       );
@@ -649,16 +749,17 @@ function installV2(pi, providedClient) {
     try {
       if (ctx.hasUI) ctx.ui.notify(`Remendra: ${message}`, "warning");
     } catch (notifyError) {
-      console.error(
+      log(
         "[remendra] error notification failed:",
         notifyError instanceof Error ? notifyError.message : String(notifyError),
         "original:",
         message
       );
     }
-    console.error(`[remendra] error #${errorCount}:`, message);
+    log(`[remendra] error #${errorCount}:`, message);
   };
   const invalidate = () => {
+    cancelScheduledLearning();
     generation++;
     learner?.cancel("Session, branch, or memory changed");
   };
@@ -706,7 +807,13 @@ function installV2(pi, providedClient) {
     scope = { ...makeScope(ctx), entryIds: entries.map((e) => e.id) };
     const fresh = entries.filter((e) => !seen.has(e.id));
     if (fresh.length && config.enabled && !passive) {
-      const inputs = sourceInputs(fresh, config.excludedPaths);
+      const editedNow = new Set(
+        fresh.flatMap(
+          (e) => e.type === "context_edit" ? [e.targetId] : []
+        )
+      );
+      const changed = entries.filter((e) => !seen.has(e.id) || editedNow.has(e.id));
+      const inputs = sourceInputs(changed, config.excludedPaths, contextEdits(entries));
       if (inputs.length) await client?.call("ingest", [scope, inputs], 1e4);
       for (const entry of fresh) seen.add(entry.id);
     }
@@ -767,8 +874,12 @@ function installV2(pi, providedClient) {
     };
   };
   const learn = async (ctx) => {
-    if (passive || !config.enabled || !config.observer || config.mode === "recall" || !ctx.isProjectTrusted())
+    if (passive || !config.enabled || !config.observer || config.mode === "recall")
       return "Learning disabled";
+    if (!ctx.isProjectTrusted()) {
+      status(ctx, "\u25CC learning paused \xB7 project not trusted");
+      return "Learning paused: this project is not trusted";
+    }
     const hostSignal = ctx.signal;
     const current = await refresh(ctx), epoch = generation;
     if (!client) return "Session closed";
@@ -829,7 +940,7 @@ function installV2(pi, providedClient) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes("Generation changed")) {
-        console.error("[remendra] startup compile skipped (generation changed \u2014 will retry on next turn)");
+        log("[remendra] startup compile skipped (generation changed \u2014 will retry on next turn)");
       } else {
         report(ctx, error);
       }
@@ -876,6 +987,7 @@ function installV2(pi, providedClient) {
   });
   pi.on("agent_start", () => {
     foreground = true;
+    cancelScheduledLearning();
     learner?.cancel();
   });
   pi.on("turn_end", async (_event, ctx) => {
@@ -922,17 +1034,14 @@ function installV2(pi, providedClient) {
         } : m
       );
       return {
-        messages: [
-          {
-            role: "custom",
-            customType: PACKET_TYPE,
-            content: current.text,
-            display: false,
-            timestamp: Date.now(),
-            details: current.manifest
-          },
-          ...messages
-        ]
+        messages: insertBeforeLastUser(messages, {
+          role: "custom",
+          customType: PACKET_TYPE,
+          content: current.text,
+          display: false,
+          timestamp: Date.now(),
+          details: current.manifest
+        })
       };
     } catch (error) {
       report(ctx, error);
@@ -949,7 +1058,13 @@ function installV2(pi, providedClient) {
   pi.on("agent_settled", (_event, ctx) => {
     foreground = false;
     settledCount++;
-    void learn(ctx).catch((error) => report(ctx, error));
+    cancelScheduledLearning();
+    learnTimer = setTimeout(() => {
+      learnTimer = void 0;
+      if (closing || foreground) return;
+      void learn(ctx).catch((error) => report(ctx, error));
+    }, LEARN_DELAY_MS);
+    learnTimer.unref?.();
   });
   pi.on("session_before_switch", () => invalidate());
   pi.on("session_before_fork", () => invalidate());
@@ -991,10 +1106,10 @@ function installV2(pi, providedClient) {
         try {
           const promoted = await client.call("sweepForPromotion", [scope, settledCount]);
           if (promoted?.length) {
-            console.error(`[remendra] auto-promoted ${promoted.length} memories to project scope`);
+            log(`[remendra] auto-promoted ${promoted.length} memories to project scope`);
           }
         } catch (promoError) {
-          console.error(
+          log(
             "[remendra] auto-promotion sweep failed:",
             promoError instanceof Error ? promoError.message : String(promoError)
           );
@@ -1002,7 +1117,7 @@ function installV2(pi, providedClient) {
       }
       await client?.close();
     } catch (shutdownError) {
-      console.error(
+      log(
         "[remendra] session_shutdown cleanup failed:",
         shutdownError instanceof Error ? shutdownError.message : String(shutdownError)
       );
@@ -1067,6 +1182,7 @@ function installV2(pi, providedClient) {
           ...await mem.call("doctor", []),
           lastError: lastError || void 0,
           configPath: join(directory, "config.json"),
+          logPath: join(directory, "remendra.log"),
           packagePath: dirname(fileURLToPath(import.meta.url))
         });
       else if (verb === "gaps") show(ctx, await mem.call("gaps", [current]));
@@ -1099,9 +1215,7 @@ function installV2(pi, providedClient) {
           invalidate();
           await learner?.stop();
           learner?.cancel();
-          config = await mem.call("configSet", [
-            { ...config, ...JSON.parse(rest) }
-          ]);
+          config = await mem.call("configSet", [{ ...config, ...JSON.parse(rest) }]);
           scope = makeScope(ctx);
           show(ctx, "Memory settings saved.");
         }
@@ -1178,11 +1292,7 @@ function installV2(pi, providedClient) {
         if (rest)
           show(
             ctx,
-            await mem.call(
-              "import",
-              [current, resolve(ctx.cwd, rest), verb === "migrate"],
-              3e4
-            )
+            await mem.call("import", [current, resolve(ctx.cwd, rest), verb === "migrate"], 3e4)
           );
         else if (verb === "migrate")
           show(ctx, await mem.call("importLegacyEntries", [current, branch(ctx)], 3e4));
@@ -1190,7 +1300,7 @@ function installV2(pi, providedClient) {
       } else if (verb === "index-sessions") {
         const dir = rest ? resolve(ctx.cwd, rest) : join(getAgentDir(), "sessions");
         status(ctx, `\u25CC indexing sessions from ${dir}`);
-        show(ctx, await mem.call("indexSessions", [current, dir], 6e4));
+        show(ctx, await mem.call("indexSessions", [current, dir, await realpath(ctx.cwd)], 6e4));
       } else if (verb === "link-project") {
         if (!rest)
           throw new Error("Provide the existing project ID from /remendra doctor or status");

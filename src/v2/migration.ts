@@ -1,6 +1,7 @@
 import type { MemoryStore } from "./store.js";
 import type { Scope, ClaimInput } from "./types.js";
 import { hash, jsonObject } from "./text.js";
+import { log } from "./log.js";
 
 /** Reads records directly: no legacy fold, fuzzy grouping, or relevance pruning. */
 export function importLegacy(
@@ -52,7 +53,7 @@ export function importLegacy(
         content = String(value.content);
       if (!content.trim() || content.length > 12000) {
         if (content.length > 12000) {
-          console.warn(
+          log(
             "[remendra] Migration skipped oversized record (" +
               content.length +
               " chars): " +
@@ -106,7 +107,7 @@ export function importLegacy(
         } catch (statusError) {
           partialFailures++;
           failedIds.push(result.claim.id); // L8
-          console.error(
+          log(
             "[remendra] migration status change failed for",
             result.claim.id,
             ":",

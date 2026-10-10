@@ -121,6 +121,7 @@ export function recall(
     query,
     undefined,
     mode === "file" ? "file" : "hybrid",
+    mode === "regex",
   );
   return finish(
     prefix +

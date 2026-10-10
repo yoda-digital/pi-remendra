@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "fs";
 import type { Message } from "@earendil-works/pi-ai";
 import { renderMessage, type RenderedEntry } from "./render-entries";
+import { log } from "../v2/log.js";
 
 export interface LoadedMessages {
   rendered: RenderedEntry[];
@@ -105,7 +106,7 @@ export const loadAllMessages = (
     }
   }
   if (parseErrors > 0) {
-    console.warn(`remendra: ${parseErrors} malformed JSONL line(s) in ${sessionFile}`);
+    log(`remendra: ${parseErrors} malformed JSONL line(s) in ${sessionFile}`);
   }
   const rendered: RenderedEntry[] = [];
   const rawMessages: Message[] = [];
@@ -115,6 +116,9 @@ export const loadAllMessages = (
   for (const e of entries) {
     const isMessage = e.type === "message" && e.message;
     if (!isMessage) continue;
+    // Pi 1.x records the system prompt as role "system" messages: prompt material, not
+    // conversation. Skipping them before numbering keeps #N indices stable and meaningful.
+    if ((e.message as { role?: unknown }).role === "system") continue;
 
     const allowed = !allowedEntryIds || allowedEntryIds.has(e.id);
     if (allowed) {

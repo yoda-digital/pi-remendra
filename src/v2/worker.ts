@@ -1,9 +1,12 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { MemoryService, RPC_METHODS } from "./service.js";
 import { redact } from "./text.js";
+import { join } from "node:path";
+import { log, setLogFile } from "./log.js";
 
 if (!parentPort) throw new Error("Memory worker must run in a worker thread");
 const port = parentPort;
+setLogFile(join(String(workerData.directory), "remendra.log"));
 const service = new MemoryService(String(workerData.file), String(workerData.directory));
 async function dispatch(request: { id: number; method: string; args: unknown[] }): Promise<void> {
   try {
@@ -29,7 +32,7 @@ async function dispatch(request: { id: number; method: string; args: unknown[] }
       });
     } catch (postError) {
       // Port closed or message not serializable — nothing we can do but log
-      console.error(
+      log(
         "[remendra] worker postMessage failed:",
         postError instanceof Error ? postError.message : String(postError),
       );
@@ -50,7 +53,7 @@ port.on("message", (request: { id: number; method: string; args: unknown[] }) =>
         });
       } catch (portError) {
         // L6: Log port-death error instead of swallowing silently
-        console.error(
+        log(
           "[remendra] worker port dead:",
           portError instanceof Error ? portError.message : String(portError),
         );

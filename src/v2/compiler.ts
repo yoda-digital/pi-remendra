@@ -1,6 +1,7 @@
 import type { MemoryStore } from "./store.js";
 import type { Packet, Scope, SearchHit } from "./types.js";
 import { COUNTER, estimateTokens, hash } from "./text.js";
+import { log } from "./log.js";
 
 export const PACKET_TYPE = "remendra.v2.context";
 export const SUMMARY_PREFIX = "Remendra v2 memory checkpoint\n";
@@ -136,6 +137,8 @@ function compileSnapshot(
 }
 
 /** Bounds memory by actual available window headroom; unknown usage gets a small reserve. */
+let loggedUnknownWindow = false;
+
 export function contextAllowance(
   configured: number,
   window: number | undefined,
@@ -143,10 +146,13 @@ export function contextAllowance(
   reserve: number,
 ): number {
   if (!window || window <= 0) {
-    // L5: Log when budget is capped due to unknown context window
-    console.error(
-      `[remendra] context window unknown; memory budget capped to ${Math.min(configured, 1024)} tokens`,
-    );
+    // L5: Log (once per process) when budget is capped due to unknown context window
+    if (!loggedUnknownWindow) {
+      loggedUnknownWindow = true;
+      log(
+        `[remendra] context window unknown; memory budget capped to ${Math.min(configured, 1024)} tokens`,
+      );
+    }
     return Math.min(configured, 1024);
   }
   const headroom =

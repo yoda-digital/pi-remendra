@@ -668,3 +668,55 @@ describe("regression: bug fixes", () => {
     }
   });
 });
+
+describe("free-text search", () => {
+  it("finds memories for a natural multi-word question (not just an exact phrase)", () => {
+    const deploy = remember("Deploy the API with Docker Compose on Hetzner");
+    remember("The billing service uses Stripe");
+    const hits = store.search({ scope, text: "where do we deploy the api?" });
+    expect(hits.map((h) => h.claim.id)).toContain(deploy.id);
+    expect(hits[0].claim.id).toBe(deploy.id);
+    expect(hits.find((h) => h.claim.text.includes("Stripe"))).toBeUndefined();
+  });
+
+  it("ranks a memory matching more of the query first", () => {
+    remember("Hetzner hosts the database");
+    const both = remember("Deploy the API to Hetzner");
+    expect(store.search({ scope, text: "deploy hetzner" })[0].claim.id).toBe(both.id);
+  });
+
+  it("filters by short queries instead of returning everything", () => {
+    const db = remember("DB backups run nightly");
+    remember("Use Stripe for billing");
+    const hits = store.search({ scope, text: "db" });
+    expect(hits.map((h) => h.claim.id)).toEqual([db.id]);
+    expect(hits[0].reasons).toContain("substring match");
+  });
+
+  it("searches sources by terms too", () => {
+    source("We decided to deploy with Docker Compose");
+    expect(store.sourceSearch(scope, "how do we deploy?").length).toBe(1);
+    expect(store.sourceSearch(scope, "a").length).toBe(0);
+  });
+});
+
+it("keeps the source search index intact when erasing a memory whose source was later replaced", () => {
+  const original = source("Use PostgreSQL on port 5432", "entry-replaced");
+  const claim = remember("PostgreSQL runs on port 5432", {}, original);
+  // The same session entry is ingested again with new text (a context edit, a re-ingest).
+  store.ingest(scope, [
+    {
+      entryId: "entry-replaced",
+      text: "Use SQLite instead",
+      role: "user",
+      timestamp: "2026-09-06T12:05:00.000Z",
+    },
+  ]);
+  const current = store.explain(claim.id, scope).claim;
+  store.erase(scope, claim.id, current.revision);
+  const db = (store as unknown as { db: { exec(sql: string): void } }).db;
+  expect(() =>
+    db.exec("INSERT INTO source_fts(source_fts) VALUES('integrity-check')"),
+  ).not.toThrow();
+  expect(store.doctor().integrity).toEqual({ quick_check: "ok" });
+});

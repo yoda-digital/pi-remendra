@@ -179,3 +179,40 @@ it("accepts source-backed manual records through the same RPC validation", async
   ]);
   expect(result.claim.status).toBe("active");
 });
+describe("stuck worker recovery", () => {
+  const script = (dir: string) => {
+    const file = join(dir, "flaky.mjs");
+    writeFileSync(
+      file,
+      [
+        'import { parentPort } from "node:worker_threads";',
+        "// Serial like the real worker: one request at a time.",
+        "let queue = Promise.resolve();",
+        "const handle = async ({ id, method }) => {",
+        "  if (method === 'hang') { while (true) {} }",
+        "  if (method === 'slow') await new Promise((r) => setTimeout(r, 400));",
+        "  parentPort.postMessage({ id, result: method });",
+        "};",
+        "parentPort.on('message', (m) => { queue = queue.then(() => handle(m)); });",
+      ].join("\n"),
+    );
+    return pathToFileURL(file);
+  };
+
+  it("restarts a worker stuck on a request so later calls work again", async () => {
+    const flaky = new MemoryClient(join(directory, "x.sqlite"), directory, script(directory));
+    await expect(flaky.call("hang" as never, [] as never, 150)).rejects.toThrow("worker restarted");
+    const start = Date.now();
+    await expect(flaky.call("doctor", [], 1000)).resolves.toBe("doctor");
+    expect(Date.now() - start).toBeLessThan(900);
+    await flaky.close();
+  });
+
+  it("does not kill a worker that is busy with a slower request ahead in the queue", async () => {
+    const flaky = new MemoryClient(join(directory, "y.sqlite"), directory, script(directory));
+    const slow = flaky.call("slow" as never, [] as never, 2000);
+    await expect(flaky.call("doctor", [], 100)).rejects.toThrow("exceeded 100 ms");
+    await expect(slow).resolves.toBe("slow");
+    await flaky.close();
+  });
+});

@@ -14,9 +14,10 @@ import { MemoryClient } from "./client.js";
 import { BackgroundLearner, type Complete } from "./learner.js";
 import { DEFAULT_CONFIG } from "./config.js";
 import { PACKET_TYPE, SUMMARY_PREFIX, contextAllowance } from "./compiler.js";
-import { sourceInputs, messageText } from "./sources.js";
+import { contextEdits, sourceInputs, messageText } from "./sources.js";
 import { hash, jsonObject, redact } from "./text.js";
 import type { ClaimInput, MemoryConfig, Packet, Scope } from "./types.js";
+import { log, setLogFile } from "./log.js";
 
 const HELP_SHORT = `Remendra — persistent memory for Pi
 /remendra                         status and daily budget
@@ -54,6 +55,9 @@ const HELP_FULL = `Remendra — persistent memory for Pi (full reference)
 Modes in settings: active, shadow (compile without injecting), recall (no background learning).
 User memory is opt-in. All source text remains untrusted data.`;
 
+/** Pause between the agent settling and background learning (see agent_settled). */
+export const LEARN_DELAY_MS = 1000;
+
 const LEGACY_PACKET_TYPES = new Set(["remendra.v2.context", "remendra.v2.output"]);
 
 /** Extract observer JSON from thinking/reasoning fields when content is empty. */
@@ -76,6 +80,17 @@ function extractFromThinking(raw: Record<string, unknown>): string {
   return "";
 }
 
+/** Insert `packet` right before the last user message (at the front when there is none). */
+export function insertBeforeLastUser<T extends { role: string }>(messages: T[], packet: T): T[] {
+  let at = 0;
+  for (let i = messages.length - 1; i >= 0; i--)
+    if (messages[i].role === "user") {
+      at = i;
+      break;
+    }
+  return [...messages.slice(0, at), packet, ...messages.slice(at)];
+}
+
 function workerLocation(): URL {
   const local = new URL("./v2/worker.js", import.meta.url);
   if (existsSync(local)) return local;
@@ -94,6 +109,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   const directory = resolve(
     process.env.PI_REMENDRA_HOME ?? join(getAgentDir(), "pi-remendra", "v2"),
   );
+  setLogFile(join(directory, "remendra.log"));
   let client = providedClient;
   let learner: BackgroundLearner | undefined;
   let config: MemoryConfig = structuredClone(DEFAULT_CONFIG);
@@ -109,6 +125,11 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   let foreground = false;
   let closing = false;
   let settledCount = 0;
+  let learnTimer: ReturnType<typeof setTimeout> | undefined;
+  const cancelScheduledLearning = (): void => {
+    if (learnTimer) clearTimeout(learnTimer);
+    learnTimer = undefined;
+  };
   const passive = process.env.PI_REMENDRA_PASSIVE === "true";
   const show = (ctx: ExtensionContext, value: unknown): void => {
     const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -122,7 +143,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         });
     } catch (showError) {
       // L2: Fallback to sendMessage when UI is disposed — the output is still useful
-      console.error(
+      log(
         "[remendra] show failed:",
         showError instanceof Error ? showError.message : String(showError),
       );
@@ -143,7 +164,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     } catch (statusError) {
       // Pi invalidates captured contexts on disposal and replacement.
       // Log non-disposal errors so they're visible in diagnostics.
-      console.error(
+      log(
         "[remendra] status update failed:",
         statusError instanceof Error ? statusError.message : String(statusError),
       );
@@ -162,7 +183,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     try {
       if (ctx.hasUI) ctx.ui.notify(`Remendra: ${message}`, "warning");
     } catch (notifyError) {
-      console.error(
+      log(
         "[remendra] error notification failed:",
         notifyError instanceof Error ? notifyError.message : String(notifyError),
         "original:",
@@ -170,9 +191,10 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       );
     }
     // H3: Log to console for diagnostics — never just swallow
-    console.error(`[remendra] error #${errorCount}:`, message);
+    log(`[remendra] error #${errorCount}:`, message);
   };
   const invalidate = (): void => {
+    cancelScheduledLearning();
     generation++;
     learner?.cancel("Session, branch, or memory changed");
   };
@@ -222,7 +244,15 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     scope = { ...makeScope(ctx), entryIds: entries.map((e) => e.id) };
     const fresh = entries.filter((e) => !seen.has(e.id));
     if (fresh.length && config.enabled && !passive) {
-      const inputs = sourceInputs(fresh, config.excludedPaths);
+      // A new context edit changes an entry that was usually ingested already: ingest the
+      // target again so its stored source is replaced (or retracted when removed).
+      const editedNow = new Set(
+        fresh.flatMap((e) =>
+          e.type === "context_edit" ? [(e as { targetId: string }).targetId] : [],
+        ),
+      );
+      const changed = entries.filter((e) => !seen.has(e.id) || editedNow.has(e.id));
+      const inputs = sourceInputs(changed, config.excludedPaths, contextEdits(entries));
       if (inputs.length) await client?.call("ingest", [scope, inputs], 10000);
       for (const entry of fresh) seen.add(entry.id);
     }
@@ -296,14 +326,13 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       };
     };
   const learn = async (ctx: ExtensionContext): Promise<string> => {
-    if (
-      passive ||
-      !config.enabled ||
-      !config.observer ||
-      config.mode === "recall" ||
-      !ctx.isProjectTrusted()
-    )
+    if (passive || !config.enabled || !config.observer || config.mode === "recall")
       return "Learning disabled";
+    if (!ctx.isProjectTrusted()) {
+      // Keep untrusted repository content out of durable memory, and say why nothing is learned.
+      status(ctx, "◌ learning paused · project not trusted");
+      return "Learning paused: this project is not trusted";
+    }
     const hostSignal = ctx.signal;
     const current = await refresh(ctx),
       epoch = generation;
@@ -376,9 +405,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       // generation counter. This self-resolves on the next turn. Don't alarm the user.
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes("Generation changed")) {
-        console.error(
-          "[remendra] startup compile skipped (generation changed — will retry on next turn)",
-        );
+        log("[remendra] startup compile skipped (generation changed — will retry on next turn)");
       } else {
         report(ctx, error);
       }
@@ -433,6 +460,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   });
   pi.on("agent_start", () => {
     foreground = true;
+    cancelScheduledLearning();
     learner?.cancel();
   });
   pi.on("turn_end", async (_event, ctx) => {
@@ -502,19 +530,20 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
             }
           : m,
       );
-      // The front position cannot split an assistant tool call from its tool results.
+      // The packet goes right before the latest user prompt. It is compiled for that prompt,
+      // so it changes from prompt to prompt; anything placed after it loses the provider's
+      // prompt cache. Before the last user message, everything earlier stays cacheable (at
+      // the front, a local model re-reads the whole conversation on every prompt), and a
+      // user-message boundary never splits an assistant tool call from its results.
       return {
-        messages: [
-          {
-            role: "custom" as const,
-            customType: PACKET_TYPE,
-            content: current.text,
-            display: false,
-            timestamp: Date.now(),
-            details: current.manifest,
-          },
-          ...messages,
-        ],
+        messages: insertBeforeLastUser(messages, {
+          role: "custom" as const,
+          customType: PACKET_TYPE,
+          content: current.text,
+          display: false,
+          timestamp: Date.now(),
+          details: current.manifest,
+        }),
       };
     } catch (error) {
       report(ctx, error);
@@ -533,7 +562,17 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   pi.on("agent_settled", (_event, ctx) => {
     foreground = false;
     settledCount++;
-    void learn(ctx).catch((error) => report(ctx, error));
+    cancelScheduledLearning();
+    // Start a moment after settling. A one-shot run (pi -p, JSON mode) shuts down right
+    // after it settles, so learning never starts there instead of leasing a job only to be
+    // cancelled at shutdown; its sources are learned in the next long-lived session.
+    // Interactive and SDK sessions start learning after the pause.
+    learnTimer = setTimeout(() => {
+      learnTimer = undefined;
+      if (closing || foreground) return;
+      void learn(ctx).catch((error) => report(ctx, error));
+    }, LEARN_DELAY_MS);
+    learnTimer.unref?.();
   });
   pi.on("session_before_switch", () => invalidate());
   pi.on("session_before_fork", () => invalidate());
@@ -576,10 +615,10 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         try {
           const promoted = await client.call("sweepForPromotion", [scope, settledCount]);
           if (promoted?.length) {
-            console.error(`[remendra] auto-promoted ${promoted.length} memories to project scope`);
+            log(`[remendra] auto-promoted ${promoted.length} memories to project scope`);
           }
         } catch (promoError) {
-          console.error(
+          log(
             "[remendra] auto-promotion sweep failed:",
             promoError instanceof Error ? promoError.message : String(promoError),
           );
@@ -587,7 +626,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       }
       await client?.close();
     } catch (shutdownError) {
-      console.error(
+      log(
         "[remendra] session_shutdown cleanup failed:",
         shutdownError instanceof Error ? shutdownError.message : String(shutdownError),
       );
@@ -657,6 +696,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           ...(await mem.call("doctor", [])),
           lastError: lastError || undefined,
           configPath: join(directory, "config.json"),
+          logPath: join(directory, "remendra.log"),
           packagePath: dirname(fileURLToPath(import.meta.url)),
         });
       else if (verb === "gaps") show(ctx, await mem.call("gaps", [current]));
@@ -785,7 +825,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       } else if (verb === "index-sessions") {
         const dir = rest ? resolve(ctx.cwd, rest) : join(getAgentDir(), "sessions");
         status(ctx, `◌ indexing sessions from ${dir}`);
-        show(ctx, await mem.call("indexSessions", [current, dir], 60000));
+        show(ctx, await mem.call("indexSessions", [current, dir, await realpath(ctx.cwd)], 60000));
       } else if (verb === "link-project") {
         if (!rest)
           throw new Error("Provide the existing project ID from /remendra doctor or status");

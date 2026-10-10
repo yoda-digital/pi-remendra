@@ -1,24 +1,24 @@
 #!/usr/bin/env node
 import { realpathSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, existsSync, chmodSync, renameSync } from 'fs';
 import { homedir } from 'os';
-import { resolve, join, dirname } from 'path';
+import { resolve, join, dirname, relative, isAbsolute } from 'path';
 import { randomUUID, createHash } from 'crypto';
 import { createRequire } from 'module';
 
 var require2 = createRequire(import.meta.url);
-function openDatabase(file) {
+function openDatabase(file2) {
   if ("Bun" in globalThis) {
     const sqlite = require2("bun:sqlite");
-    return new sqlite.Database(file);
+    return new sqlite.Database(file2);
   }
   try {
     const sqlite = require2("node:sqlite");
-    return new sqlite.DatabaseSync(file, { timeout: 3e3 });
+    return new sqlite.DatabaseSync(file2, { timeout: 3e3 });
   } catch {
   }
   try {
     const BetterSqlite3 = require2("better-sqlite3");
-    return new BetterSqlite3(file, { timeout: 3e3 });
+    return new BetterSqlite3(file2, { timeout: 3e3 });
   } catch {
     throw new Error(
       "Remendra requires SQLite. On Node 24+ it works out of the box. On Node 22, install better-sqlite3: pnpm add better-sqlite3"
@@ -39,6 +39,14 @@ var CLAIM_KINDS = [
 ];
 var hash = (value) => createHash("sha256").update(value).digest("hex");
 var normalize = (text) => text.normalize("NFC").toLocaleLowerCase("und").replace(/\s+/gu, " ").trim();
+var terms = (text) => [
+  ...new Set(
+    [
+      ...normalize(text).matchAll(/[\p{L}\p{N}_]+/gu),
+      ...normalize(text.replace(/([a-z])([A-Z])/g, "$1 $2")).matchAll(/[\p{L}\p{N}_]+/gu)
+    ].map((match) => match[0])
+  )
+].slice(0, 32);
 var estimateTokens = (text) => Math.ceil(text.length / 4);
 var COUNTER = "chars/4-estimate";
 function clipTokens(text, budget) {
@@ -58,7 +66,13 @@ function redact(text, patterns = []) {
   let out = text.replace(
     /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,
     "[REDACTED]"
-  ).replace(/\b(?:AKIA[A-Z0-9]{12,})\b/g, "[REDACTED]").replace(/\b(?:sk_(?:live|test)_[A-Za-z0-9]{20,}|rk_(?:live|test)_[A-Za-z0-9]{20,}|pk_(?:live|test)_[A-Za-z0-9]{20,})\b/g, "[REDACTED]").replace(/\b(?:xox[bpsa]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,})\b/g, "[REDACTED]").replace(/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss):\/\/[^\s"',;}{)]+/gi, "[REDACTED_URI]").replace(
+  ).replace(/\b(?:AKIA[A-Z0-9]{12,})\b/g, "[REDACTED]").replace(
+    /\b(?:sk_(?:live|test)_[A-Za-z0-9]{20,}|rk_(?:live|test)_[A-Za-z0-9]{20,}|pk_(?:live|test)_[A-Za-z0-9]{20,})\b/g,
+    "[REDACTED]"
+  ).replace(/\b(?:xox[bpsa]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,})\b/g, "[REDACTED]").replace(
+    /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss):\/\/[^\s"',;}{)]+/gi,
+    "[REDACTED_URI]"
+  ).replace(
     /((?:authorization\s*[:=]\s*(?:bearer\s+)?|(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*)["']?)[^\s"',;}{]+/gi,
     "$1[REDACTED]"
   ).replace(
@@ -79,6 +93,118 @@ function equivalent(a, b) {
 }
 function jsonObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+var STOPWORDS = /* @__PURE__ */ new Set([
+  "and",
+  "or",
+  "but",
+  "if",
+  "we",
+  "our",
+  "you",
+  "your",
+  "they",
+  "them",
+  "me",
+  "my",
+  // English
+  "the",
+  "a",
+  "an",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "have",
+  "has",
+  "had",
+  "do",
+  "does",
+  "did",
+  "will",
+  "would",
+  "could",
+  "should",
+  "may",
+  "might",
+  "can",
+  "shall",
+  "of",
+  "in",
+  "to",
+  "for",
+  "with",
+  "on",
+  "at",
+  "from",
+  "by",
+  "as",
+  "into",
+  "through",
+  "during",
+  "before",
+  "after",
+  "above",
+  "below",
+  "between",
+  "out",
+  "off",
+  "over",
+  "under",
+  "again",
+  "further",
+  "then",
+  "once",
+  "here",
+  "there",
+  "when",
+  "where",
+  "why",
+  "how",
+  "all",
+  "both",
+  "each",
+  "few",
+  "more",
+  "most",
+  "other",
+  "some",
+  "such",
+  "no",
+  "nor",
+  "not",
+  "only",
+  "own",
+  "same",
+  "so",
+  "than",
+  "too",
+  "very",
+  "just",
+  "about",
+  "it",
+  "its",
+  "that",
+  "this",
+  "what",
+  "which",
+  "who",
+  "whom",
+  "these",
+  "those"
+]);
+var quoteFts = (s) => `"${s.replace(/"/g, '""')}"`;
+function ftsMatch(text) {
+  const query = text.trim();
+  const words = terms(query).filter((w) => [...w].length >= 3 && !STOPWORDS.has(w));
+  if (words.length) return words.slice(0, 16).map(quoteFts).join(" OR ");
+  return [...query].length >= 3 ? quoteFts(query) : void 0;
+}
+function textFilterTerms(text) {
+  return terms(text.trim()).filter((w) => !STOPWORDS.has(w));
 }
 
 // src/v2/store.ts
@@ -101,10 +227,10 @@ var parse = (row, key = "data") => {
 };
 var nowISO = () => (/* @__PURE__ */ new Date()).toISOString();
 var MemoryStore = class {
-  constructor(file) {
-    this.file = file;
-    if (file !== ":memory:") mkdirSync(dirname(file), { recursive: true, mode: 448 });
-    this.db = openDatabase(file);
+  constructor(file2) {
+    this.file = file2;
+    if (file2 !== ":memory:") mkdirSync(dirname(file2), { recursive: true, mode: 448 });
+    this.db = openDatabase(file2);
     this.db.exec(
       "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000; PRAGMA secure_delete=ON;"
     );
@@ -146,7 +272,7 @@ var MemoryStore = class {
       CREATE INDEX IF NOT EXISTS source_scope ON sources(project_id,session_id,entry_id);
       CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(text,content='sources',content_rowid='rowid',tokenize='trigram');
       CREATE TRIGGER IF NOT EXISTS source_ai AFTER INSERT ON sources BEGIN INSERT INTO source_fts(rowid,text) VALUES(new.rowid,new.text); END;
-      CREATE TRIGGER IF NOT EXISTS source_au AFTER UPDATE OF text ON sources BEGIN INSERT INTO source_fts(source_fts,rowid,text) VALUES('delete',old.rowid,old.text); INSERT INTO source_fts(rowid,text) VALUES(new.rowid,new.text); END;
+      DROP TRIGGER IF EXISTS source_au; CREATE TRIGGER source_au AFTER UPDATE OF text ON sources WHEN old.replaced = 0 BEGIN INSERT INTO source_fts(source_fts,rowid,text) VALUES('delete',old.rowid,old.text); INSERT INTO source_fts(rowid,text) VALUES(new.rowid,new.text); END;
       CREATE TABLE IF NOT EXISTS chunks(
         id INTEGER PRIMARY KEY, source_key TEXT NOT NULL REFERENCES sources(key), start INTEGER NOT NULL,end INTEGER NOT NULL,
         state TEXT NOT NULL, reason TEXT, job_id TEXT, retry_at INTEGER NOT NULL DEFAULT 0,
@@ -185,7 +311,7 @@ var MemoryStore = class {
       this.db.exec("INSERT INTO source_fts(source_fts) VALUES('rebuild')");
       this.db.exec("INSERT INTO claim_fts(claim_fts) VALUES('rebuild')");
     }
-    if (file !== ":memory:" && existsSync(file)) chmodSync(file, 384);
+    if (file2 !== ":memory:" && existsSync(file2)) chmodSync(file2, 384);
   }
   file;
   db;
@@ -852,7 +978,9 @@ var MemoryStore = class {
     const filter = this.scopeSQL(query.scope, query.mode);
     const limit = Math.max(1, Math.min(200, query.limit ?? 20));
     const queryText = (query.text ?? "").trim();
-    const canFTS = queryText.length >= 3;
+    const match = ftsMatch(queryText);
+    const canFTS = match !== void 0;
+    const filterTerms = textFilterTerms(queryText);
     const sqlLimit = Math.min(limit * 3, 500);
     let rows;
     if (query.asOf) {
@@ -864,7 +992,6 @@ var MemoryStore = class {
         query.asOf
       );
     } else if (canFTS) {
-      const match = `"${queryText.replace(/"/g, '""')}"`;
       rows = this.all(
         `WITH candidates AS (
           SELECT c.data,
@@ -913,11 +1040,14 @@ var MemoryStore = class {
         if (!this.inScope(claim, query.scope, query.mode === "all") || claim.hidden || current && claim.status !== "active")
           continue;
         if (current && !this.historicalUsable(claim, query.scope, query.asOf)) continue;
+        if (filterTerms.length && !filterTerms.some((t) => normalize(claim.text).includes(t)))
+          continue;
+      } else if (!canFTS && filterTerms.length && !filterTerms.some((t) => normalize(claim.text).includes(t))) {
+        continue;
       } else if (!this.inScope(claim, query.scope, query.mode === "all") || current && !this.usable(claim, query.scope))
         continue;
-      const hasQuery = !!(query.text && query.text.trim().length >= 3);
       const reasons = [
-        hasQuery ? "lexical match" : "recent memory",
+        canFTS ? "lexical match" : filterTerms.length ? "substring match" : "recent memory",
         `scope:${claim.visibility}`,
         `status:${claim.status}`
       ];
@@ -966,9 +1096,8 @@ var MemoryStore = class {
   }
   sourceSearch(scope, text, all = false, limit = 20) {
     this.setScope(scope);
-    const queryText = text.trim();
-    if (queryText.length < 3) return [];
-    const match = `"${queryText.replace(/"/g, '""')}"`;
+    const match = ftsMatch(text);
+    if (match === void 0) return [];
     return this.all(
       `SELECT s.key FROM source_fts JOIN sources s ON s.rowid=source_fts.rowid WHERE source_fts MATCH ? AND s.project_id=? AND s.erased=0 AND s.replaced=0 AND (?=1 OR (s.session_id=? AND s.entry_id IN (SELECT id FROM active_entries))) ORDER BY rank LIMIT ?`,
       match,
@@ -1564,6 +1693,15 @@ var MemoryStore = class {
     return hits.sort((a, b) => b.score - a.score).slice(0, Math.min(100, limit));
   }
 };
+function log(...parts) {
+  const text = parts.map((p) => p instanceof Error ? p.message : typeof p === "string" ? p : JSON.stringify(p)).join(" ");
+  const line = `${(/* @__PURE__ */ new Date()).toISOString()} ${redact(text)}
+`;
+  {
+    process.stderr.write(line);
+    return;
+  }
+}
 
 // src/v2/compiler.ts
 var SUMMARY_PREFIX = "Remendra v2 memory checkpoint\n";
@@ -1815,11 +1953,11 @@ function loadConfig(directory) {
 }
 function saveConfig(directory, raw) {
   const config = validateConfig(raw);
-  const file = join(directory, "config.json");
-  mkdirSync(dirname(file), { recursive: true, mode: 448 });
-  const tmp = `${file}.${randomUUID()}.tmp`;
+  const file2 = join(directory, "config.json");
+  mkdirSync(dirname(file2), { recursive: true, mode: 448 });
+  const tmp = `${file2}.${randomUUID()}.tmp`;
   writeFileSync(tmp, JSON.stringify(config, null, 2) + "\n", { mode: 384 });
-  renameSync(tmp, file);
+  renameSync(tmp, file2);
   return config;
 }
 
@@ -1863,7 +2001,7 @@ function importLegacy(store, scope, text) {
       const id = String(value.id), content = String(value.content);
       if (!content.trim() || content.length > 12e3) {
         if (content.length > 12e3) {
-          console.warn(
+          log(
             "[remendra] Migration skipped oversized record (" + content.length + " chars): " + id.slice(0, 20)
           );
         }
@@ -1914,7 +2052,7 @@ function importLegacy(store, scope, text) {
         } catch (statusError) {
           partialFailures++;
           failedIds.push(result.claim.id);
-          console.error(
+          log(
             "[remendra] migration status change failed for",
             result.claim.id,
             ":",
@@ -2122,7 +2260,7 @@ var loadAllMessages = (sessionFile, full, allowedEntryIds) => {
     }
   }
   if (parseErrors > 0) {
-    console.warn(`remendra: ${parseErrors} malformed JSONL line(s) in ${sessionFile}`);
+    log(`remendra: ${parseErrors} malformed JSONL line(s) in ${sessionFile}`);
   }
   const rendered = [];
   const rawMessages = [];
@@ -2131,6 +2269,7 @@ var loadAllMessages = (sessionFile, full, allowedEntryIds) => {
   for (const e of entries) {
     const isMessage = e.type === "message" && e.message;
     if (!isMessage) continue;
+    if (e.message.role === "system") continue;
     const allowed = !allowedEntryIds || allowedEntryIds.has(e.id);
     if (allowed) {
       const entryId = e.id != null ? String(e.id) : "";
@@ -2154,7 +2293,11 @@ var safeRegex = (pattern) => {
     return new RegExp(escapeRegex(pattern), "i");
   }
 };
-var looksLikeRegex = (query) => /[|*+?{}()[\]\\^$.]/.test(query);
+var explicitRegex = (query, asRegex) => {
+  const delimited = query.match(/^\/(.+)\/[a-z]*$/s);
+  if (delimited) return safeRegex(delimited[1]);
+  return asRegex ? safeRegex(query) : void 0;
+};
 var snippetRegex = (terms2) => {
   const alts = terms2.map((t) => {
     try {
@@ -2166,96 +2309,6 @@ var snippetRegex = (terms2) => {
   });
   return new RegExp(alts.join("|"), "i");
 };
-var STOPWORDS = /* @__PURE__ */ new Set([
-  // English
-  "the",
-  "a",
-  "an",
-  "is",
-  "are",
-  "was",
-  "were",
-  "be",
-  "been",
-  "being",
-  "have",
-  "has",
-  "had",
-  "do",
-  "does",
-  "did",
-  "will",
-  "would",
-  "could",
-  "should",
-  "may",
-  "might",
-  "can",
-  "shall",
-  "of",
-  "in",
-  "to",
-  "for",
-  "with",
-  "on",
-  "at",
-  "from",
-  "by",
-  "as",
-  "into",
-  "through",
-  "during",
-  "before",
-  "after",
-  "above",
-  "below",
-  "between",
-  "out",
-  "off",
-  "over",
-  "under",
-  "again",
-  "further",
-  "then",
-  "once",
-  "here",
-  "there",
-  "when",
-  "where",
-  "why",
-  "how",
-  "all",
-  "both",
-  "each",
-  "few",
-  "more",
-  "most",
-  "other",
-  "some",
-  "such",
-  "no",
-  "nor",
-  "not",
-  "only",
-  "own",
-  "same",
-  "so",
-  "than",
-  "too",
-  "very",
-  "just",
-  "about",
-  "it",
-  "its",
-  "that",
-  "this",
-  "what",
-  "which",
-  "who",
-  "whom",
-  "these",
-  "those"
-]);
 var filterStopwords = (terms2) => {
   const meaningful = terms2.filter((t) => !STOPWORDS.has(t.toLowerCase()) && t.length > 1);
   return meaningful.length > 0 ? meaningful : terms2;
@@ -2367,12 +2420,12 @@ function getFileIndicators(msg) {
   }
   return fileMatches;
 }
-function computeFileMatches(msg, query) {
+function computeFileMatches(msg, query, asRegex) {
   if (!msg?.content || typeof msg.content === "string") return [];
   const rawQuery = query.trim();
   const hasQuery = rawQuery.length > 0;
   if (!hasQuery) return getFileIndicators(msg);
-  const regex = looksLikeRegex(rawQuery) ? safeRegex(rawQuery) : snippetRegex(rawQuery.split(/\s+/));
+  const regex = explicitRegex(rawQuery, asRegex) ?? snippetRegex(rawQuery.split(/\s+/));
   const fileMatches = [];
   for (const part of msg.content) {
     if (!part || typeof part !== "object" || part.type !== "toolCall") continue;
@@ -2409,11 +2462,11 @@ function getTouchedFiles(messages, rendered) {
   }
   return Array.from(map.values());
 }
-var searchEntries = (entries, messages, query, _page, mode) => {
+var searchEntries = (entries, messages, query, _page, mode, asRegex) => {
   if (!query?.trim()) return entries;
   const rawQuery = query.trim();
-  if (looksLikeRegex(rawQuery)) {
-    const regex = safeRegex(rawQuery);
+  const regex = explicitRegex(rawQuery, asRegex);
+  if (regex) {
     const hits = [];
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
@@ -2423,7 +2476,7 @@ var searchEntries = (entries, messages, query, _page, mode) => {
       const hay = `${e.role} ${text} ${filePart}`;
       if (regex.test(hay)) {
         const snip = lineSnippet(text, regex);
-        const fileMatches = computeFileMatches(msg, rawQuery);
+        const fileMatches = computeFileMatches(msg, rawQuery, asRegex);
         const extra = fileMatches.length > 0 ? { fileMatches } : {};
         hits.push({ ...e, snippet: snip, matchCount: 1, ...extra });
       }
@@ -2809,7 +2862,8 @@ function recall(store, scope, request, config, sessionFile) {
     full.rawMessages,
     query,
     void 0,
-    mode === "file" ? "file" : "hybrid"
+    mode === "file" ? "file" : "hybrid",
+    mode === "regex"
   );
   return finish(
     prefix + formatRecallOutput(
@@ -2876,13 +2930,61 @@ async function fetchEmbeddings(config, input, timeout = 1e4) {
   const tokens = jsonObject(parsed.usage) && typeof parsed.usage.total_tokens === "number" && Number.isFinite(parsed.usage.total_tokens) && parsed.usage.total_tokens >= 0 ? parsed.usage.total_tokens : void 0;
   return { vectors: input.map((_, i) => result.get(i)), tokens };
 }
+var MIN_TEXT = 10;
+var MAX_TEXT = 5e4;
+function textOf2(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.filter(
+    (b) => !!b && typeof b === "object" && b.type === "text" && typeof b.text === "string"
+  ).map((b) => b.text).join("\n");
+}
+function parseSessionFile(content) {
+  const session = { sources: [] };
+  for (const line of content.split("\n")) {
+    if (!line.trim()) continue;
+    let rec;
+    try {
+      const parsed = JSON.parse(line);
+      if (!parsed || typeof parsed !== "object") continue;
+      rec = parsed;
+    } catch {
+      continue;
+    }
+    if (rec.type === "session") {
+      if (typeof rec.id === "string") session.id = rec.id;
+      if (typeof rec.cwd === "string") session.cwd = rec.cwd;
+      continue;
+    }
+    if (rec.type !== "message" || typeof rec.id !== "string") continue;
+    const msg = rec.message;
+    const role = msg?.role;
+    if (role !== "user" && role !== "assistant" && role !== "toolResult") continue;
+    const text = textOf2(msg?.content).trim();
+    if (text.length < MIN_TEXT) continue;
+    session.sources.push({
+      entryId: rec.id,
+      role,
+      text: text.slice(0, MAX_TEXT),
+      timestamp: typeof rec.timestamp === "string" ? rec.timestamp : (/* @__PURE__ */ new Date()).toISOString(),
+      ...role === "toolResult" && typeof msg?.toolName === "string" ? { tool: msg.toolName } : {}
+    });
+  }
+  return session;
+}
+function sessionInProject(cwd, projectPath) {
+  if (!projectPath) return true;
+  if (!cwd) return false;
+  const rel = relative(projectPath, cwd);
+  return rel === "" || !rel.startsWith("..") && !isAbsolute(rel);
+}
 
 // src/v2/service.ts
 var MemoryService = class {
-  constructor(file, directory) {
+  constructor(file2, directory) {
     this.directory = directory;
     this.config = loadConfig(directory);
-    this.store = new MemoryStore(file);
+    this.store = new MemoryStore(file2);
   }
   directory;
   store;
@@ -2952,20 +3054,20 @@ var MemoryService = class {
   doctor() {
     return this.store.doctor();
   }
-  backup(file) {
-    this.store.backup(file);
-    return file;
+  backup(file2) {
+    this.store.backup(file2);
+    return file2;
   }
-  export(scope, file) {
+  export(scope, file2) {
     const text = this.store.exportData(scope);
-    if (file) {
-      writeFileSync(file, text, { flag: "wx", mode: 384 });
-      return file;
+    if (file2) {
+      writeFileSync(file2, text, { flag: "wx", mode: 384 });
+      return file2;
     }
     return text;
   }
-  import(scope, file, legacy = false) {
-    const text = readFileSync(file, "utf8");
+  import(scope, file2, legacy = false) {
+    const text = readFileSync(file2, "utf8");
     return legacy ? importLegacy(this.store, scope, text) : this.store.importData(scope, text);
   }
   importLegacyEntries(scope, entries) {
@@ -3011,7 +3113,7 @@ var MemoryService = class {
         this.store.failJob(job, error instanceof Error ? error.message : String(error), usage);
       } catch (failError) {
         const msg = failError instanceof Error ? failError.message : String(failError);
-        console.error("[remendra] embed failJob failed:", msg, "job:", job.id);
+        log("[remendra] embed failJob failed:", msg, "job:", job.id);
       }
       throw error;
     }
@@ -3019,7 +3121,7 @@ var MemoryService = class {
   sweepForPromotion(scope, minSettledTurns) {
     return this.store.sweepForPromotion(scope, minSettledTurns);
   }
-  indexSessions(scope, directory) {
+  indexSessions(scope, directory, projectPath) {
     let files = 0, sources = 0, skipped = 0;
     const scanDir = (dir) => {
       let entries;
@@ -3045,41 +3147,15 @@ var MemoryService = class {
           continue;
         }
         try {
-          const content = readFileSync(full, "utf8");
-          const lines = content.split("\n").filter(Boolean);
-          const sessionSources = [];
-          for (const line of lines) {
-            try {
-              const parsed = JSON.parse(line);
-              if (typeof parsed !== "object" || parsed === null) continue;
-              const rec = parsed;
-              if (!rec.type || !rec.id) continue;
-              let text = "";
-              let role = "user";
-              const msg = rec.message;
-              if (rec.type === "user" && msg?.content) {
-                text = typeof msg.content === "string" ? msg.content : Array.isArray(msg.content) ? msg.content.filter((b) => b.type === "text").map((b) => String(b.text ?? "")).join("\n") : "";
-                role = "user";
-              } else if (rec.type === "assistant" && msg?.content) {
-                text = Array.isArray(msg.content) ? msg.content.filter((b) => b.type === "text").map((b) => String(b.text ?? "")).join("\n") : String(msg.content);
-                role = "assistant";
-              } else if (rec.type === "tool_result") {
-                text = typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content ?? "");
-                role = "toolResult";
-              } else continue;
-              if (!text.trim() || text.length < 10) continue;
-              sessionSources.push({
-                entryId: String(rec.id),
-                role,
-                text: text.slice(0, 5e4),
-                timestamp: typeof rec.timestamp === "string" ? rec.timestamp : (/* @__PURE__ */ new Date()).toISOString()
-              });
-            } catch {
-            }
+          const parsed = parseSessionFile(readFileSync(full, "utf8"));
+          if (!sessionInProject(parsed.cwd, projectPath)) {
+            skipped++;
+            continue;
           }
+          const sessionSources = parsed.sources;
           if (sessionSources.length) {
             const result = this.store.ingest(
-              scope,
+              { ...scope, sessionId: parsed.id ?? scope.sessionId, entryIds: [] },
               sessionSources,
               this.config.redactionPatterns,
               this.config.excludedPaths
@@ -3113,7 +3189,12 @@ function messageText(value) {
     return [];
   }).join("\n");
 }
-function sourceInputs(entries, excludedPaths = []) {
+function argumentStrings(args) {
+  return Object.values(args ?? {}).flatMap(
+    (v) => typeof v === "string" ? [v] : Array.isArray(v) ? v.filter((x) => typeof x === "string") : []
+  );
+}
+function sourceInputs(entries, excludedPaths = [], edits = /* @__PURE__ */ new Map()) {
   const inputs = [];
   const calls = /* @__PURE__ */ new Map();
   let episodeId;
@@ -3137,11 +3218,15 @@ function sourceInputs(entries, excludedPaths = []) {
       for (const block of m.content) {
         if (block.type !== "toolCall") continue;
         const args = block.arguments;
-        const target = typeof args.path === "string" ? args.path : typeof args.file_path === "string" ? args.file_path : void 0;
-        calls.set(block.id, { name: block.name, target });
+        const pathTarget = typeof args.path === "string" ? args.path : typeof args.file_path === "string" ? args.file_path : void 0;
+        const sensitive = argumentStrings(args).find(
+          (v) => excludedPaths.some((p) => v.includes(p))
+        );
+        calls.set(block.id, { name: block.name, target: sensitive ?? pathTarget });
       }
     const call = m.role === "toolResult" ? calls.get(m.toolCallId) : void 0;
-    const content = m.role === "assistant" ? m.content.map((block) => {
+    const edit = edits.get(entry.id);
+    const content = edit === null ? "" : edit ? edit.content : m.role === "assistant" ? m.content.map((block) => {
       if (block.type !== "toolCall") return block;
       const target = calls.get(block.id)?.target;
       return target && excludedPaths.some((path) => target.includes(path)) ? { type: "text", text: `Tool call ${block.name}: [sensitive path excluded]` } : block;

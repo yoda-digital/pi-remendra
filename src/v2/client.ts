@@ -1,5 +1,6 @@
 import { Worker } from "node:worker_threads";
 import type { Args, Method, Result } from "./service.js";
+import { log } from "./log.js";
 
 interface Pending {
   resolve: (value: unknown) => void;
@@ -32,7 +33,7 @@ export class MemoryClient {
       const item = this.pending.get(message.id);
       if (!item) {
         // L4: Late response after timeout — worker completed but caller already rejected
-        console.error(
+        log(
           "[remendra] late worker response id",
           message.id,
           message.error ? `error: ${message.error}` : "success (data may have been written)",
@@ -66,17 +67,27 @@ export class MemoryClient {
       const worker = this.start();
       worker.ref();
       const id = ++this.sequence;
-      // H4: Per-call timeout rejects only this caller, not the entire worker.
-      // The worker may still be processing (e.g., slow embedding fetch). Killing
-      // it would reject all concurrent requests, including ones that already succeeded.
+      // The worker runs requests one at a time. A caller that times out while queued behind
+      // a slower request only rejects itself. But if the request that timed out is the
+      // oldest one still pending, it is the one the worker is executing: the worker is stuck
+      // (a pathological regex, a huge synchronous scan), and every later call would time out
+      // behind it until Pi restarts. Terminate it instead; the next call starts a fresh
+      // worker and SQLite's WAL recovers on reopen.
       const timer = setTimeout(() => {
         const item = this.pending.get(id);
-        if (item) {
-          clearTimeout(item.timer);
-          this.pending.delete(id);
-          item.reject(new Error(`Memory ${method} exceeded ${timeoutMs} ms`));
-          if (!this.pending.size) worker.unref();
+        if (!item) return;
+        const executing = Math.min(...this.pending.keys()) === id;
+        if (executing && this.worker === worker) {
+          this.fail(
+            worker,
+            new Error(`Memory ${method} exceeded ${timeoutMs} ms; worker restarted`),
+          );
+          return;
         }
+        clearTimeout(item.timer);
+        this.pending.delete(id);
+        item.reject(new Error(`Memory ${method} exceeded ${timeoutMs} ms`));
+        if (!this.pending.size) worker.unref();
       }, timeoutMs);
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
       try {
@@ -94,7 +105,7 @@ export class MemoryClient {
         await this.call("close", [], 1000);
       } catch (closeError) {
         // Worker already dead or close timed out; SQLite WAL recovers on reopen
-        console.error(
+        log(
           "[remendra] close RPC failed:",
           closeError instanceof Error ? closeError.message : String(closeError),
         );

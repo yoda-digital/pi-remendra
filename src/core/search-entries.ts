@@ -3,6 +3,7 @@ import type { Message } from "@earendil-works/pi-ai";
 import type { RenderedEntry } from "./render-entries";
 import { textOf, toolCallArgsText, isContentBearing } from "./content";
 import type { RecallMode } from "./recall-scope";
+import { STOPWORDS } from "../v2/text.js";
 
 // Mirrors @earendil-works/pi-coding-agent's BashExecutionMessage (not re-exported from index)
 interface LocalBashExec {
@@ -54,8 +55,16 @@ const safeRegex = (pattern: string): RegExp => {
   }
 };
 
-/** Detect if the query looks like a single regex pattern (contains regex metacharacters). */
-const looksLikeRegex = (query: string): boolean => /[|*+?{}()[\]\\^$.]/.test(query);
+/**
+ * The query as a regex, only when the caller asked for one: recall mode "regex", or a
+ * query written as /pattern/. A question such as "why did we pick postgres?" is a
+ * natural-language query, not a regex, even though it contains "?".
+ */
+const explicitRegex = (query: string, asRegex?: boolean): RegExp | undefined => {
+  const delimited = query.match(/^\/(.+)\/[a-z]*$/s);
+  if (delimited) return safeRegex(delimited[1]);
+  return asRegex ? safeRegex(query) : undefined;
+};
 
 /** Build a regex for snippet highlighting — matches first available term. */
 const snippetRegex = (terms: string[]): RegExp => {
@@ -72,96 +81,7 @@ const snippetRegex = (terms: string[]): RegExp => {
 };
 
 // ── Stopwords for natural language queries ──
-const STOPWORDS = new Set([
-  // English
-  "the",
-  "a",
-  "an",
-  "is",
-  "are",
-  "was",
-  "were",
-  "be",
-  "been",
-  "being",
-  "have",
-  "has",
-  "had",
-  "do",
-  "does",
-  "did",
-  "will",
-  "would",
-  "could",
-  "should",
-  "may",
-  "might",
-  "can",
-  "shall",
-  "of",
-  "in",
-  "to",
-  "for",
-  "with",
-  "on",
-  "at",
-  "from",
-  "by",
-  "as",
-  "into",
-  "through",
-  "during",
-  "before",
-  "after",
-  "above",
-  "below",
-  "between",
-  "out",
-  "off",
-  "over",
-  "under",
-  "again",
-  "further",
-  "then",
-  "once",
-  "here",
-  "there",
-  "when",
-  "where",
-  "why",
-  "how",
-  "all",
-  "both",
-  "each",
-  "few",
-  "more",
-  "most",
-  "other",
-  "some",
-  "such",
-  "no",
-  "nor",
-  "not",
-  "only",
-  "own",
-  "same",
-  "so",
-  "than",
-  "too",
-  "very",
-  "just",
-  "about",
-  "it",
-  "its",
-  "that",
-  "this",
-  "what",
-  "which",
-  "who",
-  "whom",
-  "these",
-  "those",
-]);
+// STOPWORDS is shared with the memory store's full-text search (v2/text.ts).
 
 /** Remove stopwords, keep meaningful terms. */
 const filterStopwords = (terms: string[]): string[] => {
@@ -319,14 +239,16 @@ export function getFileIndicators(msg: Message): FileMatch[] {
   return fileMatches;
 }
 
-function computeFileMatches(msg: Message | undefined, query: string): FileMatch[] {
+function computeFileMatches(
+  msg: Message | undefined,
+  query: string,
+  asRegex?: boolean,
+): FileMatch[] {
   if (!msg?.content || typeof msg.content === "string") return [];
   const rawQuery = query.trim();
   const hasQuery = rawQuery.length > 0;
   if (!hasQuery) return getFileIndicators(msg as Message);
-  const regex = looksLikeRegex(rawQuery)
-    ? safeRegex(rawQuery)
-    : snippetRegex(rawQuery.split(/\s+/));
+  const regex = explicitRegex(rawQuery, asRegex) ?? snippetRegex(rawQuery.split(/\s+/));
   const fileMatches: FileMatch[] = [];
 
   for (const part of msg.content) {
@@ -380,15 +302,15 @@ export const searchEntries = (
   query?: string,
   _page?: number,
   mode?: RecallMode,
+  asRegex?: boolean,
 ): SearchHit[] => {
   if (!query?.trim()) return entries;
 
   const rawQuery = query.trim();
 
-  // If query looks like a single regex pattern (contains metacharacters),
-  // treat the whole thing as one pattern — don't split into terms
-  if (looksLikeRegex(rawQuery)) {
-    const regex = safeRegex(rawQuery);
+  // An explicit regex is one pattern; anything else is split into terms below.
+  const regex = explicitRegex(rawQuery, asRegex);
+  if (regex) {
     const hits: SearchHit[] = [];
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
@@ -398,7 +320,7 @@ export const searchEntries = (
       const hay = `${e.role} ${text} ${filePart}`;
       if (regex.test(hay)) {
         const snip = lineSnippet(text, regex);
-        const fileMatches = computeFileMatches(msg, rawQuery);
+        const fileMatches = computeFileMatches(msg, rawQuery, asRegex);
         const extra = fileMatches.length > 0 ? { fileMatches } : {};
         hits.push({ ...e, snippet: snip, matchCount: 1, ...extra });
       }

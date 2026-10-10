@@ -17,6 +17,8 @@ import type {
   SourceInput,
   TrialInput,
 } from "./types.js";
+import { log } from "./log.js";
+import { parseSessionFile, sessionInProject } from "./sessions.js";
 
 /** Explicit RPC allowlist: model tools never receive arbitrary store methods. */
 export class MemoryService {
@@ -166,7 +168,7 @@ export class MemoryService {
         this.store.failJob(job, error instanceof Error ? error.message : String(error), usage);
       } catch (failError) {
         const msg = failError instanceof Error ? failError.message : String(failError);
-        console.error("[remendra] embed failJob failed:", msg, "job:", job.id);
+        log("[remendra] embed failJob failed:", msg, "job:", job.id);
       }
       throw error;
     }
@@ -177,6 +179,7 @@ export class MemoryService {
   indexSessions(
     scope: Scope,
     directory: string,
+    projectPath?: string,
   ): { files: number; sources: number; skipped: number } {
     let files = 0,
       sources = 0,
@@ -205,57 +208,16 @@ export class MemoryService {
           continue;
         }
         try {
-          const content = readFileSync(full, "utf8");
-          const lines = content.split("\n").filter(Boolean);
-          const sessionSources: SourceInput[] = [];
-          for (const line of lines) {
-            try {
-              const parsed: unknown = JSON.parse(line);
-              if (typeof parsed !== "object" || parsed === null) continue;
-              const rec = parsed as Record<string, unknown>;
-              if (!rec.type || !rec.id) continue;
-              let text = "";
-              let role: SourceInput["role"] = "user";
-              const msg = rec.message as Record<string, unknown> | undefined;
-              if (rec.type === "user" && msg?.content) {
-                text =
-                  typeof msg.content === "string"
-                    ? msg.content
-                    : Array.isArray(msg.content)
-                      ? (msg.content as Array<Record<string, unknown>>)
-                          .filter((b) => b.type === "text")
-                          .map((b) => String(b.text ?? ""))
-                          .join("\n")
-                      : "";
-                role = "user";
-              } else if (rec.type === "assistant" && msg?.content) {
-                text = Array.isArray(msg.content)
-                  ? (msg.content as Array<Record<string, unknown>>)
-                      .filter((b) => b.type === "text")
-                      .map((b) => String(b.text ?? ""))
-                      .join("\n")
-                  : String(msg.content);
-                role = "assistant";
-              } else if (rec.type === "tool_result") {
-                text =
-                  typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content ?? "");
-                role = "toolResult";
-              } else continue;
-              if (!text.trim() || text.length < 10) continue;
-              sessionSources.push({
-                entryId: String(rec.id),
-                role,
-                text: text.slice(0, 50000),
-                timestamp:
-                  typeof rec.timestamp === "string" ? rec.timestamp : new Date().toISOString(),
-              });
-            } catch {
-              /* skip malformed lines */
-            }
+          const parsed = parseSessionFile(readFileSync(full, "utf8"));
+          // Only this project's sessions: the default directory holds every project's.
+          if (!sessionInProject(parsed.cwd, projectPath)) {
+            skipped++;
+            continue;
           }
+          const sessionSources = parsed.sources;
           if (sessionSources.length) {
             const result = this.store.ingest(
-              scope,
+              { ...scope, sessionId: parsed.id ?? scope.sessionId, entryIds: [] },
               sessionSources,
               this.config.redactionPatterns,
               this.config.excludedPaths,

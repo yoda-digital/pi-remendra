@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { MemoryClient } from "../../src/v2/client.js";
-import { installV2 } from "../../src/v2/extension.js";
+import { installV2, LEARN_DELAY_MS } from "../../src/v2/extension.js";
 import { PACKET_TYPE } from "../../src/v2/compiler.js";
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 
@@ -12,8 +12,11 @@ const hooks = new Map<string, Function>();
 const commands = new Map<string, Function>();
 const registeredTools = new Map<string, Record<string, unknown>>();
 let entries: SessionEntry[], output: unknown[], sid: string;
+const previousHome = process.env.PI_REMENDRA_HOME;
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), "remendra-extension-"));
+  // Keep the extension's own files (log, first-run marker) out of the real ~/.pi data folder.
+  process.env.PI_REMENDRA_HOME = directory;
   client = new MemoryClient(
     join(directory, "memory.sqlite"),
     directory,
@@ -71,6 +74,8 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await hooks.get("session_shutdown")!({}, ctx);
+  if (previousHome === undefined) delete process.env.PI_REMENDRA_HOME;
+  else process.env.PI_REMENDRA_HOME = previousHome;
   rmSync(directory, { recursive: true, force: true });
 });
 
@@ -163,4 +168,97 @@ it("user /remember creates project-scoped memories visible across sessions", asy
   const result = await hooks.get("context")!({ messages: [] }, ctx);
   // User-created memories default to project scope (auto-promotion)
   expect(result.messages[0].content).toContain("Cross-session decision");
+});
+it("places the memory packet right before the latest user prompt, keeping earlier turns cache-stable", async () => {
+  await commands.get("remendra")!(
+    'remember {"text":"Preserve production data","kind":"constraint"}',
+    ctx,
+  );
+  const history = [
+    { role: "user", content: "First question", timestamp: 1 },
+    { role: "assistant", content: [{ type: "text", text: "First answer" }], timestamp: 2 },
+    { role: "user", content: "Second question about production data", timestamp: 3 },
+    {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "call", name: "bash", arguments: { command: "true" } }],
+      timestamp: 4,
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call",
+      toolName: "bash",
+      content: [{ type: "text", text: "ok" }],
+      isError: false,
+      timestamp: 5,
+    },
+  ];
+  const result = await hooks.get("context")!({ messages: history }, ctx);
+  const roles = result.messages.map(
+    (m: { role: string; customType?: string }) => m.customType ?? m.role,
+  );
+  expect(roles).toEqual(["user", "assistant", PACKET_TYPE, "user", "assistant", "toolResult"]);
+  expect(result.messages.slice(0, 2)).toEqual(history.slice(0, 2));
+  expect(result.messages.slice(-2)).toEqual(history.slice(-2));
+});
+it("a session that ends right after settling (pi -p) never starts learning", async () => {
+  const calls = vi.spyOn(client, "call");
+  await hooks.get("agent_settled")!({}, ctx);
+  await hooks.get("session_shutdown")!({}, ctx);
+  await new Promise((r) => setTimeout(r, LEARN_DELAY_MS + 300));
+  expect(calls.mock.calls.some(([method]) => method === "lease")).toBe(false);
+  calls.mockRestore();
+});
+it("a long-lived session starts learning shortly after settling", async () => {
+  const calls = vi.spyOn(client, "call");
+  await hooks.get("agent_settled")!({}, ctx);
+  expect(calls.mock.calls.some(([method]) => method === "lease")).toBe(false);
+  await new Promise((r) => setTimeout(r, LEARN_DELAY_MS + 500));
+  expect(calls.mock.calls.some(([method]) => method === "lease")).toBe(true);
+  calls.mockRestore();
+});
+it("tells the user why nothing is learned in an untrusted project", async () => {
+  const statuses: string[] = [];
+  const untrusted = {
+    ...ctx,
+    isProjectTrusted: () => false,
+    ui: { ...ctx.ui, setStatus: (_key: string, text: string) => statuses.push(text) },
+  } as unknown as ExtensionContext;
+  await commands.get("remendra")!("learn", untrusted);
+  expect(String(output.at(-1))).toContain("not trusted");
+  expect(statuses.at(-1)).toContain("not trusted");
+});
+it("follows Pi context edits: removed or rewritten messages stop feeding memory", async () => {
+  const { realpath } = await import("node:fs/promises");
+  const projectId = await client.call("project", [await realpath(directory)]);
+  const sourceHits = async (query: string) =>
+    String(
+      await client.call("recall", [
+        { projectId, sessionId: sid, entryIds: entries.map((e) => e.id) },
+        { query, mode: "source" },
+      ]),
+    );
+  expect(await sourceHits("PostgreSQL")).toContain("PostgreSQL");
+
+  entries.push({
+    type: "context_edit",
+    id: "edit-1",
+    parentId: "user-1",
+    timestamp: "2026-09-06T00:01:00Z",
+    targetId: "user-1",
+    replacement: { content: "Use SQLite for local development" },
+  } as never);
+  await hooks.get("turn_end")!({}, ctx);
+  expect(await sourceHits("PostgreSQL")).not.toContain("Use PostgreSQL");
+  expect(await sourceHits("SQLite")).toContain("SQLite");
+
+  entries.push({
+    type: "context_edit",
+    id: "edit-2",
+    parentId: "edit-1",
+    timestamp: "2026-09-06T00:02:00Z",
+    targetId: "user-1",
+    replacement: null,
+  } as never);
+  await hooks.get("turn_end")!({}, ctx);
+  expect(await sourceHits("SQLite")).not.toContain("Use SQLite");
 });

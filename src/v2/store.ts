@@ -25,9 +25,11 @@ import {
   estimateTokens,
   hash,
   jsonObject,
+  ftsMatch,
   normalize,
   redact,
   safeDate,
+  textFilterTerms,
 } from "./text.js";
 
 /** C5: Parse with structural validation — throws meaningful error on corrupt or missing data. */
@@ -100,7 +102,7 @@ export class MemoryStore {
       CREATE INDEX IF NOT EXISTS source_scope ON sources(project_id,session_id,entry_id);
       CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(text,content='sources',content_rowid='rowid',tokenize='trigram');
       CREATE TRIGGER IF NOT EXISTS source_ai AFTER INSERT ON sources BEGIN INSERT INTO source_fts(rowid,text) VALUES(new.rowid,new.text); END;
-      CREATE TRIGGER IF NOT EXISTS source_au AFTER UPDATE OF text ON sources BEGIN INSERT INTO source_fts(source_fts,rowid,text) VALUES('delete',old.rowid,old.text); INSERT INTO source_fts(rowid,text) VALUES(new.rowid,new.text); END;
+      DROP TRIGGER IF EXISTS source_au; CREATE TRIGGER source_au AFTER UPDATE OF text ON sources WHEN old.replaced = 0 BEGIN INSERT INTO source_fts(source_fts,rowid,text) VALUES('delete',old.rowid,old.text); INSERT INTO source_fts(rowid,text) VALUES(new.rowid,new.text); END;
       CREATE TABLE IF NOT EXISTS chunks(
         id INTEGER PRIMARY KEY, source_key TEXT NOT NULL REFERENCES sources(key), start INTEGER NOT NULL,end INTEGER NOT NULL,
         state TEXT NOT NULL, reason TEXT, job_id TEXT, retry_at INTEGER NOT NULL DEFAULT 0,
@@ -355,7 +357,8 @@ export class MemoryStore {
           digest,
         )) {
           this.run("UPDATE sources SET replaced=1 WHERE key=?", String(old.key));
-          // Clear stale FTS entry for replaced source
+          // Clear stale FTS entry for replaced source. source_au skips replaced rows, so a
+          // later text update (erase) does not delete this entry a second time and corrupt the index.
           this.run(
             "INSERT INTO source_fts(source_fts,rowid,text) VALUES('delete',(SELECT rowid FROM sources WHERE key=?),(SELECT text FROM sources WHERE key=?))",
             String(old.key),
@@ -979,9 +982,11 @@ export class MemoryStore {
     this.setScope(query.scope);
     const filter = this.scopeSQL(query.scope, query.mode);
     const limit = Math.max(1, Math.min(200, query.limit ?? 20));
-    // Trigram tokenizer requires ≥3-char queries; shorter falls to no-FTS path.
+    // Trigram tokenizer requires ≥3-char terms; shorter queries are filtered in JS below.
     const queryText = (query.text ?? "").trim();
-    const canFTS = queryText.length >= 3;
+    const match = ftsMatch(queryText);
+    const canFTS = match !== undefined;
+    const filterTerms = textFilterTerms(queryText);
     // Over-provision 3x to absorb usable() filtering; no arbitrary cap.
     const sqlLimit = Math.min(limit * 3, 500);
     let rows: Record<string, unknown>[];
@@ -996,8 +1001,7 @@ export class MemoryStore {
         query.asOf,
       );
     } else if (canFTS) {
-      // FTS trigram path: substring matching with composite scoring via CTE.
-      const match = `"${queryText.replace(/"/g, '""')}"`;
+      // FTS trigram path: any meaningful query term, composite scoring via CTE.
       rows = this.all(
         `WITH candidates AS (
           SELECT c.data,
@@ -1052,15 +1056,22 @@ export class MemoryStore {
         )
           continue;
         if (current && !this.historicalUsable(claim, query.scope, query.asOf)) continue;
-        // With trigram FTS5, substring matching is done in SQL; no JS-side word filter needed.
+        // The historical path scans events without full-text search: filter by the query here.
+        if (filterTerms.length && !filterTerms.some((t) => normalize(claim.text).includes(t)))
+          continue;
+      } else if (
+        !canFTS &&
+        filterTerms.length &&
+        !filterTerms.some((t) => normalize(claim.text).includes(t))
+      ) {
+        continue; // query too short for the trigram index: substring-filter recent memories
       } else if (
         !this.inScope(claim, query.scope, query.mode === "all") ||
         (current && !this.usable(claim, query.scope))
       )
         continue;
-      const hasQuery = !!(query.text && query.text.trim().length >= 3);
       const reasons = [
-        hasQuery ? "lexical match" : "recent memory",
+        canFTS ? "lexical match" : filterTerms.length ? "substring match" : "recent memory",
         `scope:${claim.visibility}`,
         `status:${claim.status}`,
       ];
@@ -1119,9 +1130,8 @@ export class MemoryStore {
 
   sourceSearch(scope: Scope, text: string, all = false, limit = 20): Source[] {
     this.setScope(scope);
-    const queryText = text.trim();
-    if (queryText.length < 3) return []; // Trigram tokenizer requires ≥3-char queries
-    const match = `"${queryText.replace(/"/g, '""')}"`;
+    const match = ftsMatch(text);
+    if (match === undefined) return []; // nothing the trigram index can match
     return this.all(
       `SELECT s.key FROM source_fts JOIN sources s ON s.rowid=source_fts.rowid WHERE source_fts MATCH ? AND s.project_id=? AND s.erased=0 AND s.replaced=0 AND (?=1 OR (s.session_id=? AND s.entry_id IN (SELECT id FROM active_entries))) ORDER BY rank LIMIT ?`,
       match,
