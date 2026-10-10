@@ -1,6 +1,6 @@
 {
   "name": "@yoda.digital/pi-remendra",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Persistent memory for Pi — remembers what matters, forgets what's wrong.",
   "keywords": [
     "context",
@@ -58,10 +58,10 @@
     "benchmark:v2": "node scripts/v2-benchmark.mjs"
   },
   "devDependencies": {
-    "@earendil-works/pi-agent-core": "0.85.1",
-    "@earendil-works/pi-ai": "0.85.1",
-    "@earendil-works/pi-coding-agent": "0.85.1",
-    "@earendil-works/pi-tui": "0.85.1",
+    "@earendil-works/pi-agent-core": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-tui": "1.1.0",
     "@typescript-eslint/eslint-plugin": "8.66.0",
     "@typescript-eslint/parser": "8.66.0",
     "eslint": "10.8.0",
@@ -75,12 +75,12 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-agent-core": "0.85.1",
-    "@earendil-works/pi-ai": "0.85.1",
-    "@earendil-works/pi-coding-agent": "0.85.1",
-    "@earendil-works/pi-tui": "0.85.1",
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
     "better-sqlite3": ">=11.0.0",
-    "typebox": "1.3.16"
+    "typebox": "*"
   },
   "peerDependenciesMeta": {
     "better-sqlite3": {

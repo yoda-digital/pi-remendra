@@ -64,11 +64,26 @@ try {
           apiKey: "local-test",
           models: [definition],
           streamSimple: (_model, context) => {
-            const observing = context.systemPrompt?.startsWith("Extract useful durable memories");
+            // Pi 1.x hands providers the system prompt as a "system" message (normalizeContext);
+            // older versions used context.systemPrompt. Accept both.
+            const textOf = (c) =>
+              typeof c === "string"
+                ? c
+                : Array.isArray(c)
+                  ? c.map((b) => b.text ?? "").join("")
+                  : "";
+            const systemText = [
+              context.systemPrompt ?? "",
+              ...context.messages
+                .filter((m) => m.role === "system")
+                .map((m) => textOf(m.content) + JSON.stringify(m.sections ?? {})),
+            ].join("\n");
+            const observing = systemText.includes("Extract useful durable memories");
             let text = "Use PostgreSQL.";
             if (observing) {
               backgroundCalls++;
-              const { chunks } = JSON.parse(context.messages[0].content);
+              const input = context.messages.find((m) => m.role === "user");
+              const { chunks } = JSON.parse(textOf(input.content));
               const chunk = chunks[0];
               text = JSON.stringify({
                 claims: chunk
