@@ -1,11 +1,16 @@
 import type { MemoryConfig } from "./types.js";
 import { jsonObject } from "./text.js";
 
-/** Optional OpenAI-compatible /embeddings endpoint; no downloaded model or implicit credentials. */
+/**
+ * Optional OpenAI-compatible /embeddings endpoint; no downloaded model or implicit credentials.
+ * Embedding is rare and user-triggered, so the server usually has to load the model first:
+ * a cold Ollama load measured 13 s, a warm batch of 32 under 2 s.
+ */
+export const EMBED_TIMEOUT_MS = 45000;
 export async function fetchEmbeddings(
   config: NonNullable<MemoryConfig["embeddings"]>,
   input: string[],
-  timeout = 10000,
+  timeout = EMBED_TIMEOUT_MS,
 ): Promise<{ vectors: number[][]; tokens?: number }> {
   const key = config.apiKeyEnv ? process.env[config.apiKeyEnv] : undefined;
   if (config.apiKeyEnv && !key)

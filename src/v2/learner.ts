@@ -144,6 +144,11 @@ export class BackgroundLearner {
         } catch (error) {
           const reason = redact(error instanceof Error ? error.message : String(error));
           if (usage === undefined && signal.aborted) usage = observerRequestTokens(job);
+          // A retry that succeeds overwrites the chunk's failure reason: keep it in the log.
+          if (!signal.aborted)
+            log(
+              `[remendra] observer attempt ${attempt + 1}/${config.maxAttempts} failed: ${reason}`,
+            );
           try {
             await this.client.call("fail", [
               job,

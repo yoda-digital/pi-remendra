@@ -1811,31 +1811,63 @@ export class MemoryStore {
     });
   }
 
-  /** Tier 2: promote eligible lineage claims to project scope at session end. */
+  /**
+   * Tier 2: promote eligible lineage claims to project scope at session end. One settled
+   * turn is enough: claims only exist once learning ran after a settle, and a session with
+   * a single prompt is common.
+   */
   sweepForPromotion(scope: Scope, minSettledTurns: number): string[] {
     return this.transaction(() => {
-      if (minSettledTurns < 2) return [];
-      const now = nowISO();
-      const rows = this.all(
-        "SELECT data FROM claims WHERE project_id=? AND session_id=? AND visibility='lineage' AND status='active'",
-        scope.projectId,
-        scope.sessionId,
+      if (minSettledTurns < 1) return [];
+      return this.promoteLineage(
+        this.all(
+          "SELECT data FROM claims WHERE project_id=? AND session_id=? AND visibility='lineage' AND status='active'",
+          scope.projectId,
+          scope.sessionId,
+        ),
       );
-      const promoted: string[] = [];
-      for (const row of rows) {
-        const claim = parse<Claim>(row)!;
-        if (claim.kind === "hypothesis") continue;
-        if (claim.verification === "unverified") continue;
-        if (claim.hidden) continue;
-        if (claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(now)) continue;
-        claim.visibility = "project";
-        claim.revision++;
-        claim.updatedAt = now;
-        this.writeClaim(claim, "auto_promoted");
-        promoted.push(claim.id);
-      }
-      return promoted;
     });
+  }
+
+  /**
+   * The end-of-session sweep never runs when Pi is killed (closed terminal, crash, WSL
+   * shutdown), which left those sessions' memories visible to nobody. At startup, apply the
+   * same sweep to other sessions of the project that have been quiet for `quietMs`, so a
+   * session still running in another Pi process keeps its lineage until it ends.
+   */
+  promoteOrphans(scope: Scope, quietMs = 60 * 60 * 1000): string[] {
+    return this.transaction(() => {
+      const cutoff = new Date(Date.now() - quietMs).toISOString();
+      return this.promoteLineage(
+        this.all(
+          `SELECT data FROM claims WHERE project_id=? AND session_id<>? AND visibility='lineage' AND status='active'
+             AND session_id NOT IN (SELECT session_id FROM claims WHERE project_id=? AND json_extract(data,'$.updatedAt')>?)`,
+          scope.projectId,
+          scope.sessionId,
+          scope.projectId,
+          cutoff,
+        ),
+      );
+    });
+  }
+
+  private promoteLineage(rows: Record<string, unknown>[]): string[] {
+    const now = nowISO();
+    const promoted: string[] = [];
+    for (const row of rows) {
+      const claim = parse<Claim>(row)!;
+      if (claim.kind === "hypothesis") continue;
+      if (claim.verification === "unverified") continue;
+      if (claim.hidden) continue;
+      if (claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(now)) continue;
+      claim.visibility = "project";
+      claim.revision++;
+      claim.updatedAt = now;
+      this.writeClaim(claim, "auto_promoted");
+      promoted.push(claim.id);
+    }
+    if (promoted.length) this.bump();
+    return promoted;
   }
 
   semantic(scope: Scope, model: string, vector: number[], limit = 20): SearchHit[] {

@@ -142,18 +142,29 @@ export function parseObservations(text: string, job: Job): ClaimInput[] {
       ? result.claims
       : undefined;
   if (!Array.isArray(list)) throw new Error('Observer must return {"claims": [...]}');
-  return list
+  const dropped: string[] = [];
+  const claims = list
     .slice(0, MAX_OBSERVER_CLAIMS)
     .map((raw: unknown) => {
       try {
-        return parseClaim(raw, job);
+        const claim = parseClaim(raw, job);
+        if (!claim) dropped.push("no quote found in its chunk");
+        return claim;
       } catch (error) {
         // Unknown chunk numbers mean the model misread its input: fail the batch.
         if (error instanceof Error && error.message.includes("unknown chunk")) throw error;
+        dropped.push(error instanceof Error ? error.message : String(error));
         return null;
       }
     })
     .filter((c): c is ClaimInput => c !== null);
+  // Dropped claims and empty answers leave no other trace: chunks still count as processed.
+  if (dropped.length || !list.length)
+    log(
+      `[remendra] observer kept ${claims.length} of ${list.length} claims from ${job.chunks.length} chunks` +
+        (dropped.length ? `; dropped: ${[...new Set(dropped)].join("; ")}` : ""),
+    );
+  return claims;
 }
 
 function parseClaim(raw: unknown, job: Job): ClaimInput | null {

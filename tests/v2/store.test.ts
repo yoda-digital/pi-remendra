@@ -720,3 +720,46 @@ it("keeps the source search index intact when erasing a memory whose source was 
   ).not.toThrow();
   expect(store.doctor().integrity).toEqual({ quick_check: "ok" });
 });
+
+describe("auto-promotion", () => {
+  function observed(text: string, session = scope.sessionId) {
+    const s = { ...scope, sessionId: session, entryIds: [...scope.entryIds] };
+    const id = `entry-${session}-${s.entryIds.length}`;
+    s.entryIds.push(id);
+    const key = store.ingest(s, [
+      { entryId: id, text, role: "user", timestamp: "2026-09-06T12:00:00.000Z" },
+    ]).keys[0];
+    const src = store.source(key)!;
+    const evidence = [{ sourceKey: src.key, hash: src.hash, start: 0, end: text.length }];
+    const claim = store.record(s, { text, kind: "fact", evidence }, "observer").claim;
+    return { claim, scope: s };
+  }
+  const later = () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.now() + 2 * 60 * 60 * 1000);
+  };
+
+  it("promotes a single-prompt session's memories at session end", () => {
+    const { claim, scope: s } = observed("The API runs in region fsn1");
+    expect(claim.visibility).toBe("lineage");
+    expect(store.sweepForPromotion(s, 0)).toEqual([]);
+    expect(store.sweepForPromotion(s, 1)).toEqual([claim.id]);
+    const next = { ...scope, sessionId: "session-b", entryIds: [] };
+    expect(store.search({ scope: next, text: "fsn1" }).map((h) => h.claim.id)).toEqual([claim.id]);
+  });
+  it("promotes memories of a session that ended without shutdown once it has been quiet", () => {
+    const { claim } = observed("Deploys go through GitHub Actions", "crashed");
+    const next = { ...scope, sessionId: "session-b", entryIds: [] };
+    expect(store.promoteOrphans(next)).toEqual([]); // just recorded: may still be running
+    later();
+    expect(store.promoteOrphans(next)).toEqual([claim.id]);
+    expect(store.search({ scope: next, text: "GitHub Actions" })[0].claim.visibility).toBe(
+      "project",
+    );
+  });
+  it("never promotes the current session's own lineage from the startup sweep", () => {
+    observed("Staging uses port 8080");
+    later();
+    expect(store.promoteOrphans(scope)).toEqual([]);
+  });
+});

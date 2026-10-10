@@ -5,7 +5,7 @@ import { compilePacket, compileCheckpoint } from "./compiler.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { importLegacy } from "./migration.js";
 import { recall, type RecallRequest } from "./recall.js";
-import { fetchEmbeddings } from "./embeddings.js";
+import { EMBED_TIMEOUT_MS, fetchEmbeddings } from "./embeddings.js";
 import { estimateTokens, hash } from "./text.js";
 import type {
   Actor,
@@ -144,7 +144,12 @@ export class MemoryService {
     const texts = query ? [query] : selected.map((c) => c.text);
     if (!texts.length) return { indexed: 0, hits: [] };
     const reservation = texts.reduce((n, text) => n + estimateTokens(text) + 16, 256);
-    const job = this.store.reserveUsage(scope, reservation, this.config.dailyTokenBudget, 12000);
+    const job = this.store.reserveUsage(
+      scope,
+      reservation,
+      this.config.dailyTokenBudget,
+      EMBED_TIMEOUT_MS + 15000,
+    );
     if (!job) throw new Error("Daily memory token budget exhausted");
     let usage: number | undefined;
     try {
@@ -175,6 +180,9 @@ export class MemoryService {
   }
   sweepForPromotion(scope: Scope, minSettledTurns: number) {
     return this.store.sweepForPromotion(scope, minSettledTurns);
+  }
+  promoteOrphans(scope: Scope) {
+    return this.store.promoteOrphans(scope);
   }
   indexSessions(
     scope: Scope,
@@ -265,6 +273,7 @@ export const RPC_METHODS = [
   "importLegacyEntries",
   "embed",
   "sweepForPromotion",
+  "promoteOrphans",
   "indexSessions",
   "close",
 ] as const;

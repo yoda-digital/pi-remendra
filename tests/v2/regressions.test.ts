@@ -331,3 +331,23 @@ describe("excludedPaths", () => {
     expect(inputs[1].target).toBe("cat .env"); // the store drops text whose target is excluded
   });
 });
+
+describe("recall arguments from small models", () => {
+  it("maps the near-miss values seen in real sessions instead of failing the call", async () => {
+    const { normalizeRecallArgs } = await import("../../src/v2/recall-args.js");
+    expect(normalizeRecallArgs({ query: "db", mode: "claims" })).toEqual({
+      query: "db",
+      mode: "memory",
+    });
+    expect(normalizeRecallArgs({ mode: "all" })).toEqual({ mode: "memory", scope: "all" });
+    expect(normalizeRecallArgs({ scope: "project" })).toEqual({ scope: "all" });
+    expect(normalizeRecallArgs({ scope: "user" })).toEqual({ scope: "all" });
+    expect(normalizeRecallArgs({ scope: "memory", mode: "nonsense" })).toEqual({});
+    expect(normalizeRecallArgs({ mode: "History", page: "2", expand: "3, 4" })).toEqual({
+      mode: "history",
+      page: 2,
+      expand: [3, 4],
+    });
+    expect(normalizeRecallArgs(null)).toEqual({});
+  });
+});

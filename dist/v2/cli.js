@@ -1643,31 +1643,61 @@ var MemoryStore = class {
       return job;
     });
   }
-  /** Tier 2: promote eligible lineage claims to project scope at session end. */
+  /**
+   * Tier 2: promote eligible lineage claims to project scope at session end. One settled
+   * turn is enough: claims only exist once learning ran after a settle, and a session with
+   * a single prompt is common.
+   */
   sweepForPromotion(scope, minSettledTurns) {
     return this.transaction(() => {
-      if (minSettledTurns < 2) return [];
-      const now = nowISO();
-      const rows = this.all(
-        "SELECT data FROM claims WHERE project_id=? AND session_id=? AND visibility='lineage' AND status='active'",
-        scope.projectId,
-        scope.sessionId
+      if (minSettledTurns < 1) return [];
+      return this.promoteLineage(
+        this.all(
+          "SELECT data FROM claims WHERE project_id=? AND session_id=? AND visibility='lineage' AND status='active'",
+          scope.projectId,
+          scope.sessionId
+        )
       );
-      const promoted = [];
-      for (const row of rows) {
-        const claim = parse(row);
-        if (claim.kind === "hypothesis") continue;
-        if (claim.verification === "unverified") continue;
-        if (claim.hidden) continue;
-        if (claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(now)) continue;
-        claim.visibility = "project";
-        claim.revision++;
-        claim.updatedAt = now;
-        this.writeClaim(claim, "auto_promoted");
-        promoted.push(claim.id);
-      }
-      return promoted;
     });
+  }
+  /**
+   * The end-of-session sweep never runs when Pi is killed (closed terminal, crash, WSL
+   * shutdown), which left those sessions' memories visible to nobody. At startup, apply the
+   * same sweep to other sessions of the project that have been quiet for `quietMs`, so a
+   * session still running in another Pi process keeps its lineage until it ends.
+   */
+  promoteOrphans(scope, quietMs = 60 * 60 * 1e3) {
+    return this.transaction(() => {
+      const cutoff = new Date(Date.now() - quietMs).toISOString();
+      return this.promoteLineage(
+        this.all(
+          `SELECT data FROM claims WHERE project_id=? AND session_id<>? AND visibility='lineage' AND status='active'
+             AND session_id NOT IN (SELECT session_id FROM claims WHERE project_id=? AND json_extract(data,'$.updatedAt')>?)`,
+          scope.projectId,
+          scope.sessionId,
+          scope.projectId,
+          cutoff
+        )
+      );
+    });
+  }
+  promoteLineage(rows) {
+    const now = nowISO();
+    const promoted = [];
+    for (const row of rows) {
+      const claim = parse(row);
+      if (claim.kind === "hypothesis") continue;
+      if (claim.verification === "unverified") continue;
+      if (claim.hidden) continue;
+      if (claim.validUntil && Date.parse(claim.validUntil) <= Date.parse(now)) continue;
+      claim.visibility = "project";
+      claim.revision++;
+      claim.updatedAt = now;
+      this.writeClaim(claim, "auto_promoted");
+      promoted.push(claim.id);
+    }
+    if (promoted.length) this.bump();
+    return promoted;
   }
   semantic(scope, model, vector, limit = 20) {
     if (!vector.length || vector.length > 8192 || !vector.every(Number.isFinite))
@@ -2875,7 +2905,8 @@ function recall(store, scope, request, config, sessionFile) {
 }
 
 // src/v2/embeddings.ts
-async function fetchEmbeddings(config, input, timeout = 1e4) {
+var EMBED_TIMEOUT_MS = 45e3;
+async function fetchEmbeddings(config, input, timeout = EMBED_TIMEOUT_MS) {
   const key = config.apiKeyEnv ? process.env[config.apiKeyEnv] : void 0;
   if (config.apiKeyEnv && !key)
     throw new Error(`Set ${config.apiKeyEnv} for the configured embedding endpoint`);
@@ -3089,7 +3120,12 @@ var MemoryService = class {
     const texts = query ? [query] : selected.map((c) => c.text);
     if (!texts.length) return { indexed: 0, hits: [] };
     const reservation = texts.reduce((n, text) => n + estimateTokens(text) + 16, 256);
-    const job = this.store.reserveUsage(scope, reservation, this.config.dailyTokenBudget, 12e3);
+    const job = this.store.reserveUsage(
+      scope,
+      reservation,
+      this.config.dailyTokenBudget,
+      EMBED_TIMEOUT_MS + 15e3
+    );
     if (!job) throw new Error("Daily memory token budget exhausted");
     let usage;
     try {
@@ -3120,6 +3156,9 @@ var MemoryService = class {
   }
   sweepForPromotion(scope, minSettledTurns) {
     return this.store.sweepForPromotion(scope, minSettledTurns);
+  }
+  promoteOrphans(scope) {
+    return this.store.promoteOrphans(scope);
   }
   indexSessions(scope, directory, projectPath) {
     let files = 0, sources = 0, skipped = 0;
