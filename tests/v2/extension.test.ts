@@ -291,7 +291,7 @@ it("keeps an unchanged packet where it was, so the previous turn keeps its cache
   expect(kinds(third)).toEqual(["user", "assistant", PACKET_TYPE, "user", "assistant"]);
 });
 
-it("falls back to semantic search in the recall tool when no memory matches the words", async () => {
+it("ranks recall by meaning with an embedding endpoint, and by words when it is down", async () => {
   const server = createServer((request, response) => {
     let body = "";
     request.on("data", (chunk) => (body += chunk));
@@ -328,13 +328,49 @@ it("falls back to semantic search in the recall tool when no memory matches the 
       ctx,
     );
     const text = result.content[0].text as string;
-    expect(text).toMatch(/^Memory results 1 by meaning/);
+    expect(text).toMatch(/^Memory results 1; page 1\. Ranked by meaning/);
     expect(text.split("\n")[1]).toContain("Hetzner fsn1");
     expect(text).toContain("similarity 1.00");
-    // Words that match skip the fallback.
+    // A word match adds to the similarity; an unrelated memory is left out.
     const direct = await recall("id", { query: "backups" }, undefined, undefined, ctx);
-    expect(direct.content[0].text).toMatch(/^Memory results 1;/);
+    expect(direct.content[0].text.split("\n")[1]).toContain("Backups run nightly");
+    expect(direct.content[0].text).toContain('"why":["similarity 1.00","word match"]');
+    expect(direct.content[0].text).not.toContain("Hetzner");
   } finally {
     await new Promise<void>((done) => server.close(() => done()));
   }
+  // Endpoint gone: plain keyword recall.
+  const recall = registeredTools.get("recall")!.execute as Function;
+  const fallback = await recall("id", { query: "backups" }, undefined, undefined, ctx);
+  expect(fallback.content[0].text).toMatch(
+    /^Memory results 1; page 1\. Current usable memories only/,
+  );
+});
+
+it("gives remembered memories search cues after learning, so a paraphrase finds them", async () => {
+  await commands.get("remendra")!(
+    'remember {"text":"The API is deployed to Hetzner","kind":"fact"}',
+    ctx,
+  );
+  const complete = ctx.modelRegistry.complete as unknown as ReturnType<typeof vi.fn>;
+  // Observer batches (the seed message is still pending) get an empty answer; cues get cues.
+  const isCue = (c: { systemPrompt: string }) => c.systemPrompt.includes("For each memory, write");
+  complete.mockImplementation(async (_model: unknown, context: { systemPrompt: string }) => ({
+    stopReason: "stop",
+    content: [
+      {
+        type: "text",
+        text: isCue(context)
+          ? '{"cues": [["cloud provider", "hosting", "backend server"]]}'
+          : '{"claims": []}',
+      },
+    ],
+    usage: { totalTokens: 40, cost: { total: 0 } },
+  }));
+  await commands.get("remendra")!("learn", ctx);
+  expect(complete.mock.calls.filter(([, context]) => isCue(context))).toHaveLength(1);
+  const recall = registeredTools.get("recall")!.execute as Function;
+  const result = await recall("id", { query: "which cloud provider" }, undefined, undefined, ctx);
+  expect(result.content[0].text).toMatch(/^Memory results 1;/);
+  expect(result.content[0].text).toContain("Hetzner");
 });

@@ -144,11 +144,16 @@ export function validateConfig(raw: unknown): MemoryConfig {
     )
       throw new Error("Invalid embedding dimensions");
     if (!e.model.trim() || e.model.length > 200) throw new Error("Invalid embedding model");
+    for (const key of ["queryPrefix", "documentPrefix"] as const)
+      if (e[key] !== undefined && (typeof e[key] !== "string" || e[key].length > 200))
+        throw new Error(`Invalid embedding ${key}`);
     config.embeddings = {
       endpoint: e.endpoint,
       model: e.model,
       apiKeyEnv: e.apiKeyEnv as string | undefined,
       dimensions: e.dimensions as number | undefined,
+      queryPrefix: e.queryPrefix as string | undefined,
+      documentPrefix: e.documentPrefix as string | undefined,
     };
   }
   return config;

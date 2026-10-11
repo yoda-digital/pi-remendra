@@ -52,6 +52,11 @@ const parse = <T>(row: Record<string, unknown> | undefined, key = "data"): T | u
 };
 const nowISO = (): string => new Date().toISOString();
 
+/** Chunk reason for user text that no memory cited: it gets one more look in a later batch. */
+export const SECOND_LOOK = "second look: no memory cited this text yet";
+/** A second-look chunk waits for fresh work to ride along with, at most this long. */
+export const SECOND_LOOK_WAIT_MS = 60 * 60 * 1000;
+
 /** Synchronous by design: instantiated only inside a storage worker (or an isolated test/CLI). */
 export class MemoryStore {
   private db: Database;
@@ -1225,11 +1230,19 @@ export class MemoryStore {
         reservation < inputTokens
       )
         throw new Error("Invalid job limits");
-      const rows = this.all(
+      let rows = this.all(
         "SELECT c.* FROM chunks c JOIN sources s ON s.key=c.source_key WHERE c.state='pending' AND c.retry_at<=? AND s.project_id=? AND s.erased=0 AND s.replaced=0 ORDER BY s.rowid,c.start LIMIT 64",
         now,
         scope.projectId,
       );
+      // Second looks ride along with fresh work, so they never cost a request of their own,
+      // unless they have waited an hour (the last message before a session went quiet).
+      if (
+        rows.every(
+          (r) => r.reason === SECOND_LOOK && Number(r.retry_at) > now - SECOND_LOOK_WAIT_MS,
+        )
+      )
+        rows = [];
       const chunks: Job["chunks"] = [];
       let used = 0;
       for (const row of rows) {
@@ -1257,7 +1270,13 @@ export class MemoryStore {
           );
         }
         used += estimateTokens(JSON.stringify(source.text.slice(start, end))) + 160;
-        chunks.push({ id: Number(row.id), source, start, end });
+        chunks.push({
+          id: Number(row.id),
+          source,
+          start,
+          end,
+          secondLook: row.reason === SECOND_LOOK,
+        });
       }
       if (!chunks.length) return undefined;
       const job: Job = {
@@ -1292,6 +1311,7 @@ export class MemoryStore {
     inputs: ClaimInput[],
     actualTokens: number,
     dollars?: number,
+    secondLook: number[] = [],
   ): Claim[] {
     return this.transaction(() => {
       this.assertJob(job);
@@ -1317,6 +1337,17 @@ export class MemoryStore {
             throw new Error("Observer cited evidence outside its leased input");
         }
       const records = inputs.map((c) => this.record(scope, c, "observer").claim);
+      // User text no claim cited goes back once; retry_at records when, for the one-hour cap.
+      const again = new Set(job.chunks.filter((c) => !c.secondLook).map((c) => c.id));
+      for (const id of secondLook)
+        if (again.has(id))
+          this.run(
+            "UPDATE chunks SET state='pending',job_id=NULL,reason=?,retry_at=? WHERE id=? AND job_id=? AND state='leased'",
+            SECOND_LOOK,
+            Date.now(),
+            id,
+            job.id,
+          );
       this.run(
         "UPDATE chunks SET state='processed',job_id=NULL,reason=NULL WHERE job_id=? AND state='leased'",
         job.id,
@@ -1793,6 +1824,40 @@ export class MemoryStore {
     );
   }
 
+  /** Usable memories that have no search cues yet (user-written, or learned before cues). */
+  cueCandidates(scope: Scope, limit = 24): Claim[] {
+    const f = this.scopeSQL(scope, "all");
+    return this.all(
+      `SELECT c.data FROM claims c WHERE ${f.sql} AND c.status IN ('active','candidate') AND json_array_length(COALESCE(json_extract(c.data,'$.cues'),'[]'))=0 ORDER BY c.rowid DESC LIMIT 200`,
+      ...f.args,
+    )
+      .map((r) => parse<Claim>(r)!)
+      .filter((c) => !c.hidden && this.inScope(c, scope, true))
+      .slice(0, limit);
+  }
+
+  /** Add search cues to memories. Not a revision: the assertion is unchanged. */
+  addCues(scope: Scope, updates: { id: string; cues: string[] }[]): number {
+    return this.transaction(() => {
+      let changed = 0;
+      for (const { id, cues } of updates) {
+        const claim = this.claim(id, scope, true);
+        if (!claim || claim.cues?.length || !Array.isArray(cues)) continue;
+        const clean = cues
+          .filter((c) => typeof c === "string")
+          .map((c) => redact(c).trim().slice(0, 80))
+          .filter(Boolean)
+          .slice(0, 8);
+        if (!clean.length) continue;
+        claim.cues = clean;
+        this.writeClaim(claim, "cues_added"); // re-indexes the cues and drops the stale vector
+        changed++;
+      }
+      if (changed) this.bump();
+      return changed;
+    });
+  }
+
   embeddingCandidates(scope: Scope, model: string, limit = 32): Claim[] {
     // Use mode "all" to find embedding candidates across all project sessions
     const f = this.scopeSQL(scope, "all");
@@ -1905,11 +1970,13 @@ export class MemoryStore {
     return promoted;
   }
 
-  semantic(scope: Scope, model: string, vector: number[], limit = 20): SearchHit[] {
+  semantic(scope: Scope, model: string, vector: number[], limit = 20, all = true): SearchHit[] {
     if (!vector.length || vector.length > 8192 || !vector.every(Number.isFinite))
       throw new Error("Invalid query vector");
-    // Use mode "all" for semantic search across all project sessions
-    const f = this.scopeSQL(scope, "all");
+    // `all`: every session of the project; otherwise what keyword search shows by default
+    // (this branch's lineage plus project memories), so the two rankings can be merged.
+    if (!all) this.setScope(scope);
+    const f = this.scopeSQL(scope, all ? "all" : "current");
     const norm = Math.hypot(...vector);
     if (!norm) return [];
     const hits: SearchHit[] = [];
@@ -1921,7 +1988,7 @@ export class MemoryStore {
       vector.length,
     )) {
       const claim = parse<Claim>(row)!;
-      if (!this.usable(claim, scope, undefined, undefined, true)) continue;
+      if (!this.usable(claim, scope, undefined, undefined, all)) continue;
       const v = JSON.parse(String(row.vector)) as number[];
       const denominator = norm * Math.hypot(...v);
       if (!denominator) continue;

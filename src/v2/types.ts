@@ -160,7 +160,14 @@ export interface Job {
   owner: string;
   projectId: string;
   sessionId: string;
-  chunks: Array<{ id: number; source: Source; start: number; end: number }>;
+  chunks: Array<{
+    id: number;
+    source: Source;
+    start: number;
+    end: number;
+    /** Already had one answer that cited none of it: this is its second and last look. */
+    secondLook?: boolean;
+  }>;
   reservedTokens: number;
   expiresAt: number;
 }
@@ -187,7 +194,15 @@ export interface MemoryConfig {
   recallTokens: number;
   autoPromote: "off" | "user-actions" | "full";
   contextMode: "packet" | "policy";
-  embeddings?: { endpoint: string; model: string; apiKeyEnv?: string; dimensions?: number };
+  embeddings?: {
+    endpoint: string;
+    model: string;
+    apiKeyEnv?: string;
+    dimensions?: number;
+    /** Task prefixes the model was trained with; known models get theirs automatically. */
+    queryPrefix?: string;
+    documentPrefix?: string;
+  };
 }
 
 export interface RecordResult {

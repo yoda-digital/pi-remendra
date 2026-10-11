@@ -29,6 +29,7 @@ let session;
 try {
   let calls = 0,
     backgroundCalls = 0,
+    cueCalls = 0,
     lastContext;
   const provider = "remendra-test",
     api = "remendra-test-api";
@@ -79,8 +80,15 @@ try {
                 .map((m) => textOf(m.content) + JSON.stringify(m.sections ?? {})),
             ].join("\n");
             const observing = systemText.includes("Extract useful durable memories");
+            const cueing = systemText.includes("For each memory, write");
             let text = "Use PostgreSQL.";
-            if (observing) {
+            if (cueing) {
+              // Background cue backfill for memories saved without cues.
+              cueCalls++;
+              const input = context.messages.find((m) => m.role === "user");
+              const { memories } = JSON.parse(textOf(input.content));
+              text = JSON.stringify({ cues: memories.map(() => ["database engine", "storage"]) });
+            } else if (observing) {
               backgroundCalls++;
               const input = context.messages.find((m) => m.role === "user");
               const { chunks } = JSON.parse(textOf(input.content));
@@ -171,7 +179,21 @@ try {
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
       assert.ok(backgroundCalls > 0, "The observer must use Pi's native custom-provider dispatch");
-      assert.equal(spent, 105, "Observer usage must commit through the memory worker");
+      // Wait for the cue backfill that follows learning, then check both were charged once.
+      const until = Date.now() + 3000;
+      while (Date.now() < until && spent < 210) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        spent = Number(
+          db.prepare("SELECT COALESCE(SUM(spent),0) AS spent FROM budgets").get().spent,
+        );
+      }
+      assert.equal(cueCalls, 1, "The remembered memory must get its search cues once");
+      assert.equal(spent, 210, "Observer and cue usage must commit through the memory worker");
+      const cued = db
+        .prepare("SELECT data FROM claims WHERE text LIKE '%PostgreSQL%'")
+        .all()
+        .some((row) => JSON.parse(row.data).cues?.includes("database engine"));
+      assert.ok(cued, "Cues must be stored on the memory");
       await new Promise((resolve) => setTimeout(resolve, 20));
     } finally {
       db.close();
@@ -193,6 +215,7 @@ try {
         node: process.version,
         providerCalls: calls,
         backgroundProviderCalls: backgroundCalls,
+        cueCalls,
         extensionErrors: errors.length,
         entry,
       },

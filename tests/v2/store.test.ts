@@ -854,3 +854,47 @@ it("never queues recall tool output for the observer, including chunks queued by
   expect(store.status(scope).gaps.pending ?? 0).toBe(0);
   expect(store.lease(scope, "owner", 4000, 8000, 80000, 50000)).toBeUndefined();
 });
+
+it("adds search cues to memories without them, so keyword search finds paraphrases", () => {
+  const claim = remember("The API is deployed to Hetzner, region fsn1");
+  expect(store.search({ scope, text: "cloud provider" })).toEqual([]);
+  expect(store.cueCandidates(scope).map((c) => c.id)).toEqual([claim.id]);
+  expect(store.addCues(scope, [{ id: claim.id, cues: ["cloud provider", "hosting", " "] }])).toBe(
+    1,
+  );
+  const found = store.search({ scope, text: "cloud provider" });
+  expect(found.map((h) => h.claim.id)).toEqual([claim.id]);
+  expect(found[0].claim.cues).toEqual(["cloud provider", "hosting"]);
+  expect(found[0].claim.revision).toBe(claim.revision);
+  expect(store.cueCandidates(scope)).toEqual([]);
+  // Existing cues are never overwritten.
+  expect(store.addCues(scope, [{ id: claim.id, cues: ["other"] }])).toBe(0);
+});
+
+it("gives uncited user text one second look: with fresh work, or alone after an hour", () => {
+  source("We deploy the API to Hetzner, region fsn1, every Tuesday morning.", "u1");
+  const lease = (owner: string, now = Date.now()) =>
+    store.lease(scope, owner, 4000, 8000, 80000, 50000, now);
+  const first = lease("o1")!;
+  store.completeJob(first, scope, [], 10, undefined, [first.chunks[0].id]);
+  // Set aside: not leased on its own.
+  expect(lease("o2")).toBeUndefined();
+  // Fresh work arrives: both go together, the old one marked as its second look.
+  source("Say hello to the team for me, please, in the channel.", "u2");
+  const second = lease("o3")!;
+  expect(second.chunks.map((c) => c.secondLook)).toEqual([true, false]);
+  // A second look is the last one, even when asked again.
+  store.completeJob(
+    second,
+    scope,
+    [],
+    10,
+    undefined,
+    second.chunks.map((c) => c.id),
+  );
+  const pendingAfter = store.status(scope).gaps.pending ?? 0;
+  expect(pendingAfter).toBe(1); // only the fresh chunk got its first second look
+  // Alone, it waits up to an hour, then is leased by itself.
+  expect(lease("o4")).toBeUndefined();
+  expect(lease("o5", Date.now() + 61 * 60 * 1000)?.chunks).toHaveLength(1);
+});

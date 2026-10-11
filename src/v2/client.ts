@@ -1,11 +1,14 @@
 import { Worker } from "node:worker_threads";
 import type { Args, Method, Result } from "./service.js";
 import { log } from "./log.js";
+import { CONCURRENT_METHODS } from "./rpc.js";
 
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+  /** Runs outside the worker queue (see CONCURRENT_METHODS). */
+  concurrent: boolean;
 }
 
 /** Worker death rejects every waiter. A later call opens a fresh worker and recovers SQLite. */
@@ -67,7 +70,7 @@ export class MemoryClient {
       const worker = this.start();
       worker.ref();
       const id = ++this.sequence;
-      // The worker runs requests one at a time. A caller that times out while queued behind
+      // The worker runs requests one at a time (except network-bound CONCURRENT_METHODS). A caller that times out while queued behind
       // a slower request only rejects itself. But if the request that timed out is the
       // oldest one still pending, it is the one the worker is executing: the worker is stuck
       // (a pathological regex, a huge synchronous scan), and every later call would time out
@@ -76,7 +79,10 @@ export class MemoryClient {
       const timer = setTimeout(() => {
         const item = this.pending.get(id);
         if (!item) return;
-        const executing = Math.min(...this.pending.keys()) === id;
+        // Concurrent calls (network-bound) are not in the queue, so they never count as the
+        // one executing, and their own timeout never restarts the worker.
+        const queued = [...this.pending].filter(([, p]) => !p.concurrent).map(([key]) => key);
+        const executing = !item.concurrent && queued.length > 0 && Math.min(...queued) === id;
         if (executing && this.worker === worker) {
           this.fail(
             worker,
@@ -89,7 +95,12 @@ export class MemoryClient {
         item.reject(new Error(`Memory ${method} exceeded ${timeoutMs} ms`));
         if (!this.pending.size) worker.unref();
       }, timeoutMs);
-      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
+      this.pending.set(id, {
+        resolve: resolve as (value: unknown) => void,
+        reject,
+        timer,
+        concurrent: CONCURRENT_METHODS.includes(method),
+      });
       try {
         worker.postMessage({ id, method, args });
       } catch (error) {

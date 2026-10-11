@@ -1,8 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { MemoryClient } from "./client.js";
-import type { Job, MemoryConfig, Scope } from "./types.js";
+import type { ClaimInput, Job, MemoryConfig, Scope, SearchHit } from "./types.js";
+
+/** Input tokens kept free in each batch for the list of known memories. */
+const KNOWN_TOKENS = 700;
 import {
   abortable,
+  dropRestatements,
+  type KnownMemory,
   OBSERVER_PROMPT,
   observerInput,
   observerRequestTokens,
@@ -25,12 +30,21 @@ export type Complete = (request: {
   sessionId: string;
 }) => Promise<Completion>;
 
-/** Whether a batch contains user-written text long enough to plausibly hold a fact. */
-export function hasUserText(job: Job, minChars = 40): boolean {
-  return job.chunks.some(
-    (c) =>
-      c.source.role === "user" && c.source.text.slice(c.start, c.end).trim().length >= minChars,
-  );
+/**
+ * Chunks of user-written text, long enough to hold a fact, that no claim in this answer
+ * cites and that have not had their second look yet.
+ */
+export function secondLookChunks(job: Job, claims: ClaimInput[], minChars = 40): number[] {
+  const cited = new Set(claims.flatMap((c) => c.evidence.map((e) => e.sourceKey)));
+  return job.chunks
+    .filter(
+      (c) =>
+        !c.secondLook &&
+        c.source.role === "user" &&
+        !cited.has(c.source.key) &&
+        c.source.text.slice(c.start, c.end).trim().length >= minChars,
+    )
+    .map((c) => c.id);
 }
 
 export class BackgroundLearner {
@@ -38,6 +52,22 @@ export class BackgroundLearner {
   private running?: Promise<string>;
   private consecutiveFailures = 0;
   constructor(readonly client: MemoryClient) {}
+  /** Existing memories related to the batch, so the observer can mark restatements of them. */
+  private async knownFor(scope: Scope, job: Job, inputLimit: number): Promise<KnownMemory[]> {
+    const text = job.chunks
+      .map((c) => c.source.text.slice(c.start, c.end))
+      .join("\n")
+      .slice(0, 4000);
+    try {
+      const hits: SearchHit[] = await this.client.call("search", [{ scope, text, limit: 10 }]);
+      const known: KnownMemory[] = hits.map((h, n) => ({ n, text: h.claim.text.slice(0, 300) }));
+      // Never let the list push the request over its budget.
+      while (known.length && observerRequestTokens(job, known) > inputLimit) known.pop();
+      return known;
+    } catch {
+      return [];
+    }
+  }
   cancel(reason = "Foreground work has priority"): void {
     this.controller?.abort(new Error(reason));
   }
@@ -98,7 +128,7 @@ export class BackgroundLearner {
       ) {
         const inputBudget = Math.max(
           128,
-          config.observerInputTokens - estimateTokens(OBSERVER_PROMPT) - 512,
+          config.observerInputTokens - estimateTokens(OBSERVER_PROMPT) - 512 - KNOWN_TOKENS,
         );
         const reservation = config.observerInputTokens + config.observerOutputTokens;
         const job: Job | undefined = await this.client.call("lease", [
@@ -118,7 +148,8 @@ export class BackgroundLearner {
         // (undefined) when the call timed out or failed without reporting usage.
         let usage: number | undefined = 0;
         try {
-          if (observerRequestTokens(job) > config.observerInputTokens)
+          const known = await this.knownFor(scope, job, config.observerInputTokens);
+          if (observerRequestTokens(job, known) > config.observerInputTokens)
             throw new Error("Serialized observer input exceeds its configured budget");
           const combined = AbortSignal.any([signal, AbortSignal.timeout(config.jobTimeoutMs)]);
           // Cancellation can land while the lease RPC is in flight: never start a call that is
@@ -128,7 +159,7 @@ export class BackgroundLearner {
           const result = await abortable(
             complete({
               system: OBSERVER_PROMPT,
-              input: observerInput(job),
+              input: observerInput(job, known),
               maxTokens: config.observerOutputTokens,
               signal: combined,
               attempt,
@@ -140,13 +171,22 @@ export class BackgroundLearner {
           usage = tokens;
           if (signal.aborted || !stillCurrent())
             throw new Error("Discarded background result after session or branch change");
-          const claims = parseObservations(result.text, job);
-          // An empty answer marks the chunks processed for good. When the batch holds real
-          // user text and another attempt is left, ask once more before accepting it: a
-          // flaky local model sometimes answers [] for input it extracts fine on the next try.
-          if (!claims.length && attempt + 1 < config.maxAttempts && hasUserText(job))
-            throw new Error("Observer found nothing in user text; asking again to confirm");
-          await this.client.call("complete", [job, scope, claims, tokens, result.dollars]);
+          const observed = parseObservations(result.text, job);
+          // Restatements of known memories (often the assistant repeating the packet) are
+          // dropped; they still count as covering their text for the second-look decision.
+          const { kept: claims, dropped } = dropRestatements(observed, known);
+          if (dropped) log(`[remendra] observer skipped ${dropped} restated memories`);
+          // A local model sometimes answers [] (or skips one message) for text it extracts
+          // fine on another try. User text that no claim cites gets one more look by riding
+          // along with the next batch, instead of costing a request of its own.
+          await this.client.call("complete", [
+            job,
+            scope,
+            claims,
+            tokens,
+            result.dollars,
+            secondLookChunks(job, observed),
+          ]);
           // L13: Re-check after async RPC — generation may have changed during the await
           if (signal.aborted || !stillCurrent())
             log("[remendra] claims committed but generation changed; may be stale");

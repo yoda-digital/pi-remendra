@@ -184,10 +184,28 @@ describe("BackgroundLearner cancellation", () => {
     );
   });
 
-  it("asks again when the model finds nothing in user text, then keeps the second answer", async () => {
+  it("gives user text no claim cited a second look in the next batch, without a request of its own", async () => {
     const learner = new BackgroundLearner(client);
-    const answers = [
-      '{"claims":[]}',
+    const seen: string[] = [];
+    const answers = ['{"claims":[]}'];
+    const provider = vi.fn(async ({ input }: { input: string }) => {
+      seen.push(input);
+      return { text: answers.shift() ?? '{"claims":[]}', tokens: 10 };
+    });
+    // First answer cites nothing: the chunk is set aside, and nothing is leased alone for it.
+    await learner.run(scope, DEFAULT_CONFIG, provider, () => true);
+    expect(provider).toHaveBeenCalledTimes(1);
+    expect(await learner.run(scope, DEFAULT_CONFIG, provider, () => true)).toBe(
+      "No eligible work or daily budget exhausted",
+    );
+    expect(provider).toHaveBeenCalledTimes(1);
+    // New work arrives: the set-aside text rides along and this time is learned.
+    const next = { ...scope, entryIds: [...scope.entryIds, "user-2"] };
+    await client.call("ingest", [
+      next,
+      [{ entryId: "user-2", role: "user", text: "Say hello.", timestamp: "2026-09-06T00:01:00Z" }],
+    ]);
+    answers.push(
       JSON.stringify({
         claims: [
           {
@@ -197,24 +215,11 @@ describe("BackgroundLearner cancellation", () => {
           },
         ],
       }),
-    ];
-    const provider = vi.fn(async () => ({ text: answers.shift()!, tokens: 10 }));
-    const result = await learner.run(scope, DEFAULT_CONFIG, provider, () => true);
-    expect(provider).toHaveBeenCalledTimes(2);
-    expect(result).toMatch(/^Learned 1 memories/);
-    expect((await client.call("status", [scope])).budget.spent).toBe(20);
-  });
-
-  it("accepts an empty answer on the last attempt and does not ask again", async () => {
-    const learner = new BackgroundLearner(client);
-    const provider = vi.fn(async () => ({ text: '{"claims":[]}', tokens: 10 }));
-    await learner.run(scope, DEFAULT_CONFIG, provider, () => true);
-    expect(provider).toHaveBeenCalledTimes(2);
-    // Nothing is left to lease: the chunks were accepted as processed.
-    expect(await learner.run(scope, DEFAULT_CONFIG, provider, () => true)).toBe(
-      "No eligible work or daily budget exhausted",
     );
+    expect(await learner.run(next, DEFAULT_CONFIG, provider, () => true)).toMatch(/^Learned 1/);
     expect(provider).toHaveBeenCalledTimes(2);
+    expect(seen[1]).toContain("Use PostgreSQL");
+    expect(seen[1]).toContain("Say hello.");
   });
 });
 
@@ -526,5 +531,119 @@ describe("recall output is not a learning source", () => {
     const [recall, bash] = sourceInputs([result("r", "recall"), result("b", "bash")] as never);
     expect(recall.skipLearning).toMatch(/recall output/);
     expect(bash.skipLearning).toBeUndefined();
+  });
+});
+
+describe("search cues from the model", () => {
+  it("reads cue lists in the shapes small models write", async () => {
+    const { parseCues } = await import("../../src/v2/observer.js");
+    const text = 'Sure: {"cues": [["cloud provider", "hosting"], "backend, server", 42]}';
+    expect(parseCues(text, 4)).toEqual([
+      ["cloud provider", "hosting"],
+      ["backend", "server"],
+      [],
+      [],
+    ]);
+    expect(() => parseCues("no json", 1)).toThrow();
+  });
+
+  it("keeps an observer claim whose cues are one comma-separated string", () => {
+    const job = {
+      chunks: [
+        {
+          id: 1,
+          start: 0,
+          end: 30,
+          source: { key: "k", hash: "h", role: "user", text: "We deploy the API to Hetzner." },
+        },
+      ],
+    } as never;
+    const [claim] = parseObservations(
+      JSON.stringify({
+        claims: [
+          {
+            text: "API on Hetzner",
+            kind: "fact",
+            cues: "cloud provider, hosting",
+            evidence: [{ chunk: 0, quote: "deploy the API to Hetzner" }],
+          },
+        ],
+      }),
+      job,
+    );
+    expect(claim.cues).toEqual(["cloud provider", "hosting"]);
+  });
+});
+
+describe("broken cue JSON", () => {
+  it("salvages one list per memory from mismatched brackets, never misaligned", async () => {
+    const { parseCues } = await import("../../src/v2/observer.js");
+    const broken =
+      '```json\n{"cues": [["where is the API hosted", "cloud provider"]}], ["db backup rule"]]}\n```';
+    expect(parseCues(broken, 2)).toEqual([
+      ["where is the API hosted", "cloud provider"],
+      ["db backup rule"],
+    ]);
+    expect(() => parseCues(broken, 3)).toThrow();
+  });
+});
+
+describe("hybrid memory ranking", () => {
+  const hit = (id: string, score: number) => ({ claim: { id } as never, score, reasons: [] });
+  it("orders by similarity, gives word matches a small bonus, and drops unrelated memories", async () => {
+    const { rankHybrid } = await import("../../src/v2/extension.js");
+    const ranked = rankHybrid(
+      [hit("b", 9), hit("z", 5)], // keyword hits (bm25 scores are ignored)
+      [hit("a", 0.6), hit("b", 0.58), hit("c", 0.3), hit("d", 0.1)],
+    );
+    expect(ranked.map((h) => (h.claim as { id: string }).id)).toEqual(["b", "a", "c", "z"]);
+    expect(ranked[0].reasons).toEqual(["similarity 0.58", "word match"]);
+    expect(ranked.at(-1)!.reasons).toEqual(["word match"]);
+  });
+});
+
+describe("restated memories", () => {
+  const known = [
+    { n: 0, text: "The API is deployed to Hetzner, region fsn1." },
+    { n: 1, text: "The frontend uses SvelteKit." },
+    { n: 2, text: "Database migrations must be run only after a fresh backup." },
+    { n: 3, text: "Use PostgreSQL 16." },
+    { n: 4, text: "Удалять старые логи каждую неделю." },
+  ];
+  const claim = (text: string, mark?: number) => ({
+    text,
+    kind: "fact" as const,
+    evidence: [],
+    known: mark,
+  });
+  it("drops restatements the observer marked, and ones that only reuse a memory's words", async () => {
+    const { dropRestatements } = await import("../../src/v2/observer.js");
+    const { kept, dropped } = dropRestatements(
+      [
+        claim("The frontend framework is SvelteKit.", 1),
+        claim("The API is deployed in the Hetzner region fsn1"),
+      ],
+      known,
+    );
+    expect(kept).toEqual([]);
+    expect(dropped).toBe(2);
+  });
+  it("keeps changes, new names, other nouns, reversed order, negation and new numbers", async () => {
+    const { dropRestatements } = await import("../../src/v2/observer.js");
+    const texts = [
+      ["We moved the API from fsn1 to nbg1.", 0],
+      ["The SvelteKit frontend is hosted on Cloudflare Pages.", 1],
+      ["The backend uses SvelteKit.", undefined],
+      ["Run migrations before the backup.", undefined],
+      ["Database migrations don't need a fresh backup.", 2],
+      ["Use PostgreSQL 15.", 3],
+      ["Не удалять старые логи каждую неделю.", 4],
+    ] as const;
+    const { kept } = dropRestatements(
+      texts.map(([t, m]) => claim(t, m)),
+      known,
+    );
+    expect(kept.map((c) => c.text)).toEqual(texts.map(([t]) => t));
+    expect(kept.every((c) => !("known" in c))).toBe(true);
   });
 });

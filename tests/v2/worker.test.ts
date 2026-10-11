@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -75,7 +76,11 @@ it("retries malformed extraction and accounts for both attempts", async () => {
   );
   expect(count).toBe(2);
   expect((await client.call("status", [scope])).budget.spent).toBe(200);
-  expect(await client.call("gaps", [scope])).toEqual([]);
+  // The empty second answer cited none of the user text: it waits for one more look.
+  const gaps = await client.call("gaps", [scope]);
+  expect(gaps.map((g: { reason?: string }) => g.reason)).toEqual([
+    "second look: no memory cited this text yet",
+  ]);
 });
 it("cancels background work immediately and leaves unfinished chunks visible", async () => {
   const learner = new BackgroundLearner(client);
@@ -215,4 +220,38 @@ describe("stuck worker recovery", () => {
     await expect(slow).resolves.toBe("slow");
     await flaky.close();
   });
+});
+
+it("keeps answering memory calls while an embedding request waits on a slow server", async () => {
+  // A cold embedding server: holds every request for 2 s.
+  const slow = createServer((request, response) => {
+    let body = "";
+    request.on("data", (c) => (body += c));
+    request.on("end", () =>
+      setTimeout(() => {
+        const { input } = JSON.parse(body) as { input: string[] };
+        response.setHeader("Content-Type", "application/json");
+        response.end(
+          JSON.stringify({ data: input.map((_, index) => ({ index, embedding: [1, 0] })) }),
+        );
+      }, 2000),
+    );
+  });
+  await new Promise<void>((done) => slow.listen(0, "127.0.0.1", done));
+  try {
+    const { port } = slow.address() as { port: number };
+    const config = await client.call("configGet", []);
+    await client.call("configSet", [
+      { ...config, embeddings: { endpoint: `http://127.0.0.1:${port}/e`, model: "m" } },
+    ]);
+    const embedding = client.call("embed", [scope, "postgres", 10000], 15000);
+    const started = Date.now();
+    // Queued calls are not stuck behind the network wait.
+    await client.call("status", [scope], 1000);
+    await client.call("search", [{ scope, text: "PostgreSQL" }], 1000);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect((await embedding).hits).toEqual([]);
+  } finally {
+    await new Promise<void>((done) => slow.close(() => done()));
+  }
 });

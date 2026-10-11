@@ -5,7 +5,12 @@ import { compilePacket, compileCheckpoint } from "./compiler.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { importLegacy } from "./migration.js";
 import { recall, type RecallRequest } from "./recall.js";
-import { EMBED_TIMEOUT_MS, fetchEmbeddings } from "./embeddings.js";
+import {
+  EMBED_TIMEOUT_MS,
+  embeddingPrefixes,
+  fetchEmbeddingsResilient,
+  memoryEmbeddingText,
+} from "./embeddings.js";
 import { estimateTokens, hash } from "./text.js";
 import type {
   Actor,
@@ -100,8 +105,15 @@ export class MemoryService {
   ) {
     return this.store.lease(scope, owner, input, reservation, limit, timeout);
   }
-  complete(job: Job, scope: Scope, inputs: ClaimInput[], tokens: number, dollars?: number) {
-    return this.store.completeJob(job, scope, inputs, tokens, dollars);
+  complete(
+    job: Job,
+    scope: Scope,
+    inputs: ClaimInput[],
+    tokens: number,
+    dollars?: number,
+    secondLook: number[] = [],
+  ) {
+    return this.store.completeJob(job, scope, inputs, tokens, dollars, secondLook);
   }
   fail(job: Job, reason: string, tokens?: number, retryMs?: number) {
     return this.store.failJob(job, reason, tokens, retryMs);
@@ -128,20 +140,25 @@ export class MemoryService {
   importLegacyEntries(scope: Scope, entries: unknown[]) {
     return importLegacy(this.store, scope, JSON.stringify(entries));
   }
-  async embed(scope: Scope, query?: string, timeoutMs = EMBED_TIMEOUT_MS) {
+  async embed(scope: Scope, query?: string, timeoutMs = EMBED_TIMEOUT_MS, allSessions = true) {
     const config = this.config.embeddings;
     if (!config) throw new Error("Configure an embedding endpoint and model first");
-    const model = hash(JSON.stringify(config));
+    // The key covers what was embedded, not just the endpoint: vectors made before prefixes
+    // and cues are rebuilt automatically instead of being compared with new-style queries.
+    const prefixes = embeddingPrefixes(config);
+    const model = hash(JSON.stringify({ ...config, prefixes, text: "memory+cues" }));
     const candidates = query ? [] : this.store.embeddingCandidates(scope, model);
     const selected: typeof candidates = [];
     let used = 0;
     for (const claim of candidates) {
-      const tokens = estimateTokens(claim.text) + 16;
+      const tokens = estimateTokens(memoryEmbeddingText(config, claim.text, claim.cues)) + 16;
       if (used + tokens > this.config.observerInputTokens) break;
       selected.push(claim);
       used += tokens;
     }
-    const texts = query ? [query] : selected.map((c) => c.text);
+    const texts = query
+      ? [prefixes.query + query]
+      : selected.map((c) => memoryEmbeddingText(config, c.text, c.cues));
     if (!texts.length) return { indexed: 0, hits: [] };
     const reservation = texts.reduce((n, text) => n + estimateTokens(text) + 16, 256);
     const job = this.store.reserveUsage(
@@ -152,23 +169,50 @@ export class MemoryService {
     );
     if (!job) throw new Error("Daily memory token budget exhausted");
     let usage: number | undefined;
-    try {
-      const result = await fetchEmbeddings(config, texts, timeoutMs);
-      usage = result.tokens;
-      const hits = this.store.transaction(() => {
-        for (let i = 0; i < selected.length; i++)
-          this.store.putVector(
-            scope,
-            selected[i].id,
-            selected[i].revision,
-            model,
-            result.vectors[i],
-          );
-        this.store.completeJob(job, scope, [], usage ?? reservation);
-        return query ? this.store.semantic(scope, model, result.vectors[0]) : [];
+    // Vectors are stored as each piece arrives: a cold server that crashes and reloads its
+    // model (13-18 s a try) can run out the clock after some pieces already succeeded.
+    let indexed = 0;
+    let spent = 0;
+    let unknownSpend = false;
+    const store = (offset: number, vectors: number[][], tokens?: number) => {
+      if (tokens === undefined) unknownSpend = true;
+      else spent += tokens;
+      if (query) return;
+      // Embedding runs concurrently with other calls (see CONCURRENT_METHODS): a memory may
+      // have been erased, revised or given cues meanwhile. Store only vectors that still
+      // match the memory's current text.
+      this.store.transaction(() => {
+        vectors.forEach((vector, i) => {
+          const claim = selected[offset + i];
+          const now = this.store.claim(claim.id, scope, true);
+          if (
+            !now ||
+            now.revision !== claim.revision ||
+            memoryEmbeddingText(config, now.text, now.cues) !== texts[offset + i]
+          )
+            return;
+          this.store.putVector(scope, claim.id, claim.revision, model, vector);
+          indexed++;
+        });
       });
-      return { indexed: selected.length, hits };
+    };
+    try {
+      const result = await fetchEmbeddingsResilient(config, texts, timeoutMs, store);
+      usage = unknownSpend ? undefined : spent;
+      const hits = this.store.transaction(() => {
+        this.store.completeJob(job, scope, [], usage ?? reservation);
+        return query ? this.store.semantic(scope, model, result.vectors[0], 20, allSessions) : [];
+      });
+      return { indexed, hits };
     } catch (error) {
+      if (indexed) {
+        // Keep what was stored; the rest is picked up by the next run.
+        this.store.completeJob(job, scope, [], unknownSpend ? reservation : spent);
+        log(
+          `[remendra] embedded ${indexed} of ${texts.length} before: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return { indexed, hits: [], incomplete: true };
+      }
       try {
         this.store.failJob(job, error instanceof Error ? error.message : String(error), usage);
       } catch (failError) {
@@ -183,6 +227,23 @@ export class MemoryService {
   }
   promoteOrphans(scope: Scope) {
     return this.store.promoteOrphans(scope);
+  }
+  cueCandidates(scope: Scope) {
+    return this.store.cueCandidates(scope).map((c) => ({ id: c.id, text: c.text }));
+  }
+  reserveCues(scope: Scope, tokens: number, timeoutMs: number) {
+    return this.store.reserveUsage(scope, tokens, this.config.dailyTokenBudget, timeoutMs);
+  }
+  addCues(
+    job: Job,
+    scope: Scope,
+    updates: { id: string; cues: string[] }[],
+    tokens: number,
+    dollars?: number,
+  ) {
+    const changed = this.store.addCues(scope, updates);
+    this.store.completeJob(job, scope, [], tokens, dollars);
+    return changed;
   }
   indexSessions(
     scope: Scope,
@@ -274,6 +335,9 @@ export const RPC_METHODS = [
   "embed",
   "sweepForPromotion",
   "promoteOrphans",
+  "cueCandidates",
+  "reserveCues",
+  "addCues",
   "indexSessions",
   "close",
 ] as const;

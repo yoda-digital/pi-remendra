@@ -1,5 +1,6 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { MemoryService, RPC_METHODS } from "./service.js";
+import { CONCURRENT_METHODS } from "./rpc.js";
 import { redact } from "./text.js";
 import { join } from "node:path";
 import { log, setLogFile } from "./log.js";
@@ -41,6 +42,10 @@ async function dispatch(request: { id: number; method: string; args: unknown[] }
 }
 let queue: Promise<void> = Promise.resolve();
 port.on("message", (request: { id: number; method: string; args: unknown[] }) => {
+  if (CONCURRENT_METHODS.includes(request.method)) {
+    void dispatch(request);
+    return;
+  }
   queue = queue
     .then(() => dispatch(request))
     .catch((error) => {

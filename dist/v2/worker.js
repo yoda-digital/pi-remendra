@@ -252,6 +252,8 @@ var parse = (row, key = "data") => {
   }
 };
 var nowISO = () => (/* @__PURE__ */ new Date()).toISOString();
+var SECOND_LOOK = "second look: no memory cited this text yet";
+var SECOND_LOOK_WAIT_MS = 60 * 60 * 1e3;
 var MemoryStore = class {
   constructor(file2) {
     this.file = file2;
@@ -1182,11 +1184,15 @@ var MemoryStore = class {
         (x) => Number.isSafeInteger(x) && x > 0
       ) || reservation < inputTokens)
         throw new Error("Invalid job limits");
-      const rows = this.all(
+      let rows = this.all(
         "SELECT c.* FROM chunks c JOIN sources s ON s.key=c.source_key WHERE c.state='pending' AND c.retry_at<=? AND s.project_id=? AND s.erased=0 AND s.replaced=0 ORDER BY s.rowid,c.start LIMIT 64",
         now,
         scope.projectId
       );
+      if (rows.every(
+        (r) => r.reason === SECOND_LOOK && Number(r.retry_at) > now - SECOND_LOOK_WAIT_MS
+      ))
+        rows = [];
       const chunks = [];
       let used = 0;
       for (const row of rows) {
@@ -1211,7 +1217,13 @@ var MemoryStore = class {
           );
         }
         used += estimateTokens(JSON.stringify(source.text.slice(start, end))) + 160;
-        chunks.push({ id: Number(row.id), source, start, end });
+        chunks.push({
+          id: Number(row.id),
+          source,
+          start,
+          end,
+          secondLook: row.reason === SECOND_LOOK
+        });
       }
       if (!chunks.length) return void 0;
       const job = {
@@ -1239,7 +1251,7 @@ var MemoryStore = class {
       return job;
     });
   }
-  completeJob(job, scope, inputs, actualTokens, dollars) {
+  completeJob(job, scope, inputs, actualTokens, dollars, secondLook = []) {
     return this.transaction(() => {
       this.assertJob(job);
       if (scope.projectId !== job.projectId) throw new Error("Stale job scope");
@@ -1259,6 +1271,16 @@ var MemoryStore = class {
             throw new Error("Observer cited evidence outside its leased input");
         }
       const records = inputs.map((c) => this.record(scope, c, "observer").claim);
+      const again = new Set(job.chunks.filter((c) => !c.secondLook).map((c) => c.id));
+      for (const id of secondLook)
+        if (again.has(id))
+          this.run(
+            "UPDATE chunks SET state='pending',job_id=NULL,reason=?,retry_at=? WHERE id=? AND job_id=? AND state='leased'",
+            SECOND_LOOK,
+            Date.now(),
+            id,
+            job.id
+          );
       this.run(
         "UPDATE chunks SET state='processed',job_id=NULL,reason=NULL WHERE job_id=? AND state='leased'",
         job.id
@@ -1648,6 +1670,31 @@ var MemoryStore = class {
       JSON.stringify(vector)
     );
   }
+  /** Usable memories that have no search cues yet (user-written, or learned before cues). */
+  cueCandidates(scope, limit = 24) {
+    const f = this.scopeSQL(scope, "all");
+    return this.all(
+      `SELECT c.data FROM claims c WHERE ${f.sql} AND c.status IN ('active','candidate') AND json_array_length(COALESCE(json_extract(c.data,'$.cues'),'[]'))=0 ORDER BY c.rowid DESC LIMIT 200`,
+      ...f.args
+    ).map((r) => parse(r)).filter((c) => !c.hidden && this.inScope(c, scope, true)).slice(0, limit);
+  }
+  /** Add search cues to memories. Not a revision: the assertion is unchanged. */
+  addCues(scope, updates) {
+    return this.transaction(() => {
+      let changed = 0;
+      for (const { id, cues } of updates) {
+        const claim = this.claim(id, scope, true);
+        if (!claim || claim.cues?.length || !Array.isArray(cues)) continue;
+        const clean = cues.filter((c) => typeof c === "string").map((c) => redact(c).trim().slice(0, 80)).filter(Boolean).slice(0, 8);
+        if (!clean.length) continue;
+        claim.cues = clean;
+        this.writeClaim(claim, "cues_added");
+        changed++;
+      }
+      if (changed) this.bump();
+      return changed;
+    });
+  }
   embeddingCandidates(scope, model, limit = 32) {
     const f = this.scopeSQL(scope, "all");
     return this.all(
@@ -1746,10 +1793,11 @@ var MemoryStore = class {
     if (promoted.length) this.bump();
     return promoted;
   }
-  semantic(scope, model, vector, limit = 20) {
+  semantic(scope, model, vector, limit = 20, all = true) {
     if (!vector.length || vector.length > 8192 || !vector.every(Number.isFinite))
       throw new Error("Invalid query vector");
-    const f = this.scopeSQL(scope, "all");
+    if (!all) this.setScope(scope);
+    const f = this.scopeSQL(scope, all ? "all" : "current");
     const norm = Math.hypot(...vector);
     if (!norm) return [];
     const hits = [];
@@ -1760,7 +1808,7 @@ var MemoryStore = class {
       vector.length
     )) {
       const claim = parse(row);
-      if (!this.usable(claim, scope, void 0, void 0, true)) continue;
+      if (!this.usable(claim, scope, void 0, void 0, all)) continue;
       const v = JSON.parse(String(row.vector));
       const denominator = norm * Math.hypot(...v);
       if (!denominator) continue;
@@ -2035,11 +2083,16 @@ function validateConfig(raw) {
     if (e.dimensions !== void 0 && (!Number.isInteger(e.dimensions) || Number(e.dimensions) < 1 || Number(e.dimensions) > 8192))
       throw new Error("Invalid embedding dimensions");
     if (!e.model.trim() || e.model.length > 200) throw new Error("Invalid embedding model");
+    for (const key of ["queryPrefix", "documentPrefix"])
+      if (e[key] !== void 0 && (typeof e[key] !== "string" || e[key].length > 200))
+        throw new Error(`Invalid embedding ${key}`);
     config.embeddings = {
       endpoint: e.endpoint,
       model: e.model,
       apiKeyEnv: e.apiKeyEnv,
-      dimensions: e.dimensions
+      dimensions: e.dimensions,
+      queryPrefix: e.queryPrefix,
+      documentPrefix: e.documentPrefix
     };
   }
   return config;
@@ -2977,6 +3030,60 @@ function recall(store, scope, request, config, sessionFile) {
 
 // src/v2/embeddings.ts
 var EMBED_TIMEOUT_MS = 45e3;
+var EmbeddingHttpError = class extends Error {
+  constructor(status, detail) {
+    super(`Embedding endpoint returned HTTP ${status}`);
+    this.status = status;
+    this.detail = detail;
+  }
+  status;
+  detail;
+  /**
+   * Worth another try: overload, rate limits, and Ollama's runner dropping a request
+   * (HTTP 400 "do embedding request: ... EOF"), which hit 30-50% of single calls while the
+   * GPU was busy with a chat model.
+   */
+  get transient() {
+    return this.status >= 500 || this.status === 429 || this.status === 400 && /\bEOF\b|do embedding request/i.test(this.detail);
+  }
+};
+function embeddingPrefixes(config) {
+  const known = /embeddinggemma/i.test(config.model) ? { query: "task: search result | query: ", document: "title: none | text: " } : /nomic-embed/i.test(config.model) ? { query: "search_query: ", document: "search_document: " } : /(^|[^a-z])e5([^a-z]|$)/i.test(config.model) ? { query: "query: ", document: "passage: " } : { query: "", document: "" };
+  return {
+    query: config.queryPrefix ?? known.query,
+    document: config.documentPrefix ?? known.document
+  };
+}
+function memoryEmbeddingText(config, text, cues) {
+  return `${embeddingPrefixes(config).document}${text}${cues?.length ? ` (${cues.join(", ")})` : ""}`;
+}
+async function fetchEmbeddingsResilient(config, input, timeout = EMBED_TIMEOUT_MS, onVectors) {
+  const deadline = Date.now() + timeout;
+  const attempt = async (texts, tries, offset) => {
+    const left = deadline - Date.now();
+    if (left <= 0) throw new Error("The operation was aborted due to timeout");
+    try {
+      const result = await fetchEmbeddings(config, texts, left);
+      onVectors?.(offset, result.vectors, result.tokens);
+      return result;
+    } catch (error) {
+      if (!(error instanceof EmbeddingHttpError) || !error.transient) throw error;
+      if (texts.length > 1) {
+        const half = Math.ceil(texts.length / 2);
+        const a = await attempt(texts.slice(0, half), 2, offset);
+        const b = await attempt(texts.slice(half), 2, offset + half);
+        return {
+          vectors: [...a.vectors, ...b.vectors],
+          tokens: a.tokens === void 0 || b.tokens === void 0 ? void 0 : a.tokens + b.tokens
+        };
+      }
+      if (tries <= 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return attempt(texts, tries - 1, offset);
+    }
+  };
+  return attempt(input, 4, 0);
+}
 async function fetchEmbeddings(config, input, timeout = EMBED_TIMEOUT_MS) {
   const key = config.apiKeyEnv ? process.env[config.apiKeyEnv] : void 0;
   if (config.apiKeyEnv && !key)
@@ -2996,8 +3103,8 @@ async function fetchEmbeddings(config, input, timeout = EMBED_TIMEOUT_MS) {
     signal: AbortSignal.timeout(timeout)
   });
   if (!response.ok) {
-    await response.body?.cancel();
-    throw new Error(`Embedding endpoint returned HTTP ${response.status}`);
+    const detail = (await response.text().catch(() => "")).slice(0, 300);
+    throw new EmbeddingHttpError(response.status, detail);
   }
   if (!response.body) throw new Error("Embedding endpoint returned an empty body");
   const reader = response.body.getReader(), chunks = [];
@@ -3147,8 +3254,8 @@ var MemoryService = class {
   lease(scope, owner, input, reservation, limit, timeout) {
     return this.store.lease(scope, owner, input, reservation, limit, timeout);
   }
-  complete(job, scope, inputs, tokens, dollars) {
-    return this.store.completeJob(job, scope, inputs, tokens, dollars);
+  complete(job, scope, inputs, tokens, dollars, secondLook = []) {
+    return this.store.completeJob(job, scope, inputs, tokens, dollars, secondLook);
   }
   fail(job, reason, tokens, retryMs) {
     return this.store.failJob(job, reason, tokens, retryMs);
@@ -3175,20 +3282,21 @@ var MemoryService = class {
   importLegacyEntries(scope, entries) {
     return importLegacy(this.store, scope, JSON.stringify(entries));
   }
-  async embed(scope, query, timeoutMs = EMBED_TIMEOUT_MS) {
+  async embed(scope, query, timeoutMs = EMBED_TIMEOUT_MS, allSessions = true) {
     const config = this.config.embeddings;
     if (!config) throw new Error("Configure an embedding endpoint and model first");
-    const model = hash(JSON.stringify(config));
+    const prefixes = embeddingPrefixes(config);
+    const model = hash(JSON.stringify({ ...config, prefixes, text: "memory+cues" }));
     const candidates = query ? [] : this.store.embeddingCandidates(scope, model);
     const selected = [];
     let used = 0;
     for (const claim of candidates) {
-      const tokens = estimateTokens(claim.text) + 16;
+      const tokens = estimateTokens(memoryEmbeddingText(config, claim.text, claim.cues)) + 16;
       if (used + tokens > this.config.observerInputTokens) break;
       selected.push(claim);
       used += tokens;
     }
-    const texts = query ? [query] : selected.map((c) => c.text);
+    const texts = query ? [prefixes.query + query] : selected.map((c) => memoryEmbeddingText(config, c.text, c.cues));
     if (!texts.length) return { indexed: 0, hits: [] };
     const reservation = texts.reduce((n, text) => n + estimateTokens(text) + 16, 256);
     const job = this.store.reserveUsage(
@@ -3199,23 +3307,40 @@ var MemoryService = class {
     );
     if (!job) throw new Error("Daily memory token budget exhausted");
     let usage;
-    try {
-      const result = await fetchEmbeddings(config, texts, timeoutMs);
-      usage = result.tokens;
-      const hits = this.store.transaction(() => {
-        for (let i = 0; i < selected.length; i++)
-          this.store.putVector(
-            scope,
-            selected[i].id,
-            selected[i].revision,
-            model,
-            result.vectors[i]
-          );
-        this.store.completeJob(job, scope, [], usage ?? reservation);
-        return query ? this.store.semantic(scope, model, result.vectors[0]) : [];
+    let indexed = 0;
+    let spent = 0;
+    let unknownSpend = false;
+    const store = (offset, vectors, tokens) => {
+      if (tokens === void 0) unknownSpend = true;
+      else spent += tokens;
+      if (query) return;
+      this.store.transaction(() => {
+        vectors.forEach((vector, i) => {
+          const claim = selected[offset + i];
+          const now = this.store.claim(claim.id, scope, true);
+          if (!now || now.revision !== claim.revision || memoryEmbeddingText(config, now.text, now.cues) !== texts[offset + i])
+            return;
+          this.store.putVector(scope, claim.id, claim.revision, model, vector);
+          indexed++;
+        });
       });
-      return { indexed: selected.length, hits };
+    };
+    try {
+      const result = await fetchEmbeddingsResilient(config, texts, timeoutMs, store);
+      usage = unknownSpend ? void 0 : spent;
+      const hits = this.store.transaction(() => {
+        this.store.completeJob(job, scope, [], usage ?? reservation);
+        return query ? this.store.semantic(scope, model, result.vectors[0], 20, allSessions) : [];
+      });
+      return { indexed, hits };
     } catch (error) {
+      if (indexed) {
+        this.store.completeJob(job, scope, [], unknownSpend ? reservation : spent);
+        log(
+          `[remendra] embedded ${indexed} of ${texts.length} before: ${error instanceof Error ? error.message : String(error)}`
+        );
+        return { indexed, hits: [], incomplete: true };
+      }
       try {
         this.store.failJob(job, error instanceof Error ? error.message : String(error), usage);
       } catch (failError) {
@@ -3230,6 +3355,17 @@ var MemoryService = class {
   }
   promoteOrphans(scope) {
     return this.store.promoteOrphans(scope);
+  }
+  cueCandidates(scope) {
+    return this.store.cueCandidates(scope).map((c) => ({ id: c.id, text: c.text }));
+  }
+  reserveCues(scope, tokens, timeoutMs) {
+    return this.store.reserveUsage(scope, tokens, this.config.dailyTokenBudget, timeoutMs);
+  }
+  addCues(job, scope, updates, tokens, dollars) {
+    const changed = this.store.addCues(scope, updates);
+    this.store.completeJob(job, scope, [], tokens, dollars);
+    return changed;
   }
   indexSessions(scope, directory, projectPath) {
     let files = 0, sources = 0, skipped = 0;
@@ -3313,9 +3449,15 @@ var RPC_METHODS = [
   "embed",
   "sweepForPromotion",
   "promoteOrphans",
+  "cueCandidates",
+  "reserveCues",
+  "addCues",
   "indexSessions",
   "close"
 ];
+
+// src/v2/rpc.ts
+var CONCURRENT_METHODS = ["embed"];
 if (!parentPort) throw new Error("Memory worker must run in a worker thread");
 var port = parentPort;
 setLogFile(join(String(workerData.directory), "remendra.log"));
@@ -3346,6 +3488,10 @@ async function dispatch(request) {
 }
 var queue = Promise.resolve();
 port.on("message", (request) => {
+  if (CONCURRENT_METHODS.includes(request.method)) {
+    void dispatch(request);
+    return;
+  }
   queue = queue.then(() => dispatch(request)).catch((error) => {
     try {
       port.postMessage({

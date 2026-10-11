@@ -19,12 +19,58 @@ import { hash, jsonObject, redact } from "./text.js";
 import type { ClaimInput, MemoryConfig, Packet, Scope, SearchHit } from "./types.js";
 import { log, setLogFile } from "./log.js";
 import { normalizeRecallArgs } from "./recall-args.js";
-import { extractClaimsJson, thinkingOffPayload, thinkingText } from "./observer.js";
-import { EMBED_TIMEOUT_MS } from "./embeddings.js";
+import {
+  abortable,
+  CUE_PROMPT,
+  extractClaimsJson,
+  parseCues,
+  thinkingOffPayload,
+  thinkingText,
+} from "./observer.js";
+import { estimateTokens } from "./text.js";
+import { randomUUID } from "node:crypto";
+/**
+ * Embedding deadlines by context. A cold Ollama embedding model on a GPU shared with a chat
+ * model was measured crashing and reloading on the first requests (13-18 s per try), so
+ * work that blocks nothing gets room for several tries; progress is kept either way.
+ */
+const BACKGROUND_EMBED_MS = 120000;
+const COMMAND_EMBED_MS = 90000;
 
-/** Deadline for the recall tool's semantic fallback; a cold Ollama load measured 12-13 s. */
-const SEMANTIC_FALLBACK_MS = 20000;
+/** Deadline for embedding a recall query; a cold Ollama load measured 12-13 s. */
+const SEMANTIC_MS = 20000;
+/** Keyword matches get this much on top of their similarity (best of 0.03-0.15 measured). */
+const KEYWORD_BONUS = 0.03;
+/** Below this, a memory found only by meaning is unrelated (0.27-0.40 measured for misses). */
 const SEMANTIC_MIN_SIMILARITY = 0.25;
+
+/**
+ * Merge keyword and semantic results: similarity first, matching words as a small bonus.
+ * A keyword-only hit (outside the semantic top 20) ranks just above the weakest semantic
+ * hit; a semantic-only hit below SEMANTIC_MIN_SIMILARITY is dropped.
+ */
+export function rankHybrid(keyword: SearchHit[], semantic: SearchHit[]): SearchHit[] {
+  const words = new Map(keyword.map((h) => [h.claim.id, h]));
+  const floor = semantic.length ? Math.min(...semantic.map((h) => h.score)) : 0;
+  const merged = new Map<string, SearchHit>();
+  for (const h of semantic) {
+    const word = words.get(h.claim.id);
+    if (!word && h.score < SEMANTIC_MIN_SIMILARITY) continue;
+    merged.set(h.claim.id, {
+      claim: h.claim,
+      score: h.score + (word ? KEYWORD_BONUS : 0),
+      reasons: [`similarity ${h.score.toFixed(2)}`, ...(word ? ["word match"] : [])],
+    });
+  }
+  for (const h of keyword)
+    if (!merged.has(h.claim.id))
+      merged.set(h.claim.id, {
+        claim: h.claim,
+        score: floor + KEYWORD_BONUS,
+        reasons: ["word match"],
+      });
+  return [...merged.values()].sort((a, b) => b.score - a.score);
+}
 
 const HELP_SHORT = `Remendra — persistent memory for Pi
 /remendra                         status and daily budget
@@ -146,6 +192,8 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   let settledCount = 0;
   /** The last "◉ N memories" line, restored when learning stops without recompiling. */
   let memoryStatus = "";
+  /** Cancels a running cue backfill (foreground work, session changes, shutdown). */
+  let cueController: AbortController | undefined;
   /** The last injected packet message, reused while the selected memories stay the same. */
   let lastPacket: { key: string; message: AgentMessage; anchor?: number } | undefined;
   let learnTimer: ReturnType<typeof setTimeout> | undefined;
@@ -218,6 +266,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   };
   const invalidate = (): void => {
     lastPacket = undefined;
+    cueController?.abort();
     cancelScheduledLearning();
     generation++;
     learner?.cancel("Session, branch, or memory changed");
@@ -363,6 +412,71 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         dollars: result.usage.cost.total,
       };
     };
+  /**
+   * Give memories without cues (written with /remendra remember, or learned before cues
+   * existed) their search cues: one small model call per batch, run after learning. Cues are
+   * indexed for keyword search and embedded with the memory, so paraphrased questions find it.
+   */
+  const backfillCues = async (
+    ctx: ExtensionContext,
+    current: Scope,
+    stillCurrent: () => boolean,
+  ): Promise<void> => {
+    if (!client || !stillCurrent()) return;
+    const candidates: { id: string; text: string }[] = await client.call("cueCandidates", [
+      current,
+    ]);
+    if (!candidates.length || !stillCurrent()) return;
+    const input = JSON.stringify({ memories: candidates.map((c, n) => ({ n, text: c.text })) });
+    const maxTokens = Math.min(config.observerOutputTokens, 80 * candidates.length + 200);
+    const inputTokens = estimateTokens(CUE_PROMPT) + estimateTokens(input);
+    const job = await client.call("reserveCues", [
+      current,
+      inputTokens + maxTokens,
+      config.jobTimeoutMs + 5000,
+    ]);
+    if (!job) return; // daily budget exhausted
+    const controller = new AbortController();
+    cueController = controller;
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(config.jobTimeoutMs)]);
+    let tokens: number | undefined;
+    try {
+      const result = await abortable(
+        completion(ctx)({
+          system: CUE_PROMPT,
+          input,
+          maxTokens,
+          signal,
+          attempt: 0,
+          sessionId: randomUUID(),
+        }),
+        signal,
+      );
+      tokens = result.tokens;
+      if (controller.signal.aborted || !stillCurrent())
+        throw new Error("Discarded cues after a session or memory change");
+      const cues = parseCues(result.text, candidates.length);
+      await client.call("addCues", [
+        job,
+        current,
+        candidates.map((c, i) => ({ id: c.id, cues: cues[i] })),
+        tokens,
+        result.dollars,
+      ]);
+    } catch (error) {
+      const cancelled = controller.signal.aborted;
+      if (!cancelled)
+        log(
+          "[remendra] cue backfill failed:",
+          error instanceof Error ? error.message : String(error),
+        );
+      await client
+        ?.call("fail", [job, "cue backfill", tokens ?? (cancelled ? inputTokens : undefined), 0])
+        .catch(() => undefined);
+    } finally {
+      if (cueController === controller) cueController = undefined;
+    }
+  };
   const learn = async (ctx: ExtensionContext): Promise<string> => {
     if (passive || !config.enabled || !config.observer || config.mode === "recall")
       return "Learning disabled";
@@ -392,11 +506,12 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       );
       if (generation === epoch && !hostSignal?.aborted) {
         await compile(ctx);
+        await backfillCues(ctx, current, () => generation === epoch && !foreground);
         // Keep vectors current so the recall tool's semantic fallback finds new memories.
         // Runs in the worker without blocking anything; with nothing new it makes no request.
         if (config.embeddings)
           void client
-            ?.call("embed", [current], EMBED_TIMEOUT_MS + 5000)
+            ?.call("embed", [current, undefined, BACKGROUND_EMBED_MS], BACKGROUND_EMBED_MS + 5000)
             .catch((error: unknown) =>
               log(
                 "[remendra] background embedding failed:",
@@ -416,6 +531,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     invalidate();
     await learner?.stop();
     learner?.cancel();
+    cueController?.abort();
     pi.appendEntry("remendra.v2.user-action", { at: new Date().toISOString() });
     const current = await refresh(ctx);
     if (!current.entryIds.length) throw new Error("A session anchor is required");
@@ -521,6 +637,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   });
   pi.on("before_agent_start", async (event, ctx) => {
     learner?.cancel();
+    cueController?.abort();
     query = event.prompt.slice(0, 12000);
     try {
       await refresh(ctx);
@@ -532,6 +649,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     foreground = true;
     cancelScheduledLearning();
     learner?.cancel();
+    cueController?.abort();
   });
   pi.on("turn_end", async (_event, ctx) => {
     try {
@@ -715,43 +833,54 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   });
 
   /**
-   * Keyword search misses paraphrases ("which cloud hosts the backend" vs "deployed to
-   * Hetzner"). When a memory search finds nothing and an embedding endpoint is configured,
-   * try a semantic search once, with a shorter deadline than /remendra embed: a model
-   * waiting on a tool should not hang on a cold embedding server.
+   * With an embedding endpoint, memory recall ranks by meaning and uses the words as a small
+   * bonus. Measured on 46 questions (36 paraphrases, 10 exact names): 42-45 answered first,
+   * against 38-39 for keyword search with a semantic fallback, which let weak word matches
+   * ("data", "server") hide the right memory. Keyword results are the fallback when the
+   * endpoint fails or misses its deadline (a cold Ollama load takes 12-13 s).
    */
-  const semanticFallback = async (
+  const hybridRecall = async (
     current: Scope,
-    params: { query?: string; mode?: string; asOf?: string; expand?: number[] },
-    text: string,
+    params: {
+      query?: string;
+      mode?: string;
+      scope?: string;
+      page?: number;
+      asOf?: string;
+      expand?: number[];
+    },
   ): Promise<string | undefined> => {
     const query = params.query?.trim();
     if (
       !config.embeddings ||
+      !client ||
       !query ||
       (params.mode ?? "memory") !== "memory" ||
       params.asOf ||
       params.expand?.length ||
-      /^#\d|^\/.+\/[a-z]*$/.test(query) ||
-      !text.startsWith("Memory results 0;")
+      /^#\d|^\/.+\/[a-z]*$/.test(query)
     )
       return undefined;
+    const all = params.scope === "all";
     try {
-      const { hits }: { hits: SearchHit[] } = await client!.call(
-        "embed",
-        [current, query, SEMANTIC_FALLBACK_MS],
-        SEMANTIC_FALLBACK_MS + 5000,
-      );
-      // Unrelated memories still score above zero (0.27-0.40 measured with embeddinggemma).
-      const close = hits.filter((h) => h.score >= SEMANTIC_MIN_SIMILARITY).slice(0, 5);
-      if (!close.length) return undefined;
+      const [keyword, semantic]: [SearchHit[], { hits: SearchHit[] }] = await Promise.all([
+        client.call("search", [
+          { scope: current, text: query, mode: all ? "all" : "current", limit: 20 },
+        ]),
+        client.call("embed", [current, query, SEMANTIC_MS, all], SEMANTIC_MS + 5000),
+      ]);
+      const ranked = rankHybrid(keyword, semantic.hits);
+      const page = Math.max(1, Math.min(1000, Math.floor(params.page ?? 1)));
       return (
-        `Memory results ${close.length} by meaning; no memory matched the words. Check each against the question; a high similarity is not proof.\n` +
-        close.map((h) => claimRecord(h.claim, [`similarity ${h.score.toFixed(2)}`])).join("\n")
+        `Memory results ${ranked.length}; page ${page}. Ranked by meaning, with matching words as a tiebreak; ${all ? "all sessions of this project" : "current usable memories"}. Similarity is not proof: check each against the question.\n` +
+        ranked
+          .slice((page - 1) * 10, page * 10)
+          .map((h) => claimRecord(h.claim, h.reasons))
+          .join("\n")
       );
     } catch (error) {
       log(
-        "[remendra] semantic fallback failed:",
+        "[remendra] semantic ranking unavailable, using keywords:",
         error instanceof Error ? error.message : String(error),
       );
       return undefined;
@@ -801,15 +930,16 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     execute: async (_id, params, signal, _update, ctx) => {
       if (signal?.aborted) throw new Error("Recall cancelled");
       const current = await refresh(ctx);
-      const text = await client?.call(
-        "recall",
-        [current, params, ctx.sessionManager.getSessionFile()],
-        3000,
-      );
+      const text =
+        (await hybridRecall(current, params)) ??
+        (await client?.call(
+          "recall",
+          [current, params, ctx.sessionManager.getSessionFile()],
+          3000,
+        ));
       if (text === undefined) throw new Error("Memory client is unavailable");
-      const semantic = await semanticFallback(current, params, text);
       return {
-        content: [{ type: "text", text: semantic ?? text }],
+        content: [{ type: "text", text }],
         details: { projectId: current.projectId, sessionId: current.sessionId },
       };
     },
@@ -867,8 +997,8 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           ctx,
           await mem.call(
             "embed",
-            [current, verb === "semantic" ? rest : undefined],
-            EMBED_TIMEOUT_MS + 5000,
+            [current, verb === "semantic" ? rest : undefined, COMMAND_EMBED_MS],
+            COMMAND_EMBED_MS + 5000,
           ),
         );
       } else if (verb === "settings") {
@@ -881,6 +1011,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           invalidate();
           await learner?.stop();
           learner?.cancel();
+          cueController?.abort();
           config = await mem.call("configSet", [{ ...config, ...(JSON.parse(rest) as object) }]);
           scope = makeScope(ctx);
           show(ctx, "Memory settings saved.");
@@ -929,6 +1060,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         invalidate();
         await learner?.stop();
         learner?.cancel();
+        cueController?.abort();
         const id = words[0];
         if (!id) throw new Error("A memory ID is required");
         const claim = (await mem.call("explain", [current, id])).claim;
@@ -967,6 +1099,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         invalidate();
         await learner?.stop();
         learner?.cancel();
+        cueController?.abort();
         if (rest)
           show(
             ctx,
