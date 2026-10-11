@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.3.0] - 2026-10-11
+
+Closes the gaps left in 2.2.0, each measured against the real Qwen 3.x and embeddinggemma setup it was found on.
+
+### Fixed
+
+- **Embedding never blocks memory.** The worker ran calls one at a time, so an embedding request waiting on a cold server held up packet compilation and ingestion behind it, and a prompt arriving then got "memory temporarily unavailable". Embedding now runs beside the queue.
+- **Cold or flaky embedding servers.** Ollama's embedding runner, sharing a GPU with a chat model, crashed and reloaded on the first requests (HTTP 400 "do embedding request: … EOF", 13–18 s a try). Requests are retried and split, every finished vector is kept even when time runs out, and deadlines fit the context: 120 s in the background, 90 s for `/remendra embed`, 20 s for a recall query (then keywords). Verified live: a cold `/remendra embed` stored all vectors in 12 s.
+- **No extra request for a second look.** 2.2.0 asked the model again at once when it found nothing in user text. Now user text that no memory cites rides along with the next batch, which is sent anyway; alone it waits up to an hour.
+- **Paraphrased duplicates.** The observer sees existing memories related to each batch and marks claims that only repeat one. A marked claim is dropped only if every name, number and relation word (not, before, after, only…) in it already appears in that memory; an unmarked one only if all its words do. Restatements were blocked in 15 of 15 valid runs and changed values kept in 8 of 8. The cost: with the list in view the model returns new facts in about 83% of single calls instead of about 93%; the second look covers the rest.
+- **Search cues stayed out of memory text.** The model had started copying cue words into the stored text.
+
+### Changed
+
+- **Recall ranks by meaning.** With an embedding endpoint, the recall tool ranks memories by similarity, with matching words as a small bonus, instead of using keywords with a semantic fallback. On 46 questions (36 paraphrases, 10 exact names) the right memory came first for 42–45, against 38–39 before; all 46 were in the top three.
+- **Search cues.** The observer writes 4–8 cues per memory (category, synonyms, the question it answers). They are indexed for keyword search and embedded with the memory. Memories without cues, such as `/remendra remember` text and everything learned before this version, get them in the background, one small request per 24.
+- **Embedding prefixes.** embeddinggemma, nomic-embed and e5 models get the task prefixes they were trained with; `queryPrefix` and `documentPrefix` set them for other models. Old vectors are rebuilt automatically.
+
 ## [2.2.0] - 2026-10-11
 
 From a live end-to-end run against Pi 1.1 and a local Qwen model, with a logging proxy recording every model request.

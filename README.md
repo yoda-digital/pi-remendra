@@ -2,7 +2,7 @@
 
 Persistent memory for [Pi](https://github.com/earendil-works/pi). Learns from your sessions, corrects itself when wrong, and gets smarter over time.
 
-**v2.2.0** · Pi 1.1 · Node ≥22
+**v2.3.0** · Pi 1.1 · Node ≥22
 
 ## What it does
 
@@ -58,7 +58,7 @@ The `recall` tool is available to the agent automatically. Use `/remendra help a
 The extension hooks into Pi's lifecycle:
 
 1. **Ingestion.** New session entries are converted to source records with SHA-256 content hashes and stored in SQLite.
-2. **Background learning.** After the agent settles, an observer model extracts structured claims from unprocessed source chunks. Each claim carries evidence: exact character spans into the stored source text. At most 4 batches per settled turn, 2 attempts per batch. Observer calls turn the model's thinking off, and an empty answer for text you wrote is asked a second time before that text counts as done. Your own `/remendra remember` text and the recall tool's output are never sent to the observer, since they are memories already.
+2. **Background learning.** After the agent settles, an observer model extracts structured claims from unprocessed source chunks. Each claim carries evidence: exact character spans into the stored source text. At most 4 batches per settled turn, 2 attempts per batch. Observer calls turn the model's thinking off. Text you wrote that no extracted memory cites gets one more look by riding along with the next batch, so a model's occasional empty answer costs no extra request. The observer also sees the existing memories related to each batch and marks claims that only repeat one; those are dropped unless they add a name, a number or a change of meaning. Every memory gets a few search cues (the category of a product, synonyms, the question it answers), so "which cloud hosts the backend" can find "The API is deployed to Hetzner". Memories saved before cues existed, or with `/remendra remember`, get theirs in the background. Your own `/remendra remember` text and the recall tool's output are never sent to the observer, since they are memories already.
 3. **Context compilation.** Before each agent turn, Remendra compiles a memory packet. FTS5 matches the current query against stored claims. Results are ranked by search score and claim-type priority (constraints rank above hypotheses). The packet fits within a measured token budget and includes provenance metadata. It goes right before your latest prompt, and stays where it was while the next prompts select the same memories, so the provider's prompt cache keeps the conversation before it.
 4. **Corrections.** When you correct a memory, the old claim is superseded, its evidence spans are retired, dependent claims are invalidated recursively, and the replacement is recorded with its own evidence.
 
@@ -97,7 +97,15 @@ If you run an OpenAI-compatible embedding endpoint:
 
 HTTPS required for remote endpoints. Loopback HTTP works. No model is downloaded automatically.
 
-With an endpoint configured, new memories are embedded in the background after each learning run, and the `recall` tool falls back to a semantic search when no memory matches the words of a question ("which cloud hosts the backend" finds "The API is deployed to Hetzner"). The fallback waits at most 20 seconds, so a cold embedding server does not stall the agent.
+With an endpoint configured, new memories are embedded in the background after each learning run, together with their search cues, and the `recall` tool ranks memories by meaning, with matching words as a tiebreak. On 46 test questions (36 paraphrases, 10 exact names) that put the right memory first for 42 to 45 of them, against 38 to 39 for keyword search with a semantic fallback.
+
+Known models get the task prefixes they were trained with (embeddinggemma, nomic-embed, e5). For another model, set them yourself:
+
+```
+/remendra settings {"embeddings":{"endpoint":"...","model":"...","queryPrefix":"query: ","documentPrefix":"passage: "}}
+```
+
+A cold embedding server is handled: failed requests are retried and split, finished vectors are kept even if time runs out, and embedding never blocks the rest of Remendra. The recall tool waits at most 20 seconds for a query vector, then answers from keywords.
 
 ## Performance
 
