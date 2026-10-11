@@ -40,6 +40,12 @@ export interface SourceInput {
   target?: string;
   isError?: boolean;
   episodeId?: string;
+  /**
+   * Why the observer must never see this source, when it is memory already: text the user
+   * stored directly (remember, correct) or the recall tool's output. Learning from either
+   * only re-records existing memories as duplicates.
+   */
+  skipLearning?: string;
 }
 
 export interface Source extends SourceInput {
@@ -174,6 +180,8 @@ export interface MemoryConfig {
   maxAttempts: number;
   models: Array<{ provider: string; id: string }>;
   useSessionModel: boolean;
+  /** Let a thinking model think during extraction (slower). Off by default; see thinkingOffPayload. */
+  observerThinking: boolean;
   excludedPaths: string[];
   redactionPatterns: string[];
   recallTokens: number;

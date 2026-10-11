@@ -6,6 +6,7 @@ import { searchEntries, getTouchedFiles } from "../core/search-entries.js";
 import { formatRecallOutput, formatTouchedOutput } from "../core/format-recall.js";
 import { parseDrillDown, expandEntryFile } from "../core/drill-down.js";
 import { clipTokens, redact } from "./text.js";
+import { claimRecord } from "./compiler.js";
 
 export interface RecallRequest {
   query?: string;
@@ -65,7 +66,7 @@ export function recall(
       `Memory results ${hits.length}; page ${page}. ${mode === "history" ? "Historical records include inactive claims; check status before use." : request.scope === "all" ? "All project lineage memories across sessions." : "Current usable memories only."}\n` +
         hits
           .slice((page - 1) * 10, page * 10)
-          .map((h) => JSON.stringify(h))
+          .map((h) => claimRecord(h.claim, h.reasons))
           .join("\n"),
     );
   }

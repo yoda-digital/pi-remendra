@@ -763,3 +763,94 @@ describe("auto-promotion", () => {
     expect(store.promoteOrphans(scope)).toEqual([]);
   });
 });
+
+it("erasing a corrected memory also erases its earlier revisions and their sources", () => {
+  const first = remember("The staging password is hunter2");
+  const s = source("The staging password is hunter3");
+  const second = store.correct(scope, first.id, first.revision, {
+    text: s.text,
+    kind: "fact",
+    evidence: [{ sourceKey: s.key, hash: s.hash, start: 0, end: s.text.length }],
+  }).claim;
+  const result = store.erase(scope, second.id, second.revision);
+  expect(result.claims).toBe(2);
+  expect(result.sources).toBe(2);
+  expect(store.claim(first.id, scope, true)).toBeUndefined();
+  expect(store.search({ scope, text: "staging password", mode: "history" })).toEqual([]);
+  for (const key of [first.evidence[0].sourceKey, s.key]) expect(store.source(key)?.text).toBe("");
+  expect(store.doctor().integrity).toEqual({ quick_check: "ok" });
+});
+
+it("never queues an explicitly remembered source for the observer", () => {
+  scope.entryIds.push("action-1");
+  const key = store.ingest(scope, [
+    {
+      entryId: "action-1",
+      role: "user",
+      text: "Always run the full test suite before tagging a release",
+      timestamp: "2026-09-06T12:00:00.000Z",
+      skipLearning: "explicit memory; already recorded",
+    },
+  ]).keys[0];
+  expect(store.source(key)?.text).toContain("full test suite");
+  expect(store.lease(scope, "owner", 4000, 8000, 80000, 50000)).toBeUndefined();
+});
+
+it("drops the text of a replaced source that no memory cites, and keeps cited text", () => {
+  const removed = source("The staging password rotation happens every Friday", "entry-hidden");
+  const cited = source("Use PostgreSQL on port 5432", "entry-cited");
+  remember("PostgreSQL runs on port 5432", {}, cited);
+  // A context edit removed one message and rewrote the other.
+  store.ingest(scope, [
+    { entryId: "entry-hidden", text: "", role: "user", timestamp: "2026-09-06T12:05:00.000Z" },
+    {
+      entryId: "entry-cited",
+      text: "Use SQLite",
+      role: "user",
+      timestamp: "2026-09-06T12:05:00.000Z",
+    },
+  ]);
+  expect(store.source(removed.key)?.text).toBe("");
+  expect(store.source(cited.key)?.text).toBe("Use PostgreSQL on port 5432");
+  const db = (store as unknown as { db: { exec(sql: string): void } }).db;
+  expect(() =>
+    db.exec("INSERT INTO source_fts(source_fts) VALUES('integrity-check')"),
+  ).not.toThrow();
+});
+
+it("does not record a second copy of a memory the observer meets again", () => {
+  const first = remember("Logs go to Grafana Loki");
+  const s = source("Reminder: logs go to Grafana Loki", "entry-again");
+  const again = store.record(
+    scope,
+    {
+      text: "logs go to   Grafana Loki",
+      kind: "fact",
+      evidence: [{ sourceKey: s.key, hash: s.hash, start: 10, end: s.text.length }],
+    },
+    "observer",
+  );
+  expect(again.duplicate).toBe(true);
+  expect(again.claim.id).toBe(first.id);
+  expect(store.search({ scope, text: "Grafana Loki" })).toHaveLength(1);
+});
+
+it("never queues recall tool output for the observer, including chunks queued by older versions", () => {
+  scope.entryIds.push("tool-1");
+  const key = store.ingest(scope, [
+    {
+      entryId: "tool-1",
+      role: "toolResult",
+      tool: "recall",
+      text: "Memory results 1; The API is deployed to Hetzner",
+      timestamp: "2026-09-06T12:00:00.000Z",
+    },
+  ]).keys[0];
+  // Ingested without skipLearning, as older versions did: queued for the observer.
+  expect(store.source(key)?.tool).toBe("recall");
+  expect(store.status(scope).gaps.pending).toBe(1);
+  store.close();
+  store = new MemoryStore(join(dir, "memory.sqlite"));
+  expect(store.status(scope).gaps.pending ?? 0).toBe(0);
+  expect(store.lease(scope, "owner", 4000, 8000, 80000, 50000)).toBeUndefined();
+});

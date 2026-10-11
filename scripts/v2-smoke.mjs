@@ -1,6 +1,6 @@
 // Executes the built package through Pi's real resource loader, SDK and fake provider.
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -181,7 +181,15 @@ try {
     JSON.stringify(
       {
         ok: true,
-        pi: "0.85.1",
+        pi: JSON.parse(
+          readFileSync(
+            new URL(
+              "../node_modules/@earendil-works/pi-coding-agent/package.json",
+              import.meta.url,
+            ),
+            "utf8",
+          ),
+        ).version,
         node: process.version,
         providerCalls: calls,
         backgroundProviderCalls: backgroundCalls,

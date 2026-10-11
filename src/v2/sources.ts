@@ -115,6 +115,10 @@ export function sourceInputs(
       target: call?.target,
       isError: m.role === "toolResult" ? m.isError : undefined,
       episodeId,
+      skipLearning:
+        m.role === "toolResult" && m.toolName === "recall"
+          ? "recall output; the memories in it are already recorded"
+          : undefined,
     });
   }
   return inputs;

@@ -90,6 +90,14 @@ describe("parseObservations", () => {
     expect(parsed.length).toBe(1);
   });
 
+  it("finds the answer when the model wraps it in prose", () => {
+    const wrapped =
+      "Here are the memories:\n" +
+      JSON.stringify({ claims: [claim("Use PostgreSQL 16", "Use PostgreSQL 16.")] }) +
+      "\nLet me know if you need more.";
+    expect(parseObservations(wrapped, job).length).toBe(1);
+  });
+
   it("still rejects output that is not JSON at all", () => {
     expect(() => parseObservations("I cannot help with that", job)).toThrow();
   });
@@ -166,13 +174,47 @@ describe("BackgroundLearner cancellation", () => {
     );
     await ready;
     learner.cancel("Foreground work has priority");
-    await running;
+    // A cancellation is not a failure: it never feeds the "learning degraded" count.
+    expect(await running).toBe("Learning paused; 0 memories committed");
     const { budget } = await client.call("status", [scope]);
     expect(budget.reserved).toBe(0);
     expect(budget.spent).toBeGreaterThan(0);
     expect(budget.spent).toBeLessThan(
       DEFAULT_CONFIG.observerInputTokens + DEFAULT_CONFIG.observerOutputTokens,
     );
+  });
+
+  it("asks again when the model finds nothing in user text, then keeps the second answer", async () => {
+    const learner = new BackgroundLearner(client);
+    const answers = [
+      '{"claims":[]}',
+      JSON.stringify({
+        claims: [
+          {
+            text: "PostgreSQL is the primary database",
+            kind: "decision",
+            evidence: [{ chunk: 0, quote: "Use PostgreSQL for the primary database." }],
+          },
+        ],
+      }),
+    ];
+    const provider = vi.fn(async () => ({ text: answers.shift()!, tokens: 10 }));
+    const result = await learner.run(scope, DEFAULT_CONFIG, provider, () => true);
+    expect(provider).toHaveBeenCalledTimes(2);
+    expect(result).toMatch(/^Learned 1 memories/);
+    expect((await client.call("status", [scope])).budget.spent).toBe(20);
+  });
+
+  it("accepts an empty answer on the last attempt and does not ask again", async () => {
+    const learner = new BackgroundLearner(client);
+    const provider = vi.fn(async () => ({ text: '{"claims":[]}', tokens: 10 }));
+    await learner.run(scope, DEFAULT_CONFIG, provider, () => true);
+    expect(provider).toHaveBeenCalledTimes(2);
+    // Nothing is left to lease: the chunks were accepted as processed.
+    expect(await learner.run(scope, DEFAULT_CONFIG, provider, () => true)).toBe(
+      "No eligible work or daily budget exhausted",
+    );
+    expect(provider).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -349,5 +391,140 @@ describe("recall arguments from small models", () => {
       expand: [3, 4],
     });
     expect(normalizeRecallArgs(null)).toEqual({});
+  });
+});
+
+describe("observer output from thinking models", () => {
+  it("takes the last valid claims object, skipping the prompt's sketch and drafts", async () => {
+    const { extractClaimsJson } = await import("../../src/v2/observer.js");
+    const reasoning =
+      'The format is {"claims": [...]}. Draft: {"claims": [{"text": "x"' +
+      ' wait, fix the quote. Final: {"claims": [{"text": "Use {braces} and \\"quotes\\"", "kind": "fact", "evidence": []}]} done.';
+    expect(JSON.parse(extractClaimsJson(reasoning)).claims[0].text).toBe(
+      'Use {braces} and "quotes"',
+    );
+    expect(extractClaimsJson("no answer here")).toBe("");
+  });
+
+  it("reads Pi thinking blocks, which keep their text in `thinking`", async () => {
+    const { thinkingText } = await import("../../src/v2/observer.js");
+    expect(
+      thinkingText([
+        { type: "thinking", thinking: "first" },
+        { type: "text", text: "ignored" },
+        { type: "thinking", thinking: "second" },
+      ]),
+    ).toBe("first\nsecond");
+  });
+
+  it("turns thinking off only for OpenAI-compatible reasoning models", async () => {
+    const { thinkingOffPayload } = await import("../../src/v2/observer.js");
+    const hook = thinkingOffPayload({ api: "openai-completions", reasoning: true })!;
+    expect(hook({ model: "m" })).toEqual({ model: "m", reasoning_effort: "none" });
+    expect(hook({ reasoning_effort: "high" })).toBeUndefined();
+    const mapped = thinkingOffPayload({
+      api: "openai-completions",
+      reasoning: true,
+      thinkingLevelMap: { off: "minimal" },
+    })!;
+    expect(mapped({})).toEqual({ reasoning_effort: "minimal" });
+    expect(
+      thinkingOffPayload({
+        api: "openai-completions",
+        reasoning: true,
+        thinkingLevelMap: { off: null },
+      }),
+    ).toBeUndefined();
+    expect(thinkingOffPayload({ api: "anthropic-messages", reasoning: true })).toBeUndefined();
+    expect(thinkingOffPayload({ api: "openai-completions", reasoning: false })).toBeUndefined();
+  });
+});
+
+describe("memory output", () => {
+  const claim = {
+    id: "c1",
+    revision: 2,
+    kind: "fact",
+    text: "The API runs in fsn1",
+    visibility: "project",
+    status: "active",
+    verification: "source_checked",
+    projectId: "p".repeat(36),
+    sessionId: "s".repeat(36),
+    anchor: "a1",
+    evidence: [{ sourceKey: "k".repeat(64), hash: "h".repeat(64), start: 0, end: 20 }],
+    supersedes: [],
+    dependsOn: [],
+    pinned: true,
+    hidden: false,
+  } as never;
+
+  it("gives the model the packet's compact record, without internal ids and hashes", async () => {
+    const { claimRecord } = await import("../../src/v2/compiler.js");
+    const record = JSON.parse(claimRecord(claim, ["fts"]));
+    expect(record).toEqual({
+      id: "c1",
+      revision: 2,
+      kind: "fact",
+      text: "The API runs in fsn1",
+      scope: "project",
+      verification: "source_checked",
+      sources: [["k".repeat(64), 0, 20]],
+      why: ["fts"],
+    });
+  });
+
+  it("shows people one readable entry per memory", async () => {
+    const { formatHits } = await import("../../src/v2/extension.js");
+    expect(formatHits([{ claim, score: 1, reasons: [] }], "current memories")).toBe(
+      "c1  fact · active · project · pinned\n  The API runs in fsn1",
+    );
+    expect(formatHits([], "current memories")).toBe("No current memories match.");
+  });
+});
+
+describe("packet placement", () => {
+  const msgs = [
+    { role: "user", timestamp: 1 },
+    { role: "assistant", timestamp: 2 },
+    { role: "user", timestamp: 3 },
+  ];
+  const packet = { role: "custom", timestamp: 9 };
+
+  it("goes before the last user message and reports it as the anchor", async () => {
+    const { placePacket } = await import("../../src/v2/extension.js");
+    const placed = placePacket(msgs, packet);
+    expect(placed.messages.map((m) => m.timestamp)).toEqual([1, 2, 9, 3]);
+    expect(placed.anchor).toBe(3);
+  });
+
+  it("stays at its earlier anchor so the conversation after it keeps its cache", async () => {
+    const { placePacket } = await import("../../src/v2/extension.js");
+    expect(placePacket(msgs, packet, 1).messages.map((m) => m.timestamp)).toEqual([9, 1, 2, 3]);
+    // The anchor was compacted away: fall back to the last user message.
+    expect(placePacket(msgs, packet, 42).anchor).toBe(3);
+    expect(placePacket([{ role: "assistant", timestamp: 2 }], packet).messages[0]).toBe(packet);
+  });
+});
+
+describe("recall output is not a learning source", () => {
+  it("marks the recall tool's result to skip learning and leaves other tools alone", async () => {
+    const { sourceInputs } = await import("../../src/v2/sources.js");
+    const result = (id: string, toolName: string) => ({
+      type: "message",
+      id,
+      parentId: null,
+      timestamp: "2026-09-06T00:00:00Z",
+      message: {
+        role: "toolResult",
+        toolCallId: id,
+        toolName,
+        content: [{ type: "text", text: "x" }],
+        isError: false,
+      },
+    });
+    const [recall, bash] = sourceInputs([result("r", "recall"), result("b", "bash")] as never);
+    expect(recall.skipLearning).toMatch(/recall output/);
+    expect(bash.skipLearning).toBeUndefined();
   });
 });

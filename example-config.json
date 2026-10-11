@@ -13,6 +13,7 @@
   "maxAttempts": 2,
   "models": [],
   "useSessionModel": true,
+  "observerThinking": false,
   "excludedPaths": [".env", "credentials", "secrets"],
   "redactionPatterns": [],
   "recallTokens": 6000,

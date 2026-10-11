@@ -47,8 +47,15 @@ var terms = (text) => [
     ].map((match) => match[0])
   )
 ].slice(0, 32);
-var estimateTokens = (text) => Math.ceil(text.length / 4);
-var COUNTER = "chars/4-estimate";
+function isWide(code) {
+  return code >= 4352 && code <= 4607 || code >= 12288 && code <= 12543 || code >= 12592 && code <= 12687 || code >= 13312 && code <= 19903 || code >= 19968 && code <= 40959 || code >= 44032 && code <= 55215 || code >= 63744 && code <= 64255 || code >= 65280 && code <= 65519;
+}
+function estimateTokens(text) {
+  let wide = 0;
+  for (let i = 0; i < text.length; i++) if (isWide(text.charCodeAt(i))) wide++;
+  return Math.ceil((text.length + 2 * wide) / 4);
+}
+var COUNTER = "chars/4-cjk3-estimate";
 function clipTokens(text, budget) {
   if (estimateTokens(text) <= budget) return text;
   if (budget < 2) return "";
@@ -61,6 +68,27 @@ function clipTokens(text, budget) {
   }
   if (lo > 0 && /[\uD800-\uDBFF]/.test(text[lo - 1])) lo--;
   return text.slice(0, lo) + suffix;
+}
+var PEM_BEGIN = /-----BEGIN [A-Z0-9 ]{0,40}PRIVATE KEY-----/g;
+var PEM_BREAK = String.raw`(?:\r?\n|(?:\\r)?\\n|[ \t])`;
+var PEM_BODY = new RegExp(
+  String.raw`[A-Za-z0-9+/=]*(?:${PEM_BREAK}+(?:[A-Za-z-]+:[^\r\n\\]*|[A-Za-z0-9+/=]+(?=${PEM_BREAK}|-----|$)))*`,
+  "y"
+);
+var PEM_END = new RegExp(`${PEM_BREAK}*-----END [A-Z0-9 ]{0,40}PRIVATE KEY-----`, "y");
+function redactPrivateKeys(text) {
+  let out = "";
+  let last = 0;
+  for (const begin of text.matchAll(PEM_BEGIN)) {
+    if (begin.index < last) continue;
+    PEM_BODY.lastIndex = begin.index + begin[0].length;
+    PEM_BODY.exec(text);
+    PEM_END.lastIndex = PEM_BODY.lastIndex;
+    const end = PEM_END.exec(text) ? PEM_END.lastIndex : PEM_BODY.lastIndex;
+    out += text.slice(last, begin.index) + "[REDACTED PRIVATE KEY]";
+    last = end;
+  }
+  return last ? out + text.slice(last) : text;
 }
 function redact(text, patterns = []) {
   let out = text.replace(
@@ -75,10 +103,8 @@ function redact(text, patterns = []) {
   ).replace(
     /((?:authorization\s*[:=]\s*(?:bearer\s+)?|(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*)["']?)[^\s"',;}{]+/gi,
     "$1[REDACTED]"
-  ).replace(
-    /-----BEGIN (?:[A-Z ]+)?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+)?PRIVATE KEY-----/g,
-    "[REDACTED PRIVATE KEY]"
   );
+  out = redactPrivateKeys(out);
   for (const literal of patterns) {
     if (literal) out = out.split(literal).join("[REDACTED]");
   }
@@ -311,6 +337,8 @@ var MemoryStore = class {
       this.db.exec("INSERT INTO source_fts(source_fts) VALUES('rebuild')");
       this.db.exec("INSERT INTO claim_fts(claim_fts) VALUES('rebuild')");
     }
+    this.db.exec(`UPDATE chunks SET state='excluded',reason='recall output; the memories in it are already recorded',job_id=NULL
+      WHERE state='pending' AND source_key IN (SELECT key FROM sources WHERE json_extract(data,'$.tool')='recall')`);
     if (file2 !== ":memory:" && existsSync(file2)) chmodSync(file2, 384);
   }
   file;
@@ -512,11 +540,16 @@ var MemoryStore = class {
             "UPDATE chunks SET state='excluded',reason='source replaced' WHERE source_key=?",
             String(old.key)
           );
-          for (const row of this.all(
+          const citing = this.all(
             "SELECT claim_id FROM evidence WHERE source_key=?",
             String(old.key)
-          ))
-            this.invalidate(String(row.claim_id), true);
+          );
+          for (const row of citing) this.invalidate(String(row.claim_id), true);
+          if (!citing.length)
+            this.run(
+              "UPDATE sources SET text='',data=json_set(data,'$.text','') WHERE key=?",
+              String(old.key)
+            );
         }
         const excluded = input.target !== void 0 && excludedPaths.some((p) => input.target.includes(p));
         const oversized = Buffer.byteLength(text) > 8 * 1024 * 1024;
@@ -538,14 +571,14 @@ var MemoryStore = class {
           input.role,
           JSON.stringify(data)
         );
-        if (oversized || excluded || !text) {
+        if (oversized || excluded || !text || input.skipLearning) {
           this.run(
             "INSERT INTO chunks(source_key,start,end,state,reason) VALUES(?,?,?,?,?)",
             key,
             0,
             text.length,
             oversized ? "damaged" : "excluded",
-            oversized ? "source exceeds 8 MiB; use original session" : excluded ? "path excluded by configuration" : "empty source"
+            oversized ? "source exceeds 8 MiB; use original session" : excluded ? "path excluded by configuration" : !text ? "empty source" : input.skipLearning
           );
         } else {
           for (let start = 0; start < text.length; ) {
@@ -734,6 +767,14 @@ var MemoryStore = class {
         if (!this.inScope(existing, scope) || !equivalent(existing.text, input.text))
           throw new Error("Claim ID collision");
         return { claim: existing, duplicate: true, conflicts: [] };
+      }
+      if (actor === "observer") {
+        const same = this.all(
+          "SELECT data FROM claims WHERE project_id=? AND status IN ('active','candidate') AND lower(text)=lower(?) LIMIT 20",
+          scope.projectId,
+          redact(input.text).replace(/\s+/g, " ").trim()
+        ).map((row) => parse(row)).find((c) => this.inScope(c, scope) && equivalent(c.text, input.text));
+        if (same) return { claim: same, duplicate: true, conflicts: [] };
       }
       const evidence = [
         ...new Map(input.evidence.map((e) => [`${e.sourceKey}:${e.start}:${e.end}`, e])).values()
@@ -1369,8 +1410,14 @@ var MemoryStore = class {
       const claim = this.claim(id, scope, true);
       if (!claim || claim.revision !== expectedRevision)
         throw new Error("Revision conflict or memory not found");
-      const sourceKeys = new Set(claim.evidence.map((e) => e.sourceKey));
-      const ids = /* @__PURE__ */ new Set([claim.id, ...this.invalidate(claim.id)]);
+      const revisions = [claim];
+      for (let i = 0; i < revisions.length; i++)
+        for (const previous of revisions[i].supersedes ?? []) {
+          const older = this.claim(previous, scope, true);
+          if (older && !revisions.some((r) => r.id === older.id)) revisions.push(older);
+        }
+      const sourceKeys = new Set(revisions.flatMap((r) => r.evidence.map((e) => e.sourceKey)));
+      const ids = new Set(revisions.flatMap((r) => [r.id, ...this.invalidate(r.id)]));
       for (const key of sourceKeys)
         for (const row of this.all("SELECT claim_id FROM evidence WHERE source_key=?", key)) {
           ids.add(String(row.claim_id));
@@ -1763,6 +1810,30 @@ var KIND_WEIGHT = {
   fact: 0.9,
   hypothesis: 0.7
 };
+function claimRecord(c, reasons) {
+  const fields = {
+    id: c.id,
+    revision: c.revision,
+    kind: c.kind,
+    text: c.text,
+    scope: c.visibility,
+    status: c.status === "active" ? void 0 : c.status,
+    verification: c.verification,
+    conditions: c.conditions,
+    cues: c.cues,
+    rationale: c.rationale,
+    validFrom: c.validFrom,
+    validUntil: c.validUntil,
+    environment: c.environment,
+    supersedes: c.supersedes,
+    sources: c.evidence.map((e) => [e.sourceKey, e.start, e.end]),
+    why: reasons
+  };
+  for (const [key, value] of Object.entries(fields))
+    if (value === void 0 || value === "" || Array.isArray(value) && value.length === 0)
+      delete fields[key];
+  return JSON.stringify(fields);
+}
 function compilePacket(store, scope, query, budget, semantic = []) {
   return store.snapshot(() => compileSnapshot(store, scope, query, budget, semantic));
 }
@@ -1790,13 +1861,6 @@ function compileSnapshot(store, scope, query, budget, semantic) {
   const selected = [];
   const lines = [];
   const warnings = cautions.slice(0, 12).map((h) => `${h.claim.id}@${h.claim.revision} ${h.claim.status}`).join(", ");
-  const omitEmpty = (fields) => {
-    for (const [key, value] of Object.entries(fields)) {
-      if (value === void 0 || value === "" || Array.isArray(value) && value.length === 0)
-        delete fields[key];
-    }
-    return fields;
-  };
   const header = `${PREAMBLE}
 Scope: project ${scope.projectId}; session ${scope.sessionId}; user memories ${scope.includeUser ? "enabled" : "disabled"}.
 Coverage: ${gaps} unfinished source chunks. Disputes visible in this window: ${conflicts}.
@@ -1811,25 +1875,7 @@ Omitted ${count} retrieved records. Recall can search source history; absence he
   let runningTokens = headerTokens + footerTokens;
   for (const hit of candidates) {
     const c = hit.claim;
-    const line = JSON.stringify(
-      omitEmpty({
-        id: c.id,
-        revision: c.revision,
-        kind: c.kind,
-        text: c.text,
-        scope: c.visibility,
-        verification: c.verification,
-        conditions: c.conditions,
-        cues: c.cues,
-        rationale: c.rationale,
-        validFrom: c.validFrom,
-        validUntil: c.validUntil,
-        environment: c.environment,
-        supersedes: c.supersedes.length ? c.supersedes : void 0,
-        sources: c.evidence.map((e) => [e.sourceKey, e.start, e.end]),
-        why: hit.reasons
-      })
-    );
+    const line = claimRecord(c, hit.reasons);
     const lineTokens = estimateTokens(line) + 1;
     if (runningTokens + lineTokens > budget) continue;
     runningTokens += lineTokens;
@@ -1899,6 +1945,7 @@ var DEFAULT_CONFIG = {
   maxAttempts: 2,
   models: [],
   useSessionModel: true,
+  observerThinking: false,
   excludedPaths: [".env", "credentials", "secrets"],
   redactionPatterns: [],
   recallTokens: 6e3,
@@ -1911,7 +1958,13 @@ function validateConfig(raw) {
   const allowed = /* @__PURE__ */ new Set([...Object.keys(DEFAULT_CONFIG), "embeddings"]);
   for (const key of Object.keys(raw))
     if (!allowed.has(key)) throw new Error(`Unknown memory setting: ${key}`);
-  for (const key of ["enabled", "includeUser", "observer", "useSessionModel"]) {
+  for (const key of [
+    "enabled",
+    "includeUser",
+    "observer",
+    "useSessionModel",
+    "observerThinking"
+  ]) {
     if (key in raw) {
       if (typeof raw[key] !== "boolean") throw new Error(`${key} must be boolean`);
       config[key] = raw[key];
@@ -2862,7 +2915,7 @@ function recall(store, scope, request, config, sessionFile) {
     });
     return finish(
       `Memory results ${hits2.length}; page ${page}. ${mode === "history" ? "Historical records include inactive claims; check status before use." : request.scope === "all" ? "All project lineage memories across sessions." : "Current usable memories only."}
-` + hits2.slice((page - 1) * 10, page * 10).map((h) => JSON.stringify(h)).join("\n")
+` + hits2.slice((page - 1) * 10, page * 10).map((h) => claimRecord(h.claim, h.reasons)).join("\n")
     );
   }
   if (!sessionFile) return "No persisted Pi session is available for transcript recall.";
@@ -3122,7 +3175,7 @@ var MemoryService = class {
   importLegacyEntries(scope, entries) {
     return importLegacy(this.store, scope, JSON.stringify(entries));
   }
-  async embed(scope, query) {
+  async embed(scope, query, timeoutMs = EMBED_TIMEOUT_MS) {
     const config = this.config.embeddings;
     if (!config) throw new Error("Configure an embedding endpoint and model first");
     const model = hash(JSON.stringify(config));
@@ -3142,12 +3195,12 @@ var MemoryService = class {
       scope,
       reservation,
       this.config.dailyTokenBudget,
-      EMBED_TIMEOUT_MS + 15e3
+      timeoutMs + 15e3
     );
     if (!job) throw new Error("Daily memory token budget exhausted");
     let usage;
     try {
-      const result = await fetchEmbeddings(config, texts);
+      const result = await fetchEmbeddings(config, texts, timeoutMs);
       usage = result.tokens;
       const hits = this.store.transaction(() => {
         for (let i = 0; i < selected.length; i++)

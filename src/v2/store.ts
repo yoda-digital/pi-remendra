@@ -142,6 +142,10 @@ export class MemoryStore {
       this.db.exec("INSERT INTO source_fts(source_fts) VALUES('rebuild')");
       this.db.exec("INSERT INTO claim_fts(claim_fts) VALUES('rebuild')");
     }
+    // Recall tool output queued by older versions would be re-learned as duplicate memories.
+    this.db
+      .exec(`UPDATE chunks SET state='excluded',reason='recall output; the memories in it are already recorded',job_id=NULL
+      WHERE state='pending' AND source_key IN (SELECT key FROM sources WHERE json_extract(data,'$.tool')='recall')`);
     if (file !== ":memory:" && existsSync(file)) chmodSync(file, 0o600);
   }
 
@@ -368,11 +372,18 @@ export class MemoryStore {
             "UPDATE chunks SET state='excluded',reason='source replaced' WHERE source_key=?",
             String(old.key),
           );
-          for (const row of this.all(
+          const citing = this.all(
             "SELECT claim_id FROM evidence WHERE source_key=?",
             String(old.key),
-          ))
-            this.invalidate(String(row.claim_id), true);
+          );
+          for (const row of citing) this.invalidate(String(row.claim_id), true);
+          // Nothing needs the old text any more (a context edit usually removes a message on
+          // purpose): drop it instead of keeping it on disk. Cited text stays so `why` can show it.
+          if (!citing.length)
+            this.run(
+              "UPDATE sources SET text='',data=json_set(data,'$.text','') WHERE key=?",
+              String(old.key),
+            );
         }
         const excluded =
           input.target !== undefined && excludedPaths.some((p) => input.target!.includes(p));
@@ -395,7 +406,7 @@ export class MemoryStore {
           input.role,
           JSON.stringify(data),
         );
-        if (oversized || excluded || !text) {
+        if (oversized || excluded || !text || input.skipLearning) {
           this.run(
             "INSERT INTO chunks(source_key,start,end,state,reason) VALUES(?,?,?,?,?)",
             key,
@@ -406,7 +417,9 @@ export class MemoryStore {
               ? "source exceeds 8 MiB; use original session"
               : excluded
                 ? "path excluded by configuration"
-                : "empty source",
+                : !text
+                  ? "empty source"
+                  : input.skipLearning!,
           );
         } else {
           for (let start = 0; start < text.length;) {
@@ -674,6 +687,20 @@ export class MemoryStore {
         if (!this.inScope(existing, scope) || !equivalent(existing.text, input.text))
           throw new Error("Claim ID collision");
         return { claim: existing, duplicate: true, conflicts: [] };
+      }
+      // The observer meets the same fact again (repeated in a later prompt or session): keep
+      // the memory already visible here instead of recording a second copy of it.
+      // A direct text comparison (SQLite lower() folds ASCII only, so it is best-effort);
+      // a scored search per observer claim made bulk learning quadratic.
+      if (actor === "observer") {
+        const same = this.all(
+          "SELECT data FROM claims WHERE project_id=? AND status IN ('active','candidate') AND lower(text)=lower(?) LIMIT 20",
+          scope.projectId,
+          redact(input.text).replace(/\s+/g, " ").trim(),
+        )
+          .map((row) => parse<Claim>(row)!)
+          .find((c) => this.inScope(c, scope) && equivalent(c.text, input.text));
+        if (same) return { claim: same, duplicate: true, conflicts: [] };
       }
       const evidence = [
         ...new Map(input.evidence.map((e) => [`${e.sourceKey}:${e.start}:${e.end}`, e])).values(),
@@ -1482,8 +1509,16 @@ export class MemoryStore {
       const claim = this.claim(id, scope, true);
       if (!claim || claim.revision !== expectedRevision)
         throw new Error("Revision conflict or memory not found");
-      const sourceKeys = new Set(claim.evidence.map((e) => e.sourceKey));
-      const ids = new Set([claim.id, ...this.invalidate(claim.id)]);
+      // Earlier revisions are the same memory, usually with nearly the same text: erasing
+      // only the latest would leave its predecessors (and their sources) on disk.
+      const revisions = [claim];
+      for (let i = 0; i < revisions.length; i++)
+        for (const previous of revisions[i].supersedes ?? []) {
+          const older = this.claim(previous, scope, true);
+          if (older && !revisions.some((r) => r.id === older.id)) revisions.push(older);
+        }
+      const sourceKeys = new Set(revisions.flatMap((r) => r.evidence.map((e) => e.sourceKey)));
+      const ids = new Set(revisions.flatMap((r) => [r.id, ...this.invalidate(r.id)]));
       for (const key of sourceKeys)
         for (const row of this.all("SELECT claim_id FROM evidence WHERE source_key=?", key)) {
           ids.add(String(row.claim_id));

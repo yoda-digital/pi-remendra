@@ -10,8 +10,8 @@ import {
 } from "../../src/v2/text.js";
 
 describe("estimateTokens", () => {
-  it("reports chars/4-estimate counter", () => {
-    expect(COUNTER).toBe("chars/4-estimate");
+  it("reports its counter name", () => {
+    expect(COUNTER).toBe("chars/4-cjk3-estimate");
   });
 
   it("estimates ASCII text", () => {
@@ -27,11 +27,10 @@ describe("estimateTokens", () => {
     expect(tokens).toBeLessThan(10); // Must not overestimate like the old formula
   });
 
-  it("estimates CJK without 3x overestimate", () => {
-    const text = "你好世界测试中文文本";
-    const tokens = estimateTokens(text);
-    // 10 chars → ceil(10/4) = 3, not the old 10 from UTF-8 bytes / 3
-    expect(tokens).toBe(3);
+  it("counts CJK and Hangul at about 0.75 tokens per character", () => {
+    // Qwen 3.x: 45 Han/kana/Hangul characters cost ~29 tokens; chars/4 said 14.
+    expect(estimateTokens("你好世界测试中文文本")).toBe(8); // 10 wide chars → ceil(30/4)
+    expect(estimateTokens("API는 Hetzner의 fsn1 리전에 배포되며")).toBe(12); // 27 chars, 9 Hangul
   });
 
   it("handles emoji (surrogate pairs)", () => {
@@ -46,8 +45,8 @@ describe("estimateTokens", () => {
   it("handles mixed scripts", () => {
     const text = "Hello Привет 你好 🎉";
     const tokens = estimateTokens(text);
-    // 18 chars → ceil(18/4) = 5
-    expect(tokens).toBe(5);
+    // 18 code units + 2 extra for each of the 2 Han characters → ceil(22/4) = 6
+    expect(tokens).toBe(6);
   });
 });
 
@@ -85,6 +84,36 @@ describe("redact", () => {
   it("redacts GitHub tokens", () => {
     const text = "token: ghp_1234567890abcdefghij1234567890ab";
     expect(redact(text)).toContain("[REDACTED]");
+  });
+
+  it("redacts private keys that are truncated, JSON-escaped or inline, and only the key", () => {
+    const cases: [string, string][] = [
+      [
+        "a\n-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\n\nMIIEow==\n-----END RSA PRIVATE KEY-----\nb",
+        "a\n[REDACTED PRIVATE KEY]\nb",
+      ],
+      [
+        "log\n-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk\n[output truncated]",
+        "log\n[REDACTED PRIVATE KEY]\n[output truncated]",
+      ],
+      [
+        '{"out":"-----BEGIN PRIVATE KEY-----\\nMIIEvQ\\n-----END PRIVATE KEY-----\\n"}',
+        '{"out":"[REDACTED PRIVATE KEY]\\n"}',
+      ],
+      [
+        "K='-----BEGIN EC PRIVATE KEY----- MHcC -----END EC PRIVATE KEY-----' x",
+        "K='[REDACTED PRIVATE KEY]' x",
+      ],
+      ["-----BEGIN CERTIFICATE----- public", "-----BEGIN CERTIFICATE----- public"],
+    ];
+    for (const [input, expected] of cases) expect(redact(input)).toBe(expected);
+  });
+
+  it("redacts many unclosed key markers in linear time", () => {
+    const text = "-----BEGIN RSA PRIVATE KEY-----\nMIIEow\n".repeat(50000);
+    const started = performance.now();
+    expect(redact(text)).not.toContain("MIIEow");
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it("redacts PEM private keys", () => {

@@ -13,13 +13,18 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { MemoryClient } from "./client.js";
 import { BackgroundLearner, type Complete } from "./learner.js";
 import { DEFAULT_CONFIG } from "./config.js";
-import { PACKET_TYPE, SUMMARY_PREFIX, contextAllowance } from "./compiler.js";
+import { PACKET_TYPE, SUMMARY_PREFIX, claimRecord, contextAllowance } from "./compiler.js";
 import { contextEdits, sourceInputs, messageText } from "./sources.js";
 import { hash, jsonObject, redact } from "./text.js";
-import type { ClaimInput, MemoryConfig, Packet, Scope } from "./types.js";
+import type { ClaimInput, MemoryConfig, Packet, Scope, SearchHit } from "./types.js";
 import { log, setLogFile } from "./log.js";
 import { normalizeRecallArgs } from "./recall-args.js";
+import { extractClaimsJson, thinkingOffPayload, thinkingText } from "./observer.js";
 import { EMBED_TIMEOUT_MS } from "./embeddings.js";
+
+/** Deadline for the recall tool's semantic fallback; a cold Ollama load measured 12-13 s. */
+const SEMANTIC_FALLBACK_MS = 20000;
+const SEMANTIC_MIN_SIMILARITY = 0.25;
 
 const HELP_SHORT = `Remendra — persistent memory for Pi
 /remendra                         status and daily budget
@@ -41,7 +46,7 @@ const HELP_FULL = `Remendra — persistent memory for Pi (full reference)
 /remendra pin|unpin|hide|show|accept|retract <id>
 /remendra promote <id> project|user
 /remendra forget <id>             alias for hide (reversible)
-/remendra erase <id>              erase memory, its sources and dependent claims
+/remendra erase <id>              erase memory with all its revisions, sources and dependent claims
 /remendra trial <JSON>            record procedure success/failure with tool evidence
 /remendra learn                   process queued source chunks now
 /remendra embed                   index up to 32 memories at the configured endpoint
@@ -53,8 +58,8 @@ const HELP_FULL = `Remendra — persistent memory for Pi (full reference)
 /remendra migrate [path]          import v1 records as candidates
 /remendra index-sessions [dir]     index past Pi sessions for search
 /remendra link-project <id>       explicitly link a moved project directory
-/remendra-recall <query>          memory search, ID, #N or #N:path
-Modes in settings: active, shadow (compile without injecting), recall (no background learning).
+/remendra-recall <query>          memory search, ID, #N, #N:path or /regex/ over the transcript
+Modes in settings: active, shadow (compile without injecting), recall (no packet and no learning; only the recall tool).
 User memory is opt-in. All source text remains untrusted data.`;
 
 /** Pause between the agent settling and background learning (see agent_settled). */
@@ -62,35 +67,47 @@ export const LEARN_DELAY_MS = 1000;
 
 const LEGACY_PACKET_TYPES = new Set(["remendra.v2.context", "remendra.v2.output"]);
 
-/** Extract observer JSON from thinking/reasoning fields when content is empty. */
-function extractFromThinking(raw: Record<string, unknown>): string {
-  for (const key of ["reasoning", "reasoning_content", "thinkingContent"]) {
-    const candidate = raw[key] ?? (jsonObject(raw.content) ? raw.content[key] : undefined);
-    if (typeof candidate === "string" && candidate.length > 2) {
-      const match = candidate.match(/\{[\s\S]*"claims"[\s\S]*\}/);
-      if (match) return match[0];
-    }
-  }
-  if (Array.isArray(raw.content)) {
-    for (const block of raw.content) {
-      if (jsonObject(block) && block.type === "thinking" && typeof block.text === "string") {
-        const match = block.text.match(/\{[\s\S]*"claims"[\s\S]*\}/);
-        if (match) return match[0];
-      }
-    }
-  }
-  return "";
+/** Search results for people: one memory per entry, id first so it can be copied into commands. */
+export function formatHits(hits: SearchHit[], what: string): string {
+  if (!hits.length) return `No ${what} match.`;
+  return hits
+    .map(({ claim: c }) => {
+      const flags = [
+        c.kind,
+        c.status,
+        c.visibility,
+        c.pinned ? "pinned" : "",
+        c.hidden ? "hidden" : "",
+      ];
+      return `${c.id}  ${flags.filter(Boolean).join(" · ")}\n  ${c.text}`;
+    })
+    .join("\n");
 }
 
-/** Insert `packet` right before the last user message (at the front when there is none). */
-export function insertBeforeLastUser<T extends { role: string }>(messages: T[], packet: T): T[] {
-  let at = 0;
-  for (let i = messages.length - 1; i >= 0; i--)
-    if (messages[i].role === "user") {
-      at = i;
-      break;
-    }
-  return [...messages.slice(0, at), packet, ...messages.slice(at)];
+/**
+ * Insert `packet` before the user message stamped `anchor` when it is still in the context,
+ * otherwise before the last user message (at the front when there is none). Returns the
+ * timestamp of the message it went in front of, to pin the next unchanged packet there.
+ */
+export function placePacket<T extends { role: string; timestamp?: number }>(
+  messages: T[],
+  packet: T,
+  anchor?: number,
+): { messages: T[]; anchor?: number } {
+  let at = -1;
+  if (anchor !== undefined)
+    at = messages.findIndex((m) => m.role === "user" && m.timestamp === anchor);
+  if (at < 0)
+    for (let i = messages.length - 1; i >= 0; i--)
+      if (messages[i].role === "user") {
+        at = i;
+        break;
+      }
+  if (at < 0) return { messages: [packet, ...messages] };
+  return {
+    messages: [...messages.slice(0, at), packet, ...messages.slice(at)],
+    anchor: messages[at].timestamp,
+  };
 }
 
 function workerLocation(): URL {
@@ -127,6 +144,10 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
   let foreground = false;
   let closing = false;
   let settledCount = 0;
+  /** The last "◉ N memories" line, restored when learning stops without recompiling. */
+  let memoryStatus = "";
+  /** The last injected packet message, reused while the selected memories stay the same. */
+  let lastPacket: { key: string; message: AgentMessage; anchor?: number } | undefined;
   let learnTimer: ReturnType<typeof setTimeout> | undefined;
   const cancelScheduledLearning = (): void => {
     if (learnTimer) clearTimeout(learnTimer);
@@ -196,6 +217,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     log(`[remendra] error #${errorCount}:`, message);
   };
   const invalidate = (): void => {
+    lastPacket = undefined;
     cancelScheduledLearning();
     generation++;
     learner?.cancel("Session, branch, or memory changed");
@@ -273,12 +295,11 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     );
     const compiled = await client?.call("compile", [current, query, budget]);
     if (!compiled) throw new Error("Memory client is unavailable");
-    status(
-      ctx,
-      `◉ ${compiled.manifest.claims.length} memories · ${compiled.manifest.tokens} tokens · ${compiled.manifest.gaps} pending${config.mode === "shadow" ? " · shadow" : ""}`,
-    );
+    memoryStatus = `◉ ${compiled.manifest.claims.length} memories · ${compiled.manifest.tokens} tokens · ${compiled.manifest.gaps} pending${config.mode === "active" ? "" : ` · ${config.mode}`}`;
+    status(ctx, memoryStatus);
     return compiled;
   };
+  const thinkingOnly = new Set<string>();
   const completion =
     (ctx: ExtensionContext): Complete =>
     async (request) => {
@@ -293,6 +314,11 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         models.push(ctx.model);
       const model = models[Math.min(request.attempt, models.length - 1)];
       if (!model) throw new Error("Configure an observer model or enable useSessionModel");
+      const modelKey = `${model.provider}/${model.id}`;
+      const onPayload =
+        config.observerThinking || thinkingOnly.has(modelKey)
+          ? undefined
+          : thinkingOffPayload(model);
       const result = await ctx.modelRegistry.complete(
         model,
         {
@@ -304,8 +330,18 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           signal: request.signal,
           sessionId: request.sessionId,
           cacheRetention: "none",
+          onPayload,
         },
       );
+      if (
+        onPayload &&
+        result.stopReason === "error" &&
+        /reasoning|effort|400|unsupported|invalid/i.test(result.errorMessage ?? "")
+      ) {
+        // The endpoint rejected reasoning_effort "none": let this model think from now on.
+        thinkingOnly.add(modelKey);
+        log(`[remendra] ${modelKey} rejected thinking off; observer will let it think`);
+      }
       if (
         result.stopReason === "error" ||
         result.stopReason === "aborted" ||
@@ -315,7 +351,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       let text = messageText(result.content);
       // Some models (Qwen 3.x thinking mode) put all output in reasoning, leaving content empty.
       if (!text.trim()) {
-        text = extractFromThinking(result as unknown as Record<string, unknown>);
+        text = extractClaimsJson(thinkingText(result.content));
         if (!text.trim())
           throw new Error(
             "Observer model returned empty content (possible thinking-mode issue; try a non-thinking model or disable thinking)",
@@ -354,7 +390,20 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           !hostSignal?.aborted &&
           sessionId === current.sessionId,
       );
-      if (generation === epoch && !hostSignal?.aborted) await compile(ctx);
+      if (generation === epoch && !hostSignal?.aborted) {
+        await compile(ctx);
+        // Keep vectors current so the recall tool's semantic fallback finds new memories.
+        // Runs in the worker without blocking anything; with nothing new it makes no request.
+        if (config.embeddings)
+          void client
+            ?.call("embed", [current], EMBED_TIMEOUT_MS + 5000)
+            .catch((error: unknown) =>
+              log(
+                "[remendra] background embedding failed:",
+                error instanceof Error ? error.message : String(error),
+              ),
+            );
+      } else if (memoryStatus) status(ctx, memoryStatus); // cancelled: don't leave "learning" up
       return result;
     } finally {
       hostSignal?.removeEventListener("abort", cancel);
@@ -378,7 +427,15 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     const timestamp = new Date().toISOString();
     const source = await client?.call("ingest", [
       current,
-      [{ entryId, role: "user", text: sourceText, timestamp }],
+      [
+        {
+          entryId,
+          role: "user",
+          text: sourceText,
+          timestamp,
+          skipLearning: "explicit memory; already recorded",
+        },
+      ],
     ]);
     if (!source) throw new Error("Memory client is unavailable");
     if (!source.keys[0]) throw new Error("This source was previously erased");
@@ -548,16 +605,22 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       // prompt cache. Before the last user message, everything earlier stays cacheable (at
       // the front, a local model re-reads the whole conversation on every prompt), and a
       // user-message boundary never splits an assistant tool call from its results.
-      return {
-        messages: insertBeforeLastUser(messages, {
-          role: "custom" as const,
-          customType: PACKET_TYPE,
-          content: current.text,
-          display: false,
-          timestamp: Date.now(),
-          details: current.manifest,
-        }),
+      // When the next prompt selects the same memories, the previous packet stays exactly
+      // where it was, so the turn after it is not read again. Its text can differ only in
+      // per-query match reasons and the coverage count, which are not worth a re-read.
+      const key = JSON.stringify([current.manifest.claims, current.manifest.conflicts]);
+      const reuse = lastPacket?.key === key ? lastPacket : undefined;
+      const message = reuse?.message ?? {
+        role: "custom" as const,
+        customType: PACKET_TYPE,
+        content: current.text,
+        display: false,
+        timestamp: Date.now(),
+        details: current.manifest,
       };
+      const placed = placePacket(messages, message, reuse?.anchor);
+      lastPacket = { key, message, anchor: placed.anchor };
+      return { messages: placed.messages };
     } catch (error) {
       report(ctx, error);
       // H2: Inject a note so the agent knows memory compilation failed
@@ -651,6 +714,50 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     }
   });
 
+  /**
+   * Keyword search misses paraphrases ("which cloud hosts the backend" vs "deployed to
+   * Hetzner"). When a memory search finds nothing and an embedding endpoint is configured,
+   * try a semantic search once, with a shorter deadline than /remendra embed: a model
+   * waiting on a tool should not hang on a cold embedding server.
+   */
+  const semanticFallback = async (
+    current: Scope,
+    params: { query?: string; mode?: string; asOf?: string; expand?: number[] },
+    text: string,
+  ): Promise<string | undefined> => {
+    const query = params.query?.trim();
+    if (
+      !config.embeddings ||
+      !query ||
+      (params.mode ?? "memory") !== "memory" ||
+      params.asOf ||
+      params.expand?.length ||
+      /^#\d|^\/.+\/[a-z]*$/.test(query) ||
+      !text.startsWith("Memory results 0;")
+    )
+      return undefined;
+    try {
+      const { hits }: { hits: SearchHit[] } = await client!.call(
+        "embed",
+        [current, query, SEMANTIC_FALLBACK_MS],
+        SEMANTIC_FALLBACK_MS + 5000,
+      );
+      // Unrelated memories still score above zero (0.27-0.40 measured with embeddinggemma).
+      const close = hits.filter((h) => h.score >= SEMANTIC_MIN_SIMILARITY).slice(0, 5);
+      if (!close.length) return undefined;
+      return (
+        `Memory results ${close.length} by meaning; no memory matched the words. Check each against the question; a high similarity is not proof.\n` +
+        close.map((h) => claimRecord(h.claim, [`similarity ${h.score.toFixed(2)}`])).join("\n")
+      );
+    } catch (error) {
+      log(
+        "[remendra] semantic fallback failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+      return undefined;
+    }
+  };
+
   pi.registerTool({
     name: "recall",
     label: "Recall",
@@ -700,8 +807,9 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
         3000,
       );
       if (text === undefined) throw new Error("Memory client is unavailable");
+      const semantic = await semanticFallback(current, params, text);
       return {
-        content: [{ type: "text", text }],
+        content: [{ type: "text", text: semantic ?? text }],
         details: { projectId: current.projectId, sessionId: current.sessionId },
       };
     },
@@ -738,15 +846,20 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
       else if (verb === "packet") show(ctx, await compile(ctx));
       else if (verb === "checkpoint")
         show(ctx, await mem.call("checkpoint", [current, query, config.summaryTokens]));
-      else if (["search", "history", "timeline"].includes(verb))
+      else if (["search", "history", "timeline"].includes(verb)) {
+        const hits = await mem.call("search", [
+          {
+            scope: current,
+            text: rest,
+            mode: verb === "search" ? "current" : "history",
+            limit: 20,
+          },
+        ]);
         show(
           ctx,
-          await mem.call("recall", [
-            current,
-            { query: rest, mode: verb === "search" ? "memory" : "history" },
-          ]),
+          formatHits(hits, verb === "search" ? "current memories" : "memories incl. retired"),
         );
-      else if (verb === "why") show(ctx, await mem.call("explain", [current, rest]));
+      } else if (verb === "why") show(ctx, await mem.call("explain", [current, rest]));
       else if (verb === "learn") show(ctx, await learn(ctx));
       else if (verb === "embed" || verb === "semantic") {
         if (verb === "semantic" && !rest) throw new Error("Provide a semantic search query");
@@ -771,6 +884,7 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
           config = await mem.call("configSet", [{ ...config, ...(JSON.parse(rest) as object) }]);
           scope = makeScope(ctx);
           show(ctx, "Memory settings saved.");
+          await compile(ctx).catch(() => undefined); // status line shows the new mode now
         }
       } else if (verb === "remember" || verb === "correct") {
         const id = verb === "correct" ? words.shift() : undefined;
@@ -897,9 +1011,12 @@ export function installV2(pi: ExtensionAPI, providedClient?: MemoryClient): void
     handler: async (args, ctx) => {
       try {
         const current = await refresh(ctx);
+        const query = args.trim();
+        // "/pattern/flags" searches the original transcript by regular expression.
+        const mode = /^\/.+\/[a-z]*$/.test(query) ? "regex" : undefined;
         const text = await client?.call(
           "recall",
-          [current, { query: args }, ctx.sessionManager.getSessionFile()],
+          [current, { query, mode }, ctx.sessionManager.getSessionFile()],
           3000,
         );
         if (text === undefined) throw new Error("Memory client is unavailable");

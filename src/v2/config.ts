@@ -19,6 +19,7 @@ export const DEFAULT_CONFIG: MemoryConfig = {
   maxAttempts: 2,
   models: [],
   useSessionModel: true,
+  observerThinking: false,
   excludedPaths: [".env", "credentials", "secrets"],
   redactionPatterns: [],
   recallTokens: 6000,
@@ -32,7 +33,13 @@ export function validateConfig(raw: unknown): MemoryConfig {
   const allowed = new Set([...Object.keys(DEFAULT_CONFIG), "embeddings"]);
   for (const key of Object.keys(raw))
     if (!allowed.has(key)) throw new Error(`Unknown memory setting: ${key}`);
-  for (const key of ["enabled", "includeUser", "observer", "useSessionModel"] as const) {
+  for (const key of [
+    "enabled",
+    "includeUser",
+    "observer",
+    "useSessionModel",
+    "observerThinking",
+  ] as const) {
     if (key in raw) {
       if (typeof raw[key] !== "boolean") throw new Error(`${key} must be boolean`);
       config[key] = raw[key];

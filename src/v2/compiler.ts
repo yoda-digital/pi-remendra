@@ -1,5 +1,5 @@
 import type { MemoryStore } from "./store.js";
-import type { Packet, Scope, SearchHit } from "./types.js";
+import type { Claim, Packet, Scope, SearchHit } from "./types.js";
 import { COUNTER, estimateTokens, hash } from "./text.js";
 import { log } from "./log.js";
 
@@ -16,6 +16,35 @@ const KIND_WEIGHT: Record<string, number> = {
   fact: 0.9,
   hypothesis: 0.7,
 };
+
+/**
+ * One memory as a compact JSON line, the form the packet and the recall tool show the model.
+ * Empty fields are left out; internal ids (project, session, anchor, hashes) never are needed.
+ */
+export function claimRecord(c: Claim, reasons?: string[]): string {
+  const fields: Record<string, unknown> = {
+    id: c.id,
+    revision: c.revision,
+    kind: c.kind,
+    text: c.text,
+    scope: c.visibility,
+    status: c.status === "active" ? undefined : c.status,
+    verification: c.verification,
+    conditions: c.conditions,
+    cues: c.cues,
+    rationale: c.rationale,
+    validFrom: c.validFrom,
+    validUntil: c.validUntil,
+    environment: c.environment,
+    supersedes: c.supersedes,
+    sources: c.evidence.map((e) => [e.sourceKey, e.start, e.end]),
+    why: reasons,
+  };
+  for (const [key, value] of Object.entries(fields))
+    if (value === undefined || value === "" || (Array.isArray(value) && value.length === 0))
+      delete fields[key];
+  return JSON.stringify(fields);
+}
 
 /** Every selected record is atomic. The bound includes headings, provenance and warnings. */
 export function compilePacket(
@@ -66,13 +95,6 @@ function compileSnapshot(
     .slice(0, 12)
     .map((h) => `${h.claim.id}@${h.claim.revision} ${h.claim.status}`)
     .join(", ");
-  const omitEmpty = (fields: Record<string, unknown>) => {
-    for (const [key, value] of Object.entries(fields)) {
-      if (value === undefined || value === "" || (Array.isArray(value) && value.length === 0))
-        delete fields[key];
-    }
-    return fields;
-  };
   const header = `${PREAMBLE}\nScope: project ${scope.projectId}; session ${scope.sessionId}; user memories ${scope.includeUser ? "enabled" : "disabled"}.\nCoverage: ${gaps} unfinished source chunks. Disputes visible in this window: ${conflicts}.\n${warnings ? `Do not reuse obsolete or disputed versions: ${warnings}.\n` : ""}Records (JSON lines):\n`;
   const render = (rows: string[], count: number) =>
     `${header}${rows.join("\n")}\nOmitted ${count} retrieved records. Recall can search source history; absence here is not evidence of absence.`;
@@ -84,25 +106,7 @@ function compileSnapshot(
   let runningTokens = headerTokens + footerTokens;
   for (const hit of candidates) {
     const c = hit.claim;
-    const line = JSON.stringify(
-      omitEmpty({
-        id: c.id,
-        revision: c.revision,
-        kind: c.kind,
-        text: c.text,
-        scope: c.visibility,
-        verification: c.verification,
-        conditions: c.conditions,
-        cues: c.cues,
-        rationale: c.rationale,
-        validFrom: c.validFrom,
-        validUntil: c.validUntil,
-        environment: c.environment,
-        supersedes: c.supersedes.length ? c.supersedes : undefined,
-        sources: c.evidence.map((e) => [e.sourceKey, e.start, e.end]),
-        why: hit.reasons,
-      }),
-    );
+    const line = claimRecord(c, hit.reasons);
     const lineTokens = estimateTokens(line) + 1; // +1 for newline separator
     if (runningTokens + lineTokens > budget) continue;
     runningTokens += lineTokens;

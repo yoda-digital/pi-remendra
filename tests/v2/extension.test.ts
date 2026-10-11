@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -261,4 +262,79 @@ it("follows Pi context edits: removed or rewritten messages stop feeding memory"
   } as never);
   await hooks.get("turn_end")!({}, ctx);
   expect(await sourceHits("SQLite")).not.toContain("Use SQLite");
+});
+
+it("keeps an unchanged packet where it was, so the previous turn keeps its cache", async () => {
+  await commands.get("remendra")!(
+    'remember {"text":"Preserve production data","kind":"constraint"}',
+    ctx,
+  );
+  const turn1 = [
+    { role: "user", content: "First question", timestamp: 1 },
+    { role: "assistant", content: [{ type: "text", text: "First answer" }], timestamp: 2 },
+  ];
+  const first = await hooks.get("context")!({ messages: turn1 }, ctx);
+  const turn2 = [
+    ...turn1,
+    { role: "user", content: "Second question", timestamp: 3 },
+    { role: "assistant", content: [{ type: "text", text: "Second answer" }], timestamp: 4 },
+  ];
+  const second = await hooks.get("context")!({ messages: turn2 }, ctx);
+  const kinds = (r: { messages: { role: string; customType?: string }[] }) =>
+    r.messages.map((m) => m.customType ?? m.role);
+  expect(kinds(second)).toEqual([PACKET_TYPE, "user", "assistant", "user", "assistant"]);
+  // Byte for byte the same message as the first request: the provider cache still matches.
+  expect(second.messages[0]).toBe(first.messages[0]);
+  // A new memory changes the packet, which then moves to the latest prompt.
+  await commands.get("remendra")!('remember {"text":"Backups run nightly","kind":"fact"}', ctx);
+  const third = await hooks.get("context")!({ messages: turn2 }, ctx);
+  expect(kinds(third)).toEqual(["user", "assistant", PACKET_TYPE, "user", "assistant"]);
+});
+
+it("falls back to semantic search in the recall tool when no memory matches the words", async () => {
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk) => (body += chunk));
+    request.on("end", () => {
+      const { input } = JSON.parse(body) as { input: string[] };
+      const data = input.map((text, index) => ({
+        index,
+        embedding: /hetzner|cloud/i.test(text) ? [1, 0] : [0, 1],
+      }));
+      response.setHeader("Content-Type", "application/json");
+      response.end(JSON.stringify({ data, usage: { total_tokens: 5 } }));
+    });
+  });
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+  try {
+    const { port } = server.address() as { port: number };
+    const endpoint = `http://127.0.0.1:${port}/embeddings`;
+    await commands.get("remendra")!(
+      `settings {"embeddings":{"endpoint":"${endpoint}","model":"t"}}`,
+      ctx,
+    );
+    await commands.get("remendra")!(
+      'remember {"text":"The API is deployed to Hetzner fsn1","kind":"fact"}',
+      ctx,
+    );
+    await commands.get("remendra")!('remember {"text":"Backups run nightly","kind":"fact"}', ctx);
+    await commands.get("remendra")!("embed", ctx);
+    const recall = registeredTools.get("recall")!.execute as Function;
+    const result = await recall(
+      "id",
+      { query: "which cloud hosts the backend" },
+      undefined,
+      undefined,
+      ctx,
+    );
+    const text = result.content[0].text as string;
+    expect(text).toMatch(/^Memory results 1 by meaning/);
+    expect(text.split("\n")[1]).toContain("Hetzner fsn1");
+    expect(text).toContain("similarity 1.00");
+    // Words that match skip the fallback.
+    const direct = await recall("id", { query: "backups" }, undefined, undefined, ctx);
+    expect(direct.content[0].text).toMatch(/^Memory results 1;/);
+  } finally {
+    await new Promise<void>((done) => server.close(() => done()));
+  }
 });

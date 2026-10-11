@@ -13,15 +13,33 @@ export const terms = (text: string): string[] =>
     ),
   ].slice(0, 32);
 
+/** Han, kana, Hangul and full-width forms: about one token per 1-2 characters, not per 4. */
+function isWide(code: number): boolean {
+  return (
+    (code >= 0x1100 && code <= 0x11ff) ||
+    (code >= 0x3000 && code <= 0x30ff) ||
+    (code >= 0x3130 && code <= 0x318f) ||
+    (code >= 0x3400 && code <= 0x4dbf) ||
+    (code >= 0x4e00 && code <= 0x9fff) ||
+    (code >= 0xac00 && code <= 0xd7af) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xff00 && code <= 0xffef)
+  );
+}
+
 /**
- * Heuristic token estimate: UTF-16 code units / 4.
- * Matches Pi's own estimateTokens formula, giving consistent budget accounting
- * between the host context manager and Remendra's compiler. Accurate within ~25%
- * for ASCII, Cyrillic, CJK, and mixed scripts. Provider-reported usage is used
- * for actual billing when available; this estimate only gates dispatch and compilation.
+ * Heuristic token estimate: UTF-16 code units / 4, with CJK and Hangul characters counted
+ * three times. Plain chars/4 (Pi's own formula) is within ~20% for English, Romanian and
+ * Russian, but undercounts Chinese, Japanese and Korean about 2x (measured on Qwen 3.x),
+ * so packets in those scripts overran their budget. Weight 3 errs slightly high instead.
+ * Provider-reported usage is used for billing; this estimate only gates dispatch and compilation.
  */
-export const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
-export const COUNTER = "chars/4-estimate";
+export function estimateTokens(text: string): number {
+  let wide = 0;
+  for (let i = 0; i < text.length; i++) if (isWide(text.charCodeAt(i))) wide++;
+  return Math.ceil((text.length + 2 * wide) / 4);
+}
+export const COUNTER = "chars/4-cjk3-estimate";
 
 export function clipTokens(text: string, budget: number): string {
   if (estimateTokens(text) <= budget) return text;
@@ -36,6 +54,36 @@ export function clipTokens(text: string, budget: number): string {
   }
   if (lo > 0 && /[\uD800-\uDBFF]/.test(text[lo - 1])) lo--;
   return text.slice(0, lo) + suffix;
+}
+
+const PEM_BEGIN = /-----BEGIN [A-Z0-9 ]{0,40}PRIVATE KEY-----/g;
+// Key body after the marker: base64 runs and "Header: value" lines, separated by real or
+// JSON-escaped line breaks or spaces (keys pasted through env vars and JSON tool output).
+const PEM_BREAK = String.raw`(?:\r?\n|(?:\\r)?\\n|[ \t])`;
+const PEM_BODY = new RegExp(
+  String.raw`[A-Za-z0-9+/=]*(?:${PEM_BREAK}+(?:[A-Za-z-]+:[^\r\n\\]*|[A-Za-z0-9+/=]+(?=${PEM_BREAK}|-----|$)))*`,
+  "y",
+);
+const PEM_END = new RegExp(`${PEM_BREAK}*-----END [A-Z0-9 ]{0,40}PRIVATE KEY-----`, "y");
+
+/**
+ * Replace private key blocks in one linear pass. Each BEGIN marker consumes only its own body
+ * and END line, so many unclosed markers cost O(n) rather than a scan to the end per marker.
+ * A key cut off before its END line (truncated tool output) is still redacted.
+ */
+function redactPrivateKeys(text: string): string {
+  let out = "";
+  let last = 0;
+  for (const begin of text.matchAll(PEM_BEGIN)) {
+    if (begin.index < last) continue;
+    PEM_BODY.lastIndex = begin.index + begin[0].length;
+    PEM_BODY.exec(text);
+    PEM_END.lastIndex = PEM_BODY.lastIndex;
+    const end = PEM_END.exec(text) ? PEM_END.lastIndex : PEM_BODY.lastIndex;
+    out += text.slice(last, begin.index) + "[REDACTED PRIVATE KEY]";
+    last = end;
+  }
+  return last ? out + text.slice(last) : text;
 }
 
 export function redact(text: string, patterns: readonly string[] = []): string {
@@ -63,12 +111,8 @@ export function redact(text: string, patterns: readonly string[] = []): string {
     .replace(
       /((?:authorization\s*[:=]\s*(?:bearer\s+)?|(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*)["']?)[^\s"',;}{]+/gi,
       "$1[REDACTED]",
-    )
-    // PEM private keys
-    .replace(
-      /-----BEGIN (?:[A-Z ]+)?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+)?PRIVATE KEY-----/g,
-      "[REDACTED PRIVATE KEY]",
     );
+  out = redactPrivateKeys(out);
   for (const literal of patterns) {
     // Configured patterns are literal secrets, avoiding untrusted regex execution.
     if (literal) out = out.split(literal).join("[REDACTED]");

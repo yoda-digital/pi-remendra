@@ -25,6 +25,14 @@ export type Complete = (request: {
   sessionId: string;
 }) => Promise<Completion>;
 
+/** Whether a batch contains user-written text long enough to plausibly hold a fact. */
+export function hasUserText(job: Job, minChars = 40): boolean {
+  return job.chunks.some(
+    (c) =>
+      c.source.role === "user" && c.source.text.slice(c.start, c.end).trim().length >= minChars,
+  );
+}
+
 export class BackgroundLearner {
   private controller?: AbortController;
   private running?: Promise<string>;
@@ -133,6 +141,11 @@ export class BackgroundLearner {
           if (signal.aborted || !stillCurrent())
             throw new Error("Discarded background result after session or branch change");
           const claims = parseObservations(result.text, job);
+          // An empty answer marks the chunks processed for good. When the batch holds real
+          // user text and another attempt is left, ask once more before accepting it: a
+          // flaky local model sometimes answers [] for input it extracts fine on the next try.
+          if (!claims.length && attempt + 1 < config.maxAttempts && hasUserText(job))
+            throw new Error("Observer found nothing in user text; asking again to confirm");
           await this.client.call("complete", [job, scope, claims, tokens, result.dollars]);
           // L13: Re-check after async RPC — generation may have changed during the await
           if (signal.aborted || !stillCurrent())
@@ -164,15 +177,14 @@ export class BackgroundLearner {
             const msg = failError instanceof Error ? failError.message : String(failError);
             log("[remendra] failJob failed:", msg, "job:", job.id);
           }
+          // Cancelled for foreground work: not a failure, so it never counts toward "degraded".
           if (signal.aborted || !stillCurrent())
-            return this.failed(`Learning paused; ${learned} memories committed`);
+            return `Learning paused; ${learned} memories committed`;
           if (attempt + 1 >= config.maxAttempts) return this.failed(`Learning deferred: ${reason}`);
         }
       }
-      if (!success) {
-        this.failed(`batch ${batch + 1} failed`);
-        break;
-      }
+      // Attempts that run out return above; ending here means the work was cancelled.
+      if (!success) break;
     }
     return `Learned ${learned} memories`;
   }

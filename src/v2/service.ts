@@ -128,7 +128,7 @@ export class MemoryService {
   importLegacyEntries(scope: Scope, entries: unknown[]) {
     return importLegacy(this.store, scope, JSON.stringify(entries));
   }
-  async embed(scope: Scope, query?: string) {
+  async embed(scope: Scope, query?: string, timeoutMs = EMBED_TIMEOUT_MS) {
     const config = this.config.embeddings;
     if (!config) throw new Error("Configure an embedding endpoint and model first");
     const model = hash(JSON.stringify(config));
@@ -148,12 +148,12 @@ export class MemoryService {
       scope,
       reservation,
       this.config.dailyTokenBudget,
-      EMBED_TIMEOUT_MS + 15000,
+      timeoutMs + 15000,
     );
     if (!job) throw new Error("Daily memory token budget exhausted");
     let usage: number | undefined;
     try {
-      const result = await fetchEmbeddings(config, texts);
+      const result = await fetchEmbeddings(config, texts, timeoutMs);
       usage = result.tokens;
       const hits = this.store.transaction(() => {
         for (let i = 0; i < selected.length; i++)
