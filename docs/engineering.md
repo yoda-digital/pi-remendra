@@ -34,7 +34,7 @@ Native Pi summaries have their own provenance limits and may contain historical 
 
 ## Background extraction
 
-Sources are divided into bounded ranges with states `pending`, `leased`, `processed`, `excluded`, or `damaged`. Coverage is a set of ranges, never a single token cursor. A successful empty result marks a chunk processed; a failed or cancelled attempt leaves it pending. Claims and completed coverage commit together.
+Sources are divided into bounded ranges with states `pending`, `leased`, `processed`, `excluded`, or `damaged`. Coverage is a set of ranges, never a single token cursor. A successful empty result marks a chunk processed, except that a batch holding user-written text is asked once more first when an attempt is left; a failed or cancelled attempt leaves it pending. Sources that are memory already (explicit `remember`/`correct` text, recall tool output) are stored but never queued. Claims and completed coverage commit together.
 
 The observer receives source excerpts as untrusted data. It returns structured JSON with exact quotes. The parser resolves quotes to stored offsets itself and rejects missing, ambiguous, or out-of-batch citations. The observer cannot pin, erase, promote scope, or assert user authority.
 

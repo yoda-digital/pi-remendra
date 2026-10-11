@@ -22,7 +22,7 @@ Storage restart and integrity; explicit project identity; project/session/branch
 - Bun runtime validation.
 - Simultaneous active Pi sessions sharing one database.
 - Power-loss fault injection.
-- A provider-specific exact tokenizer (the `chars/4` heuristic is used).
+- A provider-specific exact tokenizer (a `chars/4` heuristic is used, with CJK and Hangul characters weighted 3x).
 
 ## Synthetic performance
 

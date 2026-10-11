@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.2.0] - 2026-10-11
+
+From a live end-to-end run against Pi 1.1 and a local Qwen model, with a logging proxy recording every model request.
+
+### Fixed
+
+- **Memories reach other sessions.** Learned memories start in the session that learned them and are promoted to the project when it ends. Only sessions with two or more prompts were promoted, and a session that never ended cleanly (closed terminal, crash, WSL shutdown) never was: one real database had 50 memories no other session could see. One prompt is now enough, and at startup Remendra promotes what sessions without a clean shutdown left behind, once they have been quiet for an hour.
+- **Local models lose fewer memories.** With Qwen 3.x, learning lost facts in four ways, all fixed:
+  - Thinking took 10–125 s per batch and ran into the job timeout. Observer requests now turn thinking off (`reasoning_effort: "none"` on OpenAI-compatible endpoints); `observerThinking: true` turns it back on.
+  - The prompt said to skip "prompt instructions", so "Note: we use Redis. Reply OK only." often produced nothing. It now says to keep the facts and ignore the request. On Qwen, 14 of 15 such batches were extracted, up from 7 of 11.
+  - An empty answer for text the user wrote is asked once more before the text counts as done.
+  - JSON wrapped in prose, or left in the model's thinking, is found. The thinking fallback read a field Pi does not use, so it had never worked.
+- **Recall no longer creates duplicates.** The recall tool's output was learned like any other tool result, so each recall stored the memories it showed a second time. It is not a learning source any more (output queued by older versions is dropped on upgrade), and the observer skips a claim whose text matches a memory already visible.
+- **Explicit memories are learned once.** Text saved with `/remendra remember` or `correct` was also sent to the observer.
+- **`/remendra erase` removes earlier revisions.** Erasing a corrected memory left the versions before the correction, and their sources, on disk.
+- **Hidden messages leave no copy.** When a Pi context edit removes or rewrites a message, its old text is deleted unless a memory cites it.
+- **Private keys are always redacted.** A key cut off before its END line (truncated tool output) was stored and sent to the observer as is, and many unclosed key markers made redaction quadratic (1.6 s for 600 KB). Redaction is now one linear pass and also catches JSON-escaped and single-line keys.
+- **Chinese, Japanese and Korean token estimates.** chars/4 counted them at about half their real size (measured on Qwen), so packets in those scripts overran their budget. Han, kana and Hangul characters now count three times.
+- **Recall tool arguments from small models.** Values such as `mode: "claims"` or `scope: "project"` failed validation (10 of 42 calls in one history) and are now mapped to the valid ones.
+- **`/remendra embed` works with a cold server.** Its 10 s timeout was shorter than an Ollama model load (12–13 s). It is 45 s now.
+- **Cancelled learning is not a failure.** A prompt or compaction arriving during learning counted toward the "learning degraded" warning.
+- **Status line.** It kept showing "learning" after cancelled learning or `index-sessions`, and did not show the mode after `/remendra settings`.
+- Failed observer attempts, and batches that produced no memories, are written to `remendra.log`.
+
+### Changed
+
+- **The recall tool falls back to semantic search** when no memory matches the words and an embedding endpoint is configured. New memories are embedded in the background after learning. Before, vectors were only used by `/remendra semantic`.
+- **An unchanged packet stays in place.** When the next prompt selects the same memories, the packet stays where it was instead of moving to the new prompt, so the turn in between keeps its prompt cache.
+- **Smaller recall results.** The recall tool returns the packet's compact records instead of full JSON with internal ids and hashes: about 320 characters per memory instead of 750.
+- **`/remendra search` and `history` are readable:** one memory per entry, id first.
+- **`/remendra-recall /pattern/`** searches the transcript with a regular expression.
+- **Recall mode is documented as it behaves:** no packet and no learning; memory only through the recall tool.
+
 ## [2.1.0] - 2026-10-10
 
 Bug-fix release for Pi 1.1, from an audit of a real installation (66% of background jobs failing, crashes on exit).
