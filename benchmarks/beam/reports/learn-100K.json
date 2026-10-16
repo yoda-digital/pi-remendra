@@ -1,0 +1,365 @@
+[
+  {
+    "chat": 1,
+    "messages": 188,
+    "sourceTokens": 130827,
+    "claims": {
+      "active": 312,
+      "candidate": 93,
+      "disputed": 5
+    },
+    "chunks": {
+      "processed": 392
+    },
+    "observerCalls": 51,
+    "observerTokens": 539095,
+    "observerDollars": 0.1915987,
+    "deferredRuns": 0,
+    "learnSeconds": 1042
+  },
+  {
+    "chat": 2,
+    "messages": 200,
+    "sourceTokens": 123369,
+    "claims": {
+      "active": 256,
+      "candidate": 61,
+      "disputed": 5
+    },
+    "chunks": {
+      "pending": 1,
+      "processed": 379
+    },
+    "observerCalls": 48,
+    "observerTokens": 494999,
+    "observerDollars": 0.17298897999999996,
+    "deferredRuns": 0,
+    "learnSeconds": 1175
+  },
+  {
+    "chat": 3,
+    "messages": 194,
+    "sourceTokens": 127012,
+    "claims": {
+      "active": 278,
+      "candidate": 70,
+      "disputed": 6
+    },
+    "chunks": {
+      "processed": 382
+    },
+    "observerCalls": 58,
+    "observerTokens": 624722,
+    "observerDollars": 0.21679460999999997,
+    "deferredRuns": 3,
+    "learnSeconds": 2369
+  },
+  {
+    "chat": 4,
+    "messages": 212,
+    "sourceTokens": 168535,
+    "claims": {
+      "active": 134,
+      "candidate": 36,
+      "disputed": 13
+    },
+    "chunks": {
+      "processed": 515
+    },
+    "observerCalls": 73,
+    "observerTokens": 536476,
+    "observerDollars": 0.17369094999999996,
+    "deferredRuns": 2,
+    "learnSeconds": 1715
+  },
+  {
+    "chat": 5,
+    "messages": 238,
+    "sourceTokens": 100379,
+    "claims": {
+      "active": 165,
+      "candidate": 28,
+      "disputed": 8
+    },
+    "chunks": {
+      "processed": 377
+    },
+    "observerCalls": 44,
+    "observerTokens": 481706,
+    "observerDollars": 0.16261744000000006,
+    "deferredRuns": 0,
+    "learnSeconds": 822
+  },
+  {
+    "chat": 6,
+    "messages": 258,
+    "sourceTokens": 147567,
+    "claims": {
+      "active": 212,
+      "candidate": 74,
+      "disputed": 11
+    },
+    "chunks": {
+      "processed": 506
+    },
+    "observerCalls": 67,
+    "observerTokens": 592746,
+    "observerDollars": 0.19462255999999997,
+    "deferredRuns": 3,
+    "learnSeconds": 2317
+  },
+  {
+    "chat": 7,
+    "messages": 260,
+    "sourceTokens": 142882,
+    "claims": {
+      "active": 208,
+      "candidate": 52,
+      "disputed": 4
+    },
+    "chunks": {
+      "processed": 499
+    },
+    "observerCalls": 60,
+    "observerTokens": 508660,
+    "observerDollars": 0.16823380000000002,
+    "deferredRuns": 1,
+    "learnSeconds": 1070
+  },
+  {
+    "chat": 8,
+    "messages": 268,
+    "sourceTokens": 131468,
+    "claims": {
+      "active": 205,
+      "candidate": 48,
+      "disputed": 8
+    },
+    "chunks": {
+      "processed": 475
+    },
+    "observerCalls": 62,
+    "observerTokens": 526401,
+    "observerDollars": 0.17527534000000003,
+    "deferredRuns": 3,
+    "learnSeconds": 2008
+  },
+  {
+    "chat": 9,
+    "messages": 270,
+    "sourceTokens": 146395,
+    "claims": {
+      "active": 212,
+      "candidate": 51,
+      "disputed": 4
+    },
+    "chunks": {
+      "processed": 508
+    },
+    "observerCalls": 63,
+    "observerTokens": 534148,
+    "observerDollars": 0.17510379000000004,
+    "deferredRuns": 2,
+    "learnSeconds": 1717
+  },
+  {
+    "chat": 10,
+    "messages": 344,
+    "sourceTokens": 166476,
+    "claims": {
+      "active": 275,
+      "candidate": 42,
+      "disputed": 10
+    },
+    "chunks": {
+      "processed": 609
+    },
+    "observerCalls": 79,
+    "observerTokens": 683413,
+    "observerDollars": 0.22397342999999992,
+    "deferredRuns": 4,
+    "learnSeconds": 2894
+  },
+  {
+    "chat": 11,
+    "messages": 388,
+    "sourceTokens": 225372,
+    "claims": {
+      "active": 310,
+      "candidate": 205,
+      "disputed": 3
+    },
+    "chunks": {
+      "processed": 773
+    },
+    "observerCalls": 134,
+    "observerTokens": 1306271,
+    "observerDollars": 0.45468449000000016,
+    "deferredRuns": 21,
+    "learnSeconds": 3808
+  },
+  {
+    "chat": 12,
+    "messages": 392,
+    "sourceTokens": 225053,
+    "claims": {
+      "active": 330,
+      "candidate": 62,
+      "disputed": 8
+    },
+    "chunks": {
+      "processed": 766
+    },
+    "observerCalls": 100,
+    "observerTokens": 839478,
+    "observerDollars": 0.27373982999999996,
+    "deferredRuns": 4,
+    "learnSeconds": 3302
+  },
+  {
+    "chat": 13,
+    "messages": 310,
+    "sourceTokens": 129630,
+    "claims": {
+      "active": 216,
+      "candidate": 33,
+      "disputed": 12
+    },
+    "chunks": {
+      "processed": 503
+    },
+    "observerCalls": 54,
+    "observerTokens": 473225,
+    "observerDollars": 0.16035604000000006,
+    "deferredRuns": 0,
+    "learnSeconds": 1074
+  },
+  {
+    "chat": 14,
+    "messages": 268,
+    "sourceTokens": 111348,
+    "claims": {
+      "active": 218,
+      "candidate": 47,
+      "disputed": 2
+    },
+    "chunks": {
+      "pending": 1,
+      "processed": 420
+    },
+    "observerCalls": 46,
+    "observerTokens": 441530,
+    "observerDollars": 0.15106196000000002,
+    "deferredRuns": 0,
+    "learnSeconds": 1071
+  },
+  {
+    "chat": 15,
+    "messages": 272,
+    "sourceTokens": 108481,
+    "claims": {
+      "active": 189,
+      "candidate": 65,
+      "disputed": 8
+    },
+    "chunks": {
+      "pending": 2,
+      "processed": 427
+    },
+    "observerCalls": 45,
+    "observerTokens": 413962,
+    "observerDollars": 0.14318504999999995,
+    "deferredRuns": 0,
+    "learnSeconds": 1066
+  },
+  {
+    "chat": 16,
+    "messages": 322,
+    "sourceTokens": 152693,
+    "claims": {
+      "active": 275,
+      "candidate": 61,
+      "disputed": 9
+    },
+    "chunks": {
+      "processed": 569
+    },
+    "observerCalls": 70,
+    "observerTokens": 626756,
+    "observerDollars": 0.20698800000000003,
+    "deferredRuns": 3,
+    "learnSeconds": 2636
+  },
+  {
+    "chat": 17,
+    "messages": 286,
+    "sourceTokens": 134737,
+    "claims": {
+      "active": 249,
+      "candidate": 38,
+      "disputed": 7
+    },
+    "chunks": {
+      "processed": 500
+    },
+    "observerCalls": 65,
+    "observerTokens": 577726,
+    "observerDollars": 0.19224666000000007,
+    "deferredRuns": 4,
+    "learnSeconds": 1760
+  },
+  {
+    "chat": 18,
+    "messages": 362,
+    "sourceTokens": 192273,
+    "claims": {
+      "active": 337,
+      "candidate": 69,
+      "disputed": 13
+    },
+    "chunks": {
+      "processed": 674
+    },
+    "observerCalls": 107,
+    "observerTokens": 954114,
+    "observerDollars": 0.29099898999999996,
+    "deferredRuns": 14,
+    "learnSeconds": 3066
+  },
+  {
+    "chat": 19,
+    "messages": 328,
+    "sourceTokens": 187766,
+    "claims": {
+      "active": 295,
+      "candidate": 159,
+      "disputed": 2
+    },
+    "chunks": {
+      "processed": 647
+    },
+    "observerCalls": 86,
+    "observerTokens": 819403,
+    "observerDollars": 0.28134991,
+    "deferredRuns": 3,
+    "learnSeconds": 3544
+  },
+  {
+    "chat": 20,
+    "messages": 372,
+    "sourceTokens": 207923,
+    "claims": {
+      "active": 293,
+      "candidate": 137,
+      "disputed": 5
+    },
+    "chunks": {
+      "processed": 725
+    },
+    "observerCalls": 91,
+    "observerTokens": 836900,
+    "observerDollars": 0.28274744,
+    "deferredRuns": 3,
+    "learnSeconds": 3397
+  }
+]
